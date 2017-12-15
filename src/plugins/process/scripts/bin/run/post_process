@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "process: embedded-scripts $* END"
+exit 0

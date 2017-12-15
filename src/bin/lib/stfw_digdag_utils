@@ -1,0 +1,538 @@
+#!/bin/bash
+#set -eux
+#===================================================================================================
+# stfw generate共通ユーティリティ
+#
+# 前提
+#   ・システム設定を事前に読み込んでいること
+#
+# 定義リスト
+#   stfw.digdag.local_run
+#   stfw.digdag.push
+#   stfw.digdag.start
+#   stfw.digdag.get_attempt_id
+#   stfw.digdag.show_start_info
+#   stfw.digdag.log_follow
+#   stfw.digdag.server.start
+#   stfw.digdag.server.stop
+#   stfw.digdag.server.is_running
+#
+#===================================================================================================
+#---------------------------------------------------------------------------------------------------
+# 定数
+#---------------------------------------------------------------------------------------------------
+readonly STFW__FILENAME_START_INFO="start.info"
+
+
+#--------------------------------------------------------------------------------------------------
+# 共通関数読込み
+#--------------------------------------------------------------------------------------------------
+# stfw共通ユーティリティ
+. "${DIR_BIN_LIB}/stfw_utils"
+
+
+#---------------------------------------------------------------------------------------------------
+# dig実行 localモード
+#
+# 概要
+#   指定のdigファイルを digdag local モードで実行します。
+#
+# 引数
+#   1: digファイルパス
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.digdag.local_run() {
+  log.func_start_trace "$@"
+
+  local _dig_file_path="$1"
+  local _dig_dir=$(dirname "${_dig_file_path}")
+  local _dig_file_name=$(basename "${_dig_file_path}")
+
+  local _retcode=${EXITCODE_SUCCESS}
+
+  log.trace "cd \"${_dig_dir}\""
+  cd "${_dig_dir}"
+
+  local _cmd=( "${PATH_DIGDAG}" run "${_dig_file_name}" --rerun )
+  log.debug "${_cmd[@]}"
+  "${_cmd[@]}"
+  _retcode=$?
+
+  log.trace "cd -"
+  cd - >/dev/null 2>&1
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# digdag push
+#
+# 概要
+#   指定のdigdagプロジェクトディレクトリをdigdag serverにpushします。
+#
+# 引数
+#   1:  digdagプロジェクトディレクトリ
+#   2:  digdagプロジェクト名
+#   3~: digdagプロジェクト リビジョン名引数リスト
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.digdag.push() {
+  log.func_start_trace "$@"
+
+  local _proj_dir="$1"
+  local _proj_name="$2"
+  shift 2
+  local _rev_args="$*"
+
+  local _retcode=${EXITCODE_SUCCESS}
+
+  log.trace "cd \"${_proj_dir}\""
+  cd "${_proj_dir}"
+
+  local _cmd=(
+    "${PATH_DIGDAG}" push "${_proj_name}"
+      --revision "${_rev_args}"
+      --endpoint "localhost:${stfw_server_port}"
+  )
+  log.debug "${_cmd[@]}"
+  "${_cmd[@]}"
+  _retcode=$?
+
+  log.trace "cd -"
+  cd - >/dev/null 2>&1
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# dig実行 clientモード
+#
+# 概要
+#   digdag serverにpushしたプロジェクトのdigを実行します。
+#
+# 引数
+#   1: digdagプロジェクトディレクトリ
+#   2: digdagプロジェクト名
+#   3: dig名
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     digdagプロジェクトディレクトリ/start.info
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.digdag.start() {
+  log.func_start_trace "$@"
+
+  local _proj_dir="$1"
+  local _proj_name="$2"
+  local _dig_name="$3"
+
+  local _retcode=${EXITCODE_SUCCESS}
+
+  local _cmd=(
+    "${PATH_DIGDAG}" start "${_proj_name}" "${_dig_name}"
+      --session now
+      --endpoint "localhost:${stfw_server_port}"
+  )
+  log.debug "${_cmd[@]}"
+  "${_cmd[@]}"                                                                                2>&1 |
+  tee "${_proj_dir}/${STFW__FILENAME_START_INFO}"
+  _retcode=${PIPESTATUS[0]}
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# attempt id取得
+#
+# 概要
+#   stfw.digdag.startで実行したdigのattempt idを取得します。
+#
+# 引数
+#   1: digdagプロジェクトディレクトリ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     attempt id
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.digdag.get_attempt_id() {
+  private.stfw.digdag.get_start_info "$1" "attempt id"
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# dig実行情報の表示
+#
+# 概要
+#   stfw.digdag.startで実行したdigの実行情報を表示します。
+#
+# 引数
+#   1: digdagプロジェクトディレクトリ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     実行情報
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.digdag.show_start_info() {
+  local _digdag_proj_dir="$1"
+
+  local _project=$(private.stfw.digdag.get_start_info "${_digdag_proj_dir}" "project")
+  local _workflow=$(private.stfw.digdag.get_start_info "${_digdag_proj_dir}" "workflow")
+  local _session_id=$(private.stfw.digdag.get_start_info "${_digdag_proj_dir}" "session id")
+  local _attempt_id=$(stfw.digdag.get_attempt_id "${_digdag_proj_dir}")
+
+  echo "project    : ${_project}"
+  echo "workflow   : ${_workflow}"
+  echo "session_id : ${_session_id}"
+  echo "attempt_id : ${_attempt_id}"
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# dig実行ログの表示
+#
+# 概要
+#   stfw.digdag.startで実行したdigの実行ログを表示します。
+#
+# 引数
+#   1: digdagプロジェクトディレクトリ
+#   2: attempt id
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     実行ログ
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.digdag.log_follow() {
+  log.func_start_trace "$@"
+  local _digdag_proj_dir="$1"
+  local _attempt_id="$2"
+
+  echo ""
+  echo "---------- attempt_id:${_attempt_id} ----------"
+
+  cd "${_digdag_proj_dir}"
+  "${PATH_DIGDAG}" log ${_attempt_id} --follow
+  _retcode=$?
+  cd - >/dev/null 2>&1
+
+  echo "---------- attempt_id:${_attempt_id} ----------"
+  echo ""
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# digdag server 起動
+#
+# 概要
+#   digdag serverを起動します。
+#
+# 引数
+#   なし
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.digdag.server.start() {
+  log.func_start_trace "$@"
+
+  # ディレクトリ作成
+  if [ ! -d "${STFW_PROJ_DIR_DATA}" ]; then
+    mkdir -p "${STFW_PROJ_DIR_DATA}"
+  fi
+
+  log.trace "printenv:"
+  log.add_indent
+  log.trace "$(printenv | sort)"
+  log.remove_indent
+
+  # digdag server 起動
+  # shellcheck disable=SC2046
+  local _cmd=(
+    "${PATH_DIGDAG}" server
+      --bind ${stfw_server_bind}
+      --port ${stfw_server_port}
+      ${stfw_server_db_mode}
+      --max-task-threads ${stfw_server_max_task_threads}
+      --log-level $(stfw.parse_log_level "${LOGLEVEL}")
+      --log "${PATH_LOG}"
+      --task-log "${STFW_PROJ_DIR_DATA}"
+      --access-log "${STFW_PROJ_DIR_DATA}"
+  )
+  log.info "${_cmd[@]}"
+  ( nohup "${_cmd[@]}" >>"${PATH_LOG}" 2>&1 < /dev/null ) &
+  local _pid=$!
+
+  log.trace "echo \"${_pid}\" >\"${PATH_PROJ_PID}\""
+  echo "${_pid}" >"${PATH_PROJ_PID}"
+
+  # 起動を待つ
+  private.stfw.digdag.server.wait_response
+  _retcode=$?
+
+  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
+    log.error "failed to start stfw.server process."
+    return ${_retcode}
+  fi
+  log.info "start stfw.server process. PID=${_pid}"
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# digdag server 停止
+#
+# 概要
+#   digdag serverを停止します。
+#
+# 引数
+#   なし
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.digdag.server.stop() {
+  log.func_start_trace "$@"
+  local _retcode=${EXITCODE_SUCCESS}
+
+  # Process Kill
+  local _pid=`cat ${PATH_PROJ_PID}`
+  local _ps_row=`ps -ef | grep ${_pid} | grep -v grep`
+  if [[ "${_ps_row}x" != "x" ]]; then
+    kill -s SIGTERM ${_pid}
+    _retcode=$?
+  fi
+
+  # PIDファイルを削除
+  rm -f ${PATH_PROJ_PID}
+  log.info "stop stfw.server process. PID=${_pid}"
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# digdag server 起動済みチェック
+#
+# 概要
+#   digdag serverが起動済みか確認します。
+#
+# 引数
+#   なし
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     true : 起動済み
+#     false: その他の場合
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.digdag.server.is_running() {
+  log.func_start_trace "$@"
+
+  # PIDファイルの存在確認
+  if [[ ! -f "${PATH_PROJ_PID}" ]]; then
+    log.trace "${PATH_PROJ_PID} is not exist."
+    echo "false"
+    return ${EXITCODE_SUCCESS}
+  fi
+
+  # プロセスの存在確認
+  local _pid=$(cat "${PATH_PROJ_PID}")
+  local _ps_row=$(ps -ef | grep ${_pid} | grep -v grep)
+  if [[ "${_ps_row}x" = "x" ]]; then
+    # PIDファイルがあって、プロセスが存在しない場合、PIDファイルを削除して、停止中扱い
+    log.trace "${_pid} is not running."
+    rm -f ${PATH_PROJ_PID}
+    echo "false"
+    return ${EXITCODE_SUCCESS}
+  fi
+
+  # リクエストを送って起動チェック
+  private.stfw.digdag.server.is_running
+
+  log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# private dig起動情報の値取得
+#
+# 概要
+#   dig起動情報から指定キーの値を表示します。
+#
+# 引数
+#   1: 起動情報のキー
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     指定キーの値
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function private.stfw.digdag.get_start_info() {
+  local _digdag_proj_dir="$1"
+  local _key="$2"
+  local _start_info="${_digdag_proj_dir}/${STFW__FILENAME_START_INFO}"
+
+  grep "${_key}:" < "${_start_info}"                                                               | # start.infoから、keyでgrep
+  cut -d ':' -f 2                                                                                  | # : 区切りの 2フィールド目
+  _trim
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# private digdag serverの起動待機
+#
+# 概要
+#   digdag serverからレスポンスが返却されるまで待機します。
+#   timeout 10秒
+#
+# 引数
+#   なし
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function private.stfw.digdag.server.wait_response() {
+  log.func_start_trace
+  local _RETRY_COUNT=10
+
+  local _path_tmp_retry="/${STFW_PROJ_DIR_DATA}/${FUNCNAME[0]}_$$"
+  echo ${_RETRY_COUNT} >"${_path_tmp_retry}"
+
+  local _retcode=${EXITCODE_SUCCESS}
+
+  local _is_success=$(
+    while :; do
+      local _retry_count=$(cat ${_path_tmp_retry})
+      if [[ "${_retry_count}" = "0" ]]; then break; fi
+      _retry_count=$((_retry_count - 1))
+      echo ${_retry_count} >"${_path_tmp_retry}"
+
+      local _is_running=$(private.stfw.digdag.server.is_running)
+      if [[ "${_is_running}" = "true" ]]; then echo "true"; break; fi
+      sleep 1
+    done
+  )
+
+  if [[ "${_is_success}" != "true" ]]; then _retcode=${EXITCODE_ERROR}; fi
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# private digdag serverの起動チェック
+#
+# 概要
+#   digdag serverからレスポンスが返却されるか確認します。
+#
+# 引数
+#   なし
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     true : レスポンスが返却された場合
+#     false: その他の場合
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function private.stfw.digdag.server.is_running() {
+  log.func_start_trace
+  local _URL_HEALTHCHECK="http://localhost:${stfw_server_port}/api/projects"
+
+  local _cur_status=$(                                                                             \
+    curl                                                                                           \
+      --silent                                                                                     \
+      --request GET                                                                                \
+      --write-out '%{http_code}'                                                                   \
+      --output /dev/null                                                                           \
+      ${_URL_HEALTHCHECK}                                                                          \
+    2>/dev/null                                                                                    \
+  )
+
+  log.trace "response code: ${_cur_status}"
+  if [[ "$(echo ${_cur_status} | cut -c 1)" = "2" ]]; then
+    echo "true"
+    return
+  fi
+
+  echo "false"
+  log.func_end_trace ${EXITCODE_SUCCESS}
+}

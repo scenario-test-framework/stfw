@@ -1,0 +1,33 @@
+timezone: Asia/Tokyo
+
++bizdate_setup:
+  sh>: stfw bizdate --setup "${stfw_bizdate_dir}"
+
++_10_pre_scripts:
+  _export:
+    stfw_process_dir : "${stfw_bizdate_dir}/_10_pre_scripts"
+    stfw_process_seq : "10"
+    stfw_process_group : "pre"
+    stfw_process : "scripts"
+  sh>: stfw process --run "${stfw_process_dir}"
+
++_20_exe_scripts:
+  _export:
+    stfw_process_dir : "${stfw_bizdate_dir}/_20_exe_scripts"
+    stfw_process_seq : "20"
+    stfw_process_group : "exe"
+    stfw_process : "scripts"
+  sh>: stfw process --run "${stfw_process_dir}"
+
++_30_post_scripts:
+  _export:
+    stfw_process_dir : "${stfw_bizdate_dir}/_30_post_scripts"
+    stfw_process_seq : "30"
+    stfw_process_group : "post"
+    stfw_process : "scripts"
+  sh>: stfw process --run "${stfw_process_dir}"
+
++bizdate_teardown:
+  sh>: stfw bizdate --teardown "${stfw_bizdate_dir}"
+_error:
+  sh>: stfw bizdate --teardown "${stfw_bizdate_dir}"

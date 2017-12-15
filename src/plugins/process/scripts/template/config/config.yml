@@ -1,0 +1,10 @@
+stfw:
+  process:
+    scripts:
+      runtime:
+        some_key: value
+        list:
+          - list_key1: 0_list_key1_value
+            list_key2: 0_list_key2_value
+          - list_key1: 1_list_key1_value
+            list_key2: 1_list_key2_value

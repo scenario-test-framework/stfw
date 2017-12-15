@@ -1,0 +1,428 @@
+#!/bin/bash
+#set -eux
+#===================================================================================================
+#
+# scenario test framework installer
+#
+#===================================================================================================
+#---------------------------------------------------------------------------------------------------
+# 設定
+#---------------------------------------------------------------------------------------------------
+# 実行ディレクトリ
+export STFW_EXEC_DIR="$(pwd)"
+
+# プロジェクトディレクトリ
+STFW_PROJ_DIR=${STFW_PROJ_DIR:-$(
+  while :; do
+    if [[ "$(pwd)" = "/" ]]; then break; fi
+    if [[ -f ./stfw.yml ]]; then pwd; break; fi
+    cd ..
+  done
+)}
+# 見つからない場合、初期化していないカレントディレクトリとみなす
+export STFW_PROJ_DIR="${STFW_PROJ_DIR:-$(pwd)}"
+
+# sym linkを考慮して、スクリプト配置ディレクトリへcd
+dir_script=$(dirname "$(readlink $0)")
+if [[ "${dir_script}" = "." ]]; then dir_script=$(dirname $0); fi
+cd "$(cd ${dir_script}; pwd)"
+
+# 共通設定
+export readonly STFW_HOME="$(cd ..; pwd)"
+. "${STFW_HOME}/bin/lib/setenv"
+
+# loggingユーティリティ
+export readonly PATH_LOG="${STFW_PROJ_DIR_DATA}/stfw.log"
+export LOGLEVEL="${LOGLEVEL_INFO}"
+. "${DIR_BIN_LIB}/logging_utils"
+
+readonly __TMP_PIP_LIST="/tmp/pip_freeze_$$"
+
+
+#---------------------------------------------------------------------------------------------------
+# 関数定義
+#---------------------------------------------------------------------------------------------------
+function private.exit_on_fail() {
+  local _retcode=$1
+  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
+    log.clear_indent
+    {
+      echo "--------------------------------------------------"
+      echo " INSTALL FAILURE"
+      echo "--------------------------------------------------"
+    } | log.error
+    exit ${EXITCODE_ERROR}
+  fi
+}
+
+
+function private.is_installed() {
+  log.func_start_trace "$@"
+
+  local _cmd="$1"
+  local _retcode=${EXITCODE_SUCCESS}
+
+  log.info "${_cmd}"
+  log.add_indent
+  if [[ "$(which ${_cmd})x" = "x" ]]; then
+    log.error "${_cmd} is not installed."
+    _retcode=${EIXTCODE_ERROR}
+  else
+    log.info "${_cmd} is installed."
+  fi
+  log.remove_indent
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function private.is_pip_installed() {
+  log.func_start_trace "$@"
+
+  # pipインストール済みリスト ※同一プロセス内の再利用を考慮
+  if [[ ! -f "${__TMP_PIP_LIST}" ]]; then
+    pip freeze > "${__TMP_PIP_LIST}"
+  fi
+
+  local _cmd="$1"
+  local _retcode=${EXITCODE_SUCCESS}
+
+  log.info "${_cmd}"
+  log.add_indent
+  if [[ "$(grep ${_cmd} ${__TMP_PIP_LIST})x" = "x" ]]; then
+    log.error "pip.${_cmd} is not installed."
+    _retcode=${EIXTCODE_ERROR}
+  else
+    log.info "pip.${_cmd} is installed."
+  fi
+  log.remove_indent
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+function private.download() {
+  log.func_start_trace "$@"
+
+  # オプション解析
+  local _continue_option=""
+  while :; do
+    case $1 in
+      -c|--continue)
+        _continue_option="--continue-at -"
+        shift
+        ;;
+      --)
+        shift
+        break
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  local _url="$1"
+  local _path_output="${DIR_ARCHIVE}/$(basename ${_url})"
+  local _exitcode=${EXITCODE_SUCCESS}
+  local _retcode=${EXITCODE_SUCCESS}
+
+  if [[ ! -d "${DIR_ARCHIVE}" ]]; then mkdir -p "${DIR_ARCHIVE}"; fi
+  if [[ ! -d "${DIR_MODULE}" ]]; then mkdir -p "${DIR_MODULE}"; fi
+
+  # ダウンロード
+  curl                                                                                             \
+    --max-time ${DL_TIMEOUT}                                                                       \
+    --location                                                                                     \
+    --output "${_path_output}"                                                                     \
+    --request GET                                                                                  \
+    ${_continue_option}                                                                            \
+    --url "${_url}"                                                                                | log.debug
+  _retcode=${PIPESTATUS[0]}
+
+  if [[ ${_retcode} -eq ${EXITCODE_SUCCESS} ]]; then
+    log.info "downloaded ${_path_output}"
+  elif [[ ${_retcode} -eq 33 ]]; then
+    log.warn "download skipped. target:${_url}, retcode:${_retcode}"
+  else
+    log.error "download failed. target:${_url}, retcode:${_retcode}"
+    _exitcode=${EXITCODE_ERROR}
+  fi
+
+  log.func_end_trace ${_exitcode}
+  return ${_exitcode}
+}
+
+function private.gracefull_download() {
+  log.func_start_trace "$@"
+
+  local _download_url="$1"
+  local _path_downloaded="${DIR_ARCHIVE}/$(basename ${_download_url})"
+  local _retcode="${EXITCODE_SUCCESS}"
+
+  # ダウンロード
+  local _option=""
+  if [[ -f "${_path_downloaded}" ]]; then _option="--continue"; fi
+  private.download ${_option} "${_download_url}"
+  _retcode=$?
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+function private.extract() {
+  log.func_start_trace "$@"
+  local _path_from="$1"
+  local _dir_to="$2"
+
+  # fromファイル
+  if [[ ! -f "${_path_from}" ]]; then
+    log.error "${_path_from} is not exist."
+    log.restore_indent
+    return ${EXITCODE_ERROR}
+  fi
+
+  local _exitcode=${EXITCODE_SUCCESS}
+
+  # 展開ディレクトリ
+  if [[ -d "${_dir_to}" ]]; then
+    log.warn "${_dir_to} removed. because already exists."
+    rm -fr "${_dir_to}"
+  fi
+  mkdir -p "${_dir_to}"
+
+  # 拡張子判定
+  local _ext_from="$(get_ext ${_path_from})"
+
+  # 展開
+  local _tmp_path="${_dir_to}/$(basename ${_path_from})"
+  cd "${_dir_to}"
+  mv "${_path_from}" "${_dir_to}/"
+  if [[ "zip" = "${_ext_from}" ]] || [[ "war" = "${_ext_from}" ]]; then
+    # zip | war
+    log.info "unzip \"${_tmp_path}\""
+    unzip "${_tmp_path}"                                                                      2>&1 | log.debug
+
+  elif [[ "tar.gz" = "${_ext_from}" ]] || [[ "tgz" = "${_ext_from}" ]]; then
+    # tar.gz
+    log.info "tar xvzf \"${_tmp_path}\""
+    tar xvzf "${_tmp_path}"                                                                   2>&1 | log.debug
+
+  else
+    log.error "extension:${_ext_from} is not supported."
+    _exitcode=${EXITCODE_ERROR}
+  fi
+  mv "${_tmp_path}" "${_path_from}"
+  cd - > /dev/null
+
+  # 展開結果を一つ上のディレクトリに移動
+  local _dirname_extracted="$(ls ${_dir_to} | head -n 1)"
+  mv "${_dir_to}/${_dirname_extracted}"/* "${_dir_to}/"
+  rm -fr "${_dir_to:?}/${_dirname_extracted}"
+
+  log.func_end_trace ${_exitcode}
+  return ${_exitcode}
+}
+
+function private.download_and_rename() {
+  log.func_start_trace "$@"
+  local _target="$1"
+  local _download_url="$2"
+  local _path_copied="$3"
+
+  local _path_downloaded="${DIR_ARCHIVE}/$(basename ${_download_url})"
+  local _retcode=${EXITCODE_SUCCESS}
+
+  log.save_indent
+  log.info "${_target}"
+  log.add_indent
+
+  # ダウンロード
+  private.gracefull_download "${_download_url}"
+  _retcode=$?
+  if [[ ${EXITCODE_SUCCESS} -ne ${_retcode} ]]; then return ${_retcode}; fi
+
+  # コピー
+  log.info "copy"
+  log.add_indent
+  cp "${_path_downloaded}" "${_path_copied}"
+  _retcode=$?
+  log.remove_indent
+  if [[ ${EXITCODE_SUCCESS} -ne ${_retcode} ]]; then return ${_retcode}; fi
+
+  # 権限付与
+  log.info "chmod"
+  log.add_indent
+  chmod +x "${_path_copied}"
+  _retcode=$?
+  log.remove_indent
+  if [[ ${EXITCODE_SUCCESS} -ne ${_retcode} ]]; then return ${_retcode}; fi
+
+  log.restore_indent
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+function private.download_and_extract() {
+  log.func_start_trace "$@"
+  local _target="$1"
+  local _download_url="$2"
+  local _path_extracted="$3"
+
+  local _path_downloaded="${DIR_ARCHIVE}/$(basename ${_download_url})"
+  local _retcode=${EXITCODE_SUCCESS}
+
+  log.save_indent
+  log.info "${_target}"
+  log.add_indent
+
+  # ダウンロード
+  private.gracefull_download "${_download_url}"
+  _retcode=$?
+  if [[ ${EXITCODE_SUCCESS} -ne ${_retcode} ]]; then return ${_retcode}; fi
+
+  # 展開
+  log.info "extract"
+  log.add_indent
+  private.extract "${_path_downloaded}" "${_path_extracted}"
+  _retcode=$?
+  log.remove_indent
+  if [[ ${EXITCODE_SUCCESS} -ne ${_retcode} ]]; then return ${_retcode}; fi
+
+  # 権限付与
+  log.info "chmod"
+  log.add_indent
+  chmod -R +x "${_path_extracted}/bin"
+  _retcode=$?
+  log.remove_indent
+  if [[ ${EXITCODE_SUCCESS} -ne ${_retcode} ]]; then return ${_retcode}; fi
+
+  log.restore_indent
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+
+#---------------------------------------------------------------------------------------------------
+# 事前処理
+#---------------------------------------------------------------------------------------------------
+exitcode=${EXITCODE_SUCCESS}
+
+
+#---------------------------------------------------------------------------------------------------
+# 本処理
+#---------------------------------------------------------------------------------------------------
+{
+  echo "--------------------------------------------------"
+  echo " INSTALL"
+  echo "--------------------------------------------------"
+} | log.info
+log.add_indent
+
+
+#--------------------------------------------------------------------------------------------------
+# 前提チェック
+#--------------------------------------------------------------------------------------------------
+log.info "check requires"
+log.add_indent
+
+private.is_installed "java"
+private.exit_on_fail $?
+
+private.is_installed "curl"
+private.exit_on_fail $?
+
+private.is_installed "python"
+private.exit_on_fail $?
+
+private.is_installed "pip"
+private.exit_on_fail $?
+
+private.is_pip_installed "pyaml"
+private.exit_on_fail $?
+
+private.is_pip_installed "docopt"
+private.exit_on_fail $?
+
+rm -f "${__TMP_PIP_LIST}"
+log.remove_indent
+
+
+
+#--------------------------------------------------------------------------------------------------
+# バイナリファイル切り替え
+#--------------------------------------------------------------------------------------------------
+log.info "switch binaries"
+
+__TMP_DIR_BINARY="${DIR_BIN_LIB}/binary/linux"
+if [ "$(is_mac)" = "true" ]; then __TMP_DIR_BINARY="${DIR_BIN_LIB}/binary/mac"; fi
+
+# shellcheck disable=SC2038
+find "${__TMP_DIR_BINARY}" -type f                                                                 |
+xargs -I {} bash -c 'cur_file_path={}; ln -sf ${cur_file_path} $(cd $(dirname ${cur_file_path})/../..; pwd)/$(basename ${cur_file_path})'
+
+
+
+#--------------------------------------------------------------------------------------------------
+# 依存モジュールのインストール
+#--------------------------------------------------------------------------------------------------
+log.info "install modules"
+log.add_indent
+
+# digdag
+private.download_and_rename "digdag" "${URL_DIGDAG}" "${PATH_DIGDAG}"
+private.exit_on_fail $?
+
+# embulk
+private.download_and_rename "embulk" "${URL_EMBULK}" "${PATH_EMBULK}"
+private.exit_on_fail $?
+
+# compare-files
+# TODO process pluginに移動
+#readonly URL_COMPAREFILES="https://github.com/scenario-test-framework/compare-files/releases/download/1.0.0/compare-files_1.0.0_production.tar.gz"
+#readonly DIR_COMPAREFILES="${DIR_MODULE}/comparefiles"
+#private.download_and_extract "compare-files" "${URL_COMPAREFILES}" "${DIR_COMPAREFILES}"
+#private.exit_on_fail $?
+
+# logfilter
+# TODO process pluginに移動
+#readonly URL_LOGFILTER="https://github.com/scenario-test-framework/logfilter/releases/download/1.0.0/logfilter_1.0.0_production.tar.gz"
+#readonly DIR_LOGFILTER="${DIR_MODULE}/logfilter"
+#private.download_and_extract "logfilter" "${URL_LOGFILTER}" "${DIR_LOGFILTER}"
+#private.exit_on_fail $?
+
+log.remove_indent
+
+
+
+#--------------------------------------------------------------------------------------------------
+# process pluginのインストール
+#--------------------------------------------------------------------------------------------------
+log.info "install process plugins"
+log.add_indent
+
+for cur_process in $(stfw.process.list); do
+  log.info "${cur_process}"
+  log.add_indent
+  plugin_path=$(stfw.process.get_path "${cur_process}")
+  stfw.process.install "${plugin_path}"
+  private.exit_on_fail $?
+  log.remove_indent
+done
+
+log.remove_indent
+
+
+
+#---------------------------------------------------------------------------------------------------
+# 事後処理
+#---------------------------------------------------------------------------------------------------
+log.clear_indent
+{
+  echo "--------------------------------------------------"
+  echo " INSTALL SUCCESS"
+  echo "--------------------------------------------------"
+} | log.info
+exit ${exitcode}

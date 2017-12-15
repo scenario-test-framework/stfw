@@ -1,0 +1,23 @@
+timezone: Asia/Tokyo
+
++scenario_setup:
+  sh>: stfw scenario --setup "${stfw_scenario_dir}"
+
++_100_99990101:
+  _export:
+    stfw_bizdate_dir : "${stfw_scenario_dir}/_100_99990101"
+    stfw_bizdate_seq : "100"
+    stfw_bizdate : "99990101"
+  !include : _100_99990101/bizdate.dig
+
++_200_99990201:
+  _export:
+    stfw_bizdate_dir : "${stfw_scenario_dir}/_200_99990201"
+    stfw_bizdate_seq : "200"
+    stfw_bizdate : "99990201"
+  !include : _200_99990201/bizdate.dig
+
++scenario_teardown:
+  sh>: stfw scenario --teardown "${stfw_scenario_dir}"
+_error:
+  sh>: stfw scenario --teardown "${stfw_scenario_dir}"

@@ -1,0 +1,436 @@
+#!/bin/bash
+#set -eux
+#===================================================================================================
+# stfw共通ユーティリティ
+#
+# 前提
+#   ・システム設定を事前に読み込んでいること
+#
+# 定義リスト
+#   stfw.apply_log_level
+#   stfw.apply_dynamic_env
+#   stfw.get_plugin_path
+#   stfw.bulk_exec_scripts
+#   stfw.is_in_scenario-root-dir
+#   stfw.is_in_scenario-dir
+#   stfw.is_in_scenario-bizdate-dir
+#   stfw.is_in_scenario-process-dir
+#   stfw.process.list
+#   stfw.process.get_path
+#   stfw.process.is_installed
+#   stfw.process.install
+#
+#===================================================================================================
+# loggingユーティリティ
+. "${DIR_BIN_LIB}/logging_utils"
+
+#---------------------------------------------------------------------------------------------------
+# ログレベル反映
+#
+# 概要
+#   ログレベル名(error | warn | info | debug | tarace) に合わせて
+#   logging_utilsの定数を環境変数に設定します。
+#
+# 引数
+#   1: ログレベル名
+#
+# 出力
+#   環境変数
+#     LOGLEVEL
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.apply_log_level() {
+  case $1 in
+    error)
+      export LOGLEVEL="${LOGLEVEL_ERROR}"
+      ;;
+    warn)
+      export LOGLEVEL="${LOGLEVEL_WARN}"
+      ;;
+    info)
+      export LOGLEVEL="${LOGLEVEL_INFO}"
+      ;;
+    debug)
+      export LOGLEVEL="${LOGLEVEL_DEBUG}"
+      ;;
+    trace)
+      export LOGLEVEL="${LOGLEVEL_TRACE}"
+      ;;
+  esac
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# ログレベル定数 -> ログレベル名 の変換
+#
+# 概要
+#   logging_utilsの定数から
+#   ログレベル名(error | warn | info | debug | tarace) を返します。
+#
+# 引数
+#   1: ログレベル定数
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     ログレベル名
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.parse_log_level() {
+  case $1 in
+    "${LOGLEVEL_ERROR}")
+      echo "error"
+      ;;
+    "${LOGLEVEL_WARN}")
+      echo "warn"
+      ;;
+    "${LOGLEVEL_INFO}")
+      echo "info"
+      ;;
+    "${LOGLEVEL_DEBUG}")
+      echo "debug"
+      ;;
+    "${LOGLEVEL_TRACE}")
+      echo "trace"
+      ;;
+  esac
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# pluginディレクトリ取得
+#
+# 概要
+#   プロジェクトpluginが存在する場合、そのパス
+#   組み込みpluginが存在する場合、そのパス
+#   pluginが存在しない場合、空文字 を返します。
+#
+# 引数
+#   1: plugin名
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     pluginディレクトリ
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.get_plugin_path() {
+  local _plugin_name="$1"
+
+  log.func_start_trace "$@"
+  local _retcode=${EXITCODE_SUCCESS}
+  local _result=""
+
+  # プロジェクトplugin
+  if [[ -d "${STFW_PROJ_DIR_PLUGIN}/${_plugin_name}" ]]; then
+    _result="${STFW_PROJ_DIR_PLUGIN}/${_plugin_name}"
+  fi
+
+  # 組み込みplugin
+  if [[ -d "${DIR_PLUGIN}/${_plugin_name}" ]]; then
+    _result="${DIR_PLUGIN}/${_plugin_name}"
+  fi
+
+  if [[ "${_result}x" = "x" ]]; then
+    log.warn "${_plugin_name} is not exist."
+    _retcode=${EXITCODE_ERROR}
+  else
+    log.trace "result: ${_result}"
+    echo "${_result}"
+  fi
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# スクリプトの一括実行
+#
+# 概要
+#   指定ディレクトリ直下の全てのファイルを、スクリプトとみなして一括実行します。
+#   スクリプトから0以外のリターンコードが返された場合、皇族は実行せずエラー終了します。
+#
+# 引数
+#   1: スクリプト配置ディレクトリ
+#
+# リターンコード
+#   ${EXITCODE_SUCCESS}: 正常終了した場合
+#   ${EXITCODE_ERROR}  : エラー発生時
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     スクリプトの標準出力&標準エラー
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.bulk_exec_scripts() {
+  log.func_start_trace "$@"
+
+  local _dir="$1"
+  local _before_dir="$(pwd)"
+
+  log.trace "cd \"${_dir}\""
+  cd "${_dir}"
+
+  local _before_IFS="$IFS"
+  IFS=$'\n'
+  for _cur_path in $(find . -mindepth 1 -maxdepth 1 -follow -type f | sort); do
+    local _cur_file=$(basename "${_cur_path}")
+    local _exitcode=${EXITCODE_SUCCESS}
+    local _cur_retcode=${EXITCODE_SUCCESS}
+
+    local _sect_name="${_dir}/${_cur_file}"
+    log.sect_start_info "${_sect_name}"
+    ./${_cur_file}
+    _cur_retcode=$?
+    log.sect_end_info "${_sect_name}" "${_cur_retcode}"
+
+    if [[ ${_cur_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
+      _exitcode=${EXITCODE_ERROR}
+      break
+    fi
+
+  done
+  IFS="${_before_IFS}"
+
+  log.trace "cd \"${_before_dir}\""
+  cd "${_before_dir}"
+
+  log.func_end_trace ${_exitcode}
+  return ${_exitcode}
+}
+
+
+function stfw.is_in_scenario-root-dir() {
+  local _check_scenario_root_dirname=$(basename "$(pwd)")
+  local _check_file="../${FILENAME_SYSTEM_CONFIG}"
+  if [[ "${_check_scenario_root_dirname}" = "scenario" ]] && [[ -f ${_check_file} ]]; then
+    echo "true"
+  else
+    echo "false"
+  fi
+  return ${EXITCODE_SUCCESS}
+}
+function stfw.is_in_scenario-dir() {
+  local _check_scenario_root_dirname=$(basename "$(cd ..; pwd)")
+  local _check_file="../../${FILENAME_SYSTEM_CONFIG}"
+  if [[ "${_check_scenario_root_dirname}" = "scenario" ]] && [[ -f ${_check_file} ]]; then
+    echo "true"
+  else
+    echo "false"
+  fi
+  return ${EXITCODE_SUCCESS}
+}
+function stfw.is_in_scenario-bizdate-dir() {
+  local _check_scenario_root_dirname=$(basename "$(cd ../..; pwd)")
+  local _check_file="../../../${FILENAME_SYSTEM_CONFIG}"
+  if [[ "${_check_scenario_root_dirname}" = "scenario" ]] && [[ -f ${_check_file} ]]; then
+    echo "true"
+  else
+    echo "false"
+  fi
+  return ${EXITCODE_SUCCESS}
+}
+function stfw.is_in_scenario-process-dir() {
+  local _check_scenario_root_dirname=$(basename "$(cd ../../..; pwd)")
+  local _check_file="../../../../${FILENAME_SYSTEM_CONFIG}"
+  if [[ "${_check_scenario_root_dirname}" = "scenario" ]] && [[ -f ${_check_file} ]]; then
+    echo "true"
+  else
+    echo "false"
+  fi
+  return ${EXITCODE_SUCCESS}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# process一覧
+#
+# 概要
+#   プロジェクト、STFW_HOMEに配置されたprocess名を一覧表示します。
+#
+# 引数
+#   なし
+#
+# リターンコード
+#   ${EXITCODE_SUCCESS}: 正常終了した場合
+#   ${EXITCODE_ERROR}  : エラー発生時
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     process名
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.process.list() {
+  log.func_start_trace "$@"
+
+  # 一時ファイル
+  local _tmp_embed_list="/tmp/${FUNCNAME[0]}_$$_embed"
+  local _tmp_proj_list="/tmp/${FUNCNAME[0]}_$$_proj"
+
+  # 組込みpluginリスト作成
+  local _target_dir="${DIR_PLUGIN}/process"
+  find "${_target_dir}" -mindepth 1 -maxdepth 1 -type d                                            | # 直下のディレクトリパスから
+  sed -e "s|${_target_dir}/||"                                                                     | # ディレクトリ名に変換
+  tee > "${_tmp_embed_list}"
+  log.trace "find \"${_target_dir}\" -mindepth 1 -maxdepth 1 -type d"
+
+  # プロジェクトpluginリスト作成
+  local _target_dir="${STFW_PROJ_DIR_PLUGIN}/process"
+  touch "${_tmp_proj_list}"
+  if [[ -d "${_target_dir}" ]]; then
+    find "${_target_dir}" -mindepth 1 -maxdepth 1 -type d                                          | # 直下のディレクトリパスから
+    sed -e "s|${_target_dir}/||"                                                                   | # ディレクトリ名に変換
+    tee > "${_tmp_proj_list}"
+    log.trace "find \"${_target_dir}\" -mindepth 1 -maxdepth 1 -type d"
+  fi
+
+  # 結果リスト表示
+  cat "${_tmp_embed_list}" "${_tmp_proj_list}"                                                     | # 組込み + プロジェクト のリストから
+  grep -v "^_"                                                                                     | # 共通処理を除外
+  sort                                                                                             | # 一意に絞る
+  uniq
+
+  # 一時ファイルを削除
+  rm -f "${_tmp_embed_list}"
+  rm -f "${_tmp_proj_list}"
+
+  log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# process plugin配置ディレクトリ取得
+#
+# 概要
+#   プロジェクト、STFW_HOMEいづれかに配置されたprocess pluginの内、利用可能なパスを表示します。
+#
+# 引数
+#   1: process名
+#
+# リターンコード
+#   ${EXITCODE_SUCCESS}: 正常終了した場合
+#   ${EXITCODE_ERROR}  : エラー発生時
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     process plugin配置ディレクトリ: 存在する場合
+#     空文字                        : 存在しない場合
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.process.get_path() {
+  log.func_start_trace "$@"
+
+  local _retcode=${EXITCODE_SUCCESS}
+  stfw.get_plugin_path "process/$1"
+  _retcode=$?
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# process pluginインストール済み確認
+#
+# 概要
+#   プロジェクト、STFW_HOMEいづれかに配置されたprocess pluginのis_installedスクリプトを実行します。
+#
+# 引数
+#   1: process plugin path
+#
+# リターンコード
+#   ${EXITCODE_SUCCESS}: インストール済みの場合
+#   ${EXITCODE_ERROR}  : その他の場合
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.process.is_installed() {
+  log.func_start_trace "$@"
+  local _retcode=${EXITCODE_SUCCESS}
+
+  local _plugin_path="$1"
+
+  if [[ ! -d "${_plugin_path}" ]]; then
+    log.error "process: ${_plugin_path} is not exist."
+    return ${EXITCODE_ERROR}
+  fi
+
+  "${_plugin_path}/bin/install/is_installed"
+  _retcode=$?
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# process pluginインストール
+#
+# 概要
+#   プロジェクト、STFW_HOMEいづれかに配置されたprocess pluginのinstallスクリプトを実行します。
+#
+# 引数
+#   1: process plugin path
+#
+# リターンコード
+#   ${EXITCODE_SUCCESS}: 正常終了した場合
+#   ${EXITCODE_ERROR}  : エラー発生時
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.process.install() {
+  log.func_start_trace "$@"
+  local _retcode=${EXITCODE_SUCCESS}
+
+  local _plugin_path="$1"
+
+  local _is_installed=$(stfw.process.is_installed "${_plugin_path}")
+  if [[ "${_is_installed}" = "true" ]]; then
+    log.info "${_plugin_path} is already installed."
+    return ${EXITCODE_SUCCESS}
+  fi
+
+  "${_plugin_path}/bin/install/install"
+  _retcode=$?
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}

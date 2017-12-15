@@ -1,0 +1,167 @@
+#!/bin/bash
+#set -ex
+#===================================================================================================
+#
+# scenario test framework cli
+#
+#===================================================================================================
+#---------------------------------------------------------------------------------------------------
+# 設定
+#---------------------------------------------------------------------------------------------------
+# 実行ディレクトリ
+export STFW_EXEC_DIR="$(pwd)"
+
+# プロジェクトディレクトリ
+STFW_PROJ_DIR=${STFW_PROJ_DIR:-$(
+  while :; do
+    if [[ "$(pwd)" = "/" ]]; then break; fi
+    if [[ -f ./stfw.yml ]]; then pwd; break; fi
+    cd ..
+  done
+)}
+# 見つからない場合、初期化していないカレントディレクトリとみなす
+export STFW_PROJ_DIR="${STFW_PROJ_DIR:-$(pwd)}"
+
+# sym linkを考慮して、スクリプト配置ディレクトリへcd
+dir_script=$(dirname "$(readlink $0)")
+if [[ "${dir_script}" = "." ]]; then dir_script=$(dirname $0); fi
+cd "$(cd ${dir_script}; pwd)"
+
+# 共通設定
+export readonly STFW_HOME="$(cd ..; pwd)"
+. "${STFW_HOME}/bin/lib/setenv"
+
+# loggingユーティリティ
+export readonly PATH_LOG="${STFW_PROJ_DIR_DATA}/stfw.log"
+export LOGLEVEL="${LOGLEVEL_INFO}"
+. "${DIR_BIN_LIB}/logging_utils"
+
+
+
+#--------------------------------------------------------------------------------------------------
+# デフォルト設定
+#--------------------------------------------------------------------------------------------------
+# デフォルト設定ファイル
+export_yaml "${PATH_DEFAULT_CONFIG}"
+
+# プロジェクト設定ファイル
+if [[ -f "${PATH_PROJ_CONFIG}" ]]; then
+  log.debug "${PATH_PROJ_CONFIG} was detected. Override the default config."                       | log.tee
+  export_yaml "${PATH_PROJ_CONFIG}"
+fi
+
+# ログレベル
+stfw.apply_log_level "${stfw_loglevel:-${LOGLEVEL_INFO}}"
+
+
+#---------------------------------------------------------------------------------------------------
+# 関数定義
+#---------------------------------------------------------------------------------------------------
+function private.version() {
+  {
+    echo "$(basename $0) $(cat ${STFW_HOME}/VERSION)"
+    echo "STFW_HOME: ${STFW_HOME}"
+  } >&2
+}
+
+function private.usage() {
+  cat << __EOT__ >&2
+$(private.version)
+usage: $(basename $0) [--version] [--help] [global-options...] <command>
+
+global-options:
+  -l, --log-level <level> : log level [error, warn, info, debug, trace] (default: info)
+  -X KEY=VALUE            : add a performance system config
+
+commands:
+$(                                                                                                   \
+  find ${DIR_BIN_CMD} -maxdepth 1 -type f -print0                                                  | \
+  xargs -0 -I{} bash -c '{} --description'                                                         | \
+  sed -e 's| |@|g'                                                                                 | \
+  sed -e 's|:| : |g'                                                                               | \
+  ${DIR_BIN_LIB}/Tukubai/keta --                                                                   | \
+  sed -e 's| : |:|g'                                                                               | \
+  sed -e 's|@| |g'                                                                                   \
+)
+
+Use '$(basename $0) <command> --help' to see detailed usage of a command.
+__EOT__
+}
+
+
+
+#---------------------------------------------------------------------------------------------------
+# 事前処理
+#---------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+# オプション解析
+#-------------------------------------------------------------------------------
+while :; do
+  case $1 in
+    -v|--version)
+      private.version
+      exit ${EXITCODE_ERROR}
+      ;;
+
+    -h|--help)
+      private.usage
+      exit ${EXITCODE_ERROR}
+      ;;
+
+    -l|--log-level)
+      stfw.apply_log_level "$2"
+      shift 2
+      ;;
+
+    -X)
+      apply_dynamic_env "$2"
+      shift 2
+      ;;
+
+    --)
+      shift
+      break
+      ;;
+
+    *)
+      break
+      ;;
+  esac
+done
+
+
+#-------------------------------------------------------------------------------
+# 引数解析
+#-------------------------------------------------------------------------------
+# 引数チェック
+if [[ $# -lt 1 ]]; then
+  private.usage
+  exit ${EXITCODE_ERROR}
+fi
+
+# サブコマンド
+subcmd="$1"
+shift
+if [[ ! -f "${DIR_BIN_CMD}/${subcmd}" ]]; then
+  private.usage
+  exit ${EXITCODE_ERROR}
+fi
+
+
+
+#---------------------------------------------------------------------------------------------------
+# 本処理
+#---------------------------------------------------------------------------------------------------
+# サブコマンド実行
+"${DIR_BIN_CMD}/${subcmd}" "$@"                                                               2>&1 | log.tee
+retcode=${PIPESTATUS[0]}
+
+
+
+#---------------------------------------------------------------------------------------------------
+# 事後処理
+#---------------------------------------------------------------------------------------------------
+# ログローテーション
+log.rotatelog_by_day_first
+
+exit ${retcode}

@@ -1,0 +1,23 @@
+#!/bin/bash
+. "${STFW_HOME:?}/bin/lib/setenv"
+. "${DIR_BIN_LIB:?}/logging_utils"
+
+# 処理時間を表示
+processing_time=$(log.processing_time.calc "${stfw_process_dir:?}")
+(
+  echo "result:"
+  echo "  run:"
+  echo "    id: ${run_id:?}"
+  echo "    scenario:"
+  echo "      name: $(basename ${stfw_scenario_dir:?})"
+  echo "      bizdate:"
+  echo "        seq: ${stfw_bizdate_seq:?}"
+  echo "        date: ${stfw_bizdate:?}"
+  echo "        process: "
+  echo "          seq: ${stfw_process_seq:?}"
+  echo "          group: ${stfw_process_group:?}"
+  echo "          name: ${stfw_process:?}"
+  echo "          processing_time: ${processing_time}"
+) | log.info
+
+exit ${EXITCODE_SUCCESS}

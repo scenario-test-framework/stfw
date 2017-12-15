@@ -1,0 +1,10 @@
+.DS_Store
+
+src/archives
+src/modules
+src/bin/lib/jq
+
+dist/
+
+.stfw/
+.digdag/

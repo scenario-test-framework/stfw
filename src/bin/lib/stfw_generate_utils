@@ -1,0 +1,337 @@
+#!/bin/bash
+#set -eux
+#===================================================================================================
+# stfw generate共通ユーティリティ
+#
+# 前提
+#   ・システム設定を事前に読み込んでいること
+#
+# 定義リスト
+#   stfw.generate.meta
+#   stfw.generate.run-dig
+#   stfw.generate.scenario-dig
+#   stfw.generate.bizdate-dig
+#
+#===================================================================================================
+#---------------------------------------------------------------------------------------------------
+# 定数
+#---------------------------------------------------------------------------------------------------
+readonly STFW__GEN_MODE_SELF="self"
+readonly STFW__GEN_MODE_CASCADE="cascade"
+
+
+#--------------------------------------------------------------------------------------------------
+# 共通関数読込み
+#--------------------------------------------------------------------------------------------------
+# stfw共通ユーティリティ
+. "${DIR_BIN_LIB}/stfw_utils"
+
+
+#---------------------------------------------------------------------------------------------------
+# meta.yml生成
+#
+# 概要
+#   指定のディレクトリに、run.digを生成します。
+#
+# 引数
+#   1: 出力ディレクトリ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     ${出力ディレクトリ}/meta.yml
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.generate.meta() {
+  log.func_start_trace "$@"
+  local _dir_output="$1"
+  local _path_meta="${_dir_output}/${FILENAME_META}"
+
+  log.info "generate ${_path_meta}"
+
+  (
+    echo 'description: '
+    echo ''
+    echo 'requirement_specifications:'
+    echo ''
+  ) > "${_path_meta}"
+
+  log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# run.dig生成
+#
+# 概要
+#   指定のscenario rootディレクトリ配下の構成から、run.digを生成します。
+#
+# 引数
+#   1: run mode (--run | --dry-run)
+#   2: run id
+#   3: scenario rootディレクトリ
+#   4~: scenario名
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     ${scenario rootディレクトリ}/run.dig
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.generate.run-dig() {
+  log.func_start_trace "$@"
+  local _run_mode="$1"
+  local _run_id="$2"
+  local _dir_digdag_proj="$3"
+  shift 3
+  local _scenario_names=( "$@" )
+  local _path_dig="${_dir_digdag_proj}/${FILENAME_DIG_RUN}"
+
+  # scenario-root-dirが存在しない場合、エラー
+  if [[ ! -d "${_dir_digdag_proj}" ]]; then
+    log.error "${_dir_digdag_proj} is not exist."
+    log.remove_indent
+    return ${EXITCODE_ERROR}
+  fi
+
+
+  log.info "generate ${_path_dig}"
+  log.add_indent
+
+  # dig作成: 開始〜setup
+  # shellcheck disable=SC2154 disable=SC2145
+  (
+    echo 'timezone: '${stfw_server_timezone}
+    echo ''
+    echo '_export:'
+    echo '  run_id : "'${_run_id}'"'
+    echo '  STFW_PROJ_DIR : "'${_dir_digdag_proj}'"'
+    echo '  run_mode : "'${_run_mode}'"'
+    echo ''
+    echo '+run_setup:'
+    echo '  sh>: stfw run --setup '"${_scenario_names[@]}"
+  ) > "${_path_dig}"
+
+  # dig作成: tasks
+  for _cur_scenario in ${_scenario_names[*]}; do
+    local _cur_scenario_dir="${_dir_digdag_proj}/scenario/${_cur_scenario}"
+    (
+      echo ''
+      echo '+'${_cur_scenario}':'
+      echo '  _export:'
+      echo '    stfw_scenario_dir : "'${_cur_scenario_dir}'"'
+      echo '  !include : scenario/'${_cur_scenario}'/scenario.dig'
+    ) >> "${_path_dig}"
+  done
+
+  # dig作成: teardown
+  # shellcheck disable=SC2145
+  (
+    echo ''
+    echo '+run_teardown:'
+    echo '  sh>: stfw run --teardown '"${_scenario_names[@]}"
+    echo '_error:'
+    echo '  sh>: stfw run --teardown '"${_scenario_names[@]}"
+  ) >> "${_path_dig}"
+
+  log.remove_indent
+  log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+
+#---------------------------------------------------------------------------------------------------
+# scenario.dig生成
+#
+# 概要
+#   指定のscenarioディレクトリ配下の構成から、scenario.digを生成します。
+#
+# 引数
+#   1: generate mode (STFW__GEN_MODE_SELF | STFW__GEN_MODE_CASCADE)
+#   2: scenarioディレクトリ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     generate mode = self
+#       ${scenarioディレクトリ}/scenario.dig
+#     generate mode = cascade
+#       ${scenarioディレクトリ}/
+#         scenario.dig
+#         ${bizdateディレクトリ}/bizdate.dig
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.generate.scenario-dig() {
+  log.func_start_trace "$@"
+  local _generate_mode="$1"
+  local _dir_scenario="$2"
+  local _path_output="${_dir_scenario}/${FILENAME_DIG_SCENARIO}"
+  local _path_tmp_bizdate_list="${_path_output}.bizdate.lst"
+
+  # scenario-dirが存在しない場合、エラー
+  if [[ ! -d "${_dir_scenario}" ]]; then
+    log.error "${_dir_scenario} is not exist."
+    log.remove_indent
+    return ${EXITCODE_ERROR}
+  fi
+
+  # メタ情報ファイル作成
+  stfw.generate.meta "${_dir_scenario}"
+
+  log.info "generate ${_path_output}"
+  log.add_indent
+
+  # bizdate-dirリスト
+  find "${_dir_scenario}" -mindepth 1 -maxdepth 1 -follow -type d                                  | # scenario-dir直下のディレクトリリストから
+  sed -e "s|${_dir_scenario}/||"                                                                   | # ディレクトリ名リストに置換
+  grep "^_"                                                                                        | # _で始まるものに絞る
+  sort                                                                                             | # 文字列でソート
+  tee > "${_path_tmp_bizdate_list}"
+
+  # dig作成: 開始〜setup
+  (
+    echo 'timezone: '${stfw_server_timezone}
+    echo ''
+    echo '+scenario_setup:'
+    echo '  sh>: stfw scenario --setup "${stfw_scenario_dir}"'
+  ) > "${_path_output}"
+
+  # dig作成: tasks
+  for _cur_bizdate_dirname in $(cat "${_path_tmp_bizdate_list}"); do
+    local _cur_seq="$(     echo ${_cur_bizdate_dirname} | cut -d '_' -f 2 )"
+    local _cur_bizdate="$( echo ${_cur_bizdate_dirname} | cut -d '_' -f 3 )"
+    (
+      echo ''
+      echo '+'${_cur_bizdate_dirname}':'
+      echo '  _export:'
+      echo '    stfw_bizdate_dir : "${stfw_scenario_dir}/'${_cur_bizdate_dirname}'"'
+      echo '    stfw_bizdate_seq : "'${_cur_seq}'"'
+      echo '    stfw_bizdate : "'${_cur_bizdate}'"'
+      echo '  !include : '${_cur_bizdate_dirname}'/bizdate.dig'
+    ) >> "${_path_output}"
+  done
+
+  # dig作成: teardown
+  (
+    echo ''
+    echo '+scenario_teardown:'
+    echo '  sh>: stfw scenario --teardown "${stfw_scenario_dir}"'
+    echo '_error:'
+    echo '  sh>: stfw scenario --teardown "${stfw_scenario_dir}"'
+  ) >> "${_path_output}"
+
+  # cascade
+  if [[ "${_generate_mode}" = "cascade" ]]; then
+    for _cur_bizdate_dirname in $(cat "${_path_tmp_bizdate_list}"); do
+      local _cur_seq="$(     echo ${_cur_bizdate_dirname} | cut -d '_' -f 2 )"
+      local _cur_bizdate="$( echo ${_cur_bizdate_dirname} | cut -d '_' -f 3 )"
+      stfw.generate.bizdate-dig "${_dir_scenario}/${_cur_bizdate_dirname}"
+    done
+  fi
+
+  # 一時ファイル削除
+  rm -f "${_path_tmp_bizdate_list}"
+
+  log.remove_indent
+  log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# bizdate dig生成
+#
+# 概要
+#   指定のbizdateディレクトリ配下の構成から、bizdate.digを生成します。
+#
+# 引数
+#   1: bizdateディレクトリ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     ${bizdateディレクトリ}/bizdate.dig
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.generate.bizdate-dig() {
+  log.func_start_trace "$@"
+  local _dir_bizdate="$1"
+  local _path_output="${_dir_bizdate}/${FILENAME_DIG_DATE}"
+  local _path_tmp_process_list="${_path_output}.process.lst"
+
+  # bizdate-dirが存在しない場合、エラー
+  if [[ ! -d "${_dir_bizdate}" ]]; then
+    log.error "${_dir_bizdate} is not exist."
+    log.remove_indent
+    return ${EXITCODE_ERROR}
+  fi
+
+  # メタ情報ファイル作成
+  stfw.generate.meta "${_dir_bizdate}"
+
+  log.info "generate ${_path_output}"
+  log.add_indent
+
+  # process-dirリスト
+  find "${_dir_bizdate}" -mindepth 1 -maxdepth 1 -follow -type d                                   | # bizdate-dir直下のディレクトリリストから
+  sed -e "s|${_dir_bizdate}/||"                                                                    | # ディレクトリ名リストに置換
+  grep "^_"                                                                                        | # _で始まるものに絞る
+  sort                                                                                             | # 文字列でソート
+  tee > "${_path_tmp_process_list}"
+
+  # dig作成: 開始〜setup
+  (
+    echo 'timezone: '${stfw_server_timezone}
+    echo ''
+    echo '+bizdate_setup:'
+    echo '  sh>: stfw bizdate --setup "${stfw_bizdate_dir}"'
+  ) > "${_path_output}"
+
+  # dig作成: tasks
+  for _cur_process_dirname in $(cat "${_path_tmp_process_list}"); do
+    local _cur_seq="$(     echo ${_cur_process_dirname} | cut -d '_' -f 2 )"
+    local _cur_group="$(   echo ${_cur_process_dirname} | cut -d '_' -f 3 )"
+    local _cur_process="$( echo ${_cur_process_dirname} | cut -d '_' -f 4 )"
+    (
+      echo ''
+      echo '+'${_cur_process_dirname}':'
+      echo '  _export:'
+      echo '    stfw_process : "'${_cur_process}'"'
+      echo '    stfw_process_dir : "${stfw_bizdate_dir}/'${_cur_process_dirname}'"'
+      echo '    stfw_process_seq : "'${_cur_seq}'"'
+      echo '    stfw_process_group : "'${_cur_group}'"'
+      echo '    stfw_process_retcode : 0'
+      echo '  sh>: stfw process ${run_mode} "${stfw_process_dir}"'
+    ) >> "${_path_output}"
+  done
+
+  # dig作成: teardown
+  (
+    echo ''
+    echo '+bizdate_teardown:'
+    echo '  sh>: stfw bizdate --teardown "${stfw_bizdate_dir}"'
+    echo '_error:'
+    echo '  sh>: stfw bizdate --teardown "${stfw_bizdate_dir}"'
+  ) >> "${_path_output}"
+
+  # 一時ファイル削除
+  rm -f "${_path_tmp_process_list}"
+
+  log.remove_indent
+  log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}

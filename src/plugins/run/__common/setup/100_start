@@ -1,0 +1,7 @@
+#!/bin/bash
+. "${STFW_HOME:?}/bin/lib/setenv"
+. "${DIR_BIN_LIB:?}/logging_utils"
+
+# 処理開始時刻を保存
+log.processing_time.start "${run_id:?}"
+exit $?

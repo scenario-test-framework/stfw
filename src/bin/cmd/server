@@ -1,0 +1,199 @@
+#!/bin/bash
+#set -ex
+#===================================================================================================
+#
+# scenario test framework cli - server control
+#
+#===================================================================================================
+#---------------------------------------------------------------------------------------------------
+# 設定
+#---------------------------------------------------------------------------------------------------
+dir_script="$(dirname $0)"
+cd "$(cd ${dir_script}; pwd)"
+
+# 共通設定
+readonly STFW_HOME="$(cd ../..; pwd)"
+. "${STFW_HOME}/bin/lib/setenv"
+
+# loggingユーティリティ
+. "${DIR_BIN_LIB}/logging_utils"
+# stfw digdag共通ユーティリティ
+. "${DIR_BIN_LIB}/stfw_digdag_utils"
+
+readonly PROGNAME="stfw $(basename $0)"
+
+
+#---------------------------------------------------------------------------------------------------
+# 関数定義
+#---------------------------------------------------------------------------------------------------
+function private.description() {
+  echo "  $(basename $0) : server control"
+}
+
+
+function private.usage() {
+  cat << __EOT__ >&2
+usage: ${PROGNAME} start|stop|restart|status [start options...]
+
+start options:
+  -b, --bind ADDRESS       : IP address to listen HTTP clients (default: ${stfw_server_bind})
+  -n, --port PORT          : port number to listen for web interface and api clients (default: ${stfw_server_port})
+  -m, --memory             : uses memory database (default: ${stfw_server_db_mode})
+  -o, --database DIR       : store status to this database (default: ${stfw_server_db_mode})
+      --max-task-threads N : limit maxium number of task execution threads
+
+__EOT__
+}
+
+
+function private.start() {
+  log.func_start_trace
+
+  # 多重起動チェック
+  if [ -f ${PATH_PROJ_PID} ]; then
+      log.error "other ${PROGNAME} process has already running. (PID-file:${PATH_PROJ_PID} is exist.)"
+      return ${EXITCODE_ERROR}
+  fi
+
+  # バナー表示
+  cat "${STFW_HOME}/banner.txt"
+  cat "${STFW_HOME}/VERSION"
+
+  # digdag server
+  stfw.digdag.server.start
+  local _retcode=$?
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function private.stop() {
+  log.func_start_trace
+
+  # 停止中チェック
+  if [ ! -f ${PATH_PROJ_PID} ]; then
+      log.error "${PROGNAME} process is NOT running."
+      return ${EXITCODE_ERROR}
+  fi
+
+  # digdag server
+  stfw.digdag.server.stop
+  local _retcode=$?
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function private.status() {
+  log.func_start_trace
+
+  # digdag server
+  local _is_running=$(stfw.digdag.server.is_running)
+
+  if [[ "${_is_running}" = "true" ]]; then
+    log.info "${PROGNAME} process is running."
+  else
+    log.info "${PROGNAME} process is NOT running."
+  fi
+
+  log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+
+#---------------------------------------------------------------------------------------------------
+# 事前処理
+#---------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+# 引数解析
+#-------------------------------------------------------------------------------
+# 引数チェック
+if [[ $# -lt 1 ]]; then
+  private.usage
+  exit ${EXITCODE_ERROR}
+fi
+
+# 実行コマンド
+cmd="$1"
+shift
+
+
+#-------------------------------------------------------------------------------
+# オプション解析
+#-------------------------------------------------------------------------------
+while :; do
+  case $1 in
+    -b|--bind)
+      export stfw_server_bind="$2"
+      shift 2
+      ;;
+
+    -n|--port)
+      export stfw_server_port="$2"
+      shift 2
+      ;;
+
+    -m|--memory)
+      export stfw_server_db_mode="--memory"
+      shift
+      ;;
+
+    -o|--database)
+      export stfw_server_db_mode="--database $2"
+      shift 2
+      ;;
+
+    --max-task-threads)
+      export stfw_server_max_task_threads="$2"
+      shift 2
+      ;;
+
+    --)
+      shift
+      break
+      ;;
+
+    *)
+      break
+      ;;
+  esac
+done
+
+
+
+#---------------------------------------------------------------------------------------------------
+# 本処理
+#---------------------------------------------------------------------------------------------------
+case ${cmd} in
+  --description)
+    private.description
+    exit ${EXITCODE_ERROR}
+    ;;
+
+  start)
+    private.start
+    ;;
+
+  stop)
+    private.stop
+    ;;
+
+  restart)
+    private.stop
+    private.start
+    ;;
+
+  status)
+    private.status
+    ;;
+
+  *)
+    private.usage
+    exit ${EXITCODE_ERROR}
+    ;;
+esac
+
+exit $?

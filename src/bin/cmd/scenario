@@ -1,0 +1,307 @@
+#!/bin/bash
+#set -ex
+#===================================================================================================
+#
+# scenario test framework cli - scenario command
+#
+#===================================================================================================
+#---------------------------------------------------------------------------------------------------
+# 設定
+#---------------------------------------------------------------------------------------------------
+dir_script="$(dirname $0)"
+cd "$(cd ${dir_script}; pwd)"
+
+# 共通設定
+readonly STFW_HOME="$(cd ../..; pwd)"
+. "${STFW_HOME}/bin/lib/setenv"
+
+# loggingユーティリティ
+. "${DIR_BIN_LIB}/logging_utils"
+# stfw generate共通ユーティリティ
+. "${DIR_BIN_LIB}/stfw_generate_utils"
+
+readonly PROGNAME="stfw $(basename $0)"
+
+
+#---------------------------------------------------------------------------------------------------
+# 関数定義
+#---------------------------------------------------------------------------------------------------
+function private.description() {
+  echo "  $(basename $0) : scenario control"
+}
+
+
+function private.usage() {
+  cat << __EOT__ >&2
+usage: ${PROGNAME} [options...]
+
+options:
+  -i, --init <scenario-name> : generate scaffold to current directory
+  -g, --generate-dig         : generate workflow definition from current directory structure
+  -G, --generate-dig-cascade : generate workflow definition from current directory structure with children
+  -s, --setup <exec-dir>     : run setup scripts
+  -t, --teardown <exec-dir>  : run teardown scripts
+
+__EOT__
+  exit ${EXITCODE_ERROR}
+}
+
+
+function private.init() {
+  log.func_start_trace "$@"
+  local _dirname_scenario="$1"
+
+  log.trace "cd \"${STFW_EXEC_DIR}\""
+  cd "${STFW_EXEC_DIR}"
+
+  local _dir_scenario="$(pwd)/${_dirname_scenario}"
+
+  # カレントディレクトリが scenario-root-dir 以外の場合、エラー
+  if [[ "$(stfw.is_in_scenario-root-dir)" != "true" ]]; then
+    log.error "current dir: $(pwd) is not scenario-root-dir."
+    return ${EXITCODE_ERROR}
+  fi
+
+  # ディレクトリ作成
+  if [[ ! -d "${_dir_scenario}" ]]; then
+    log.trace "mkdir \"${_dir_scenario}\""
+    mkdir "${_dir_scenario}"
+  fi
+
+  # dig生成
+  stfw.generate.scenario-dig "${STFW__GEN_MODE_SELF}" "${_dir_scenario}"
+
+  # 結果を表示
+  log.info "result:"
+  log.add_indent
+  find "${_dirname_scenario}" -type f | log.info
+  log.remove_indent
+
+  log.trace "cd -"
+  cd - >/dev/null 2>&1
+
+  log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function private.generate_dig() {
+  log.func_start_trace "$@"
+  local _generate_mode="$1"
+  local _retcode=${EXITCODE_SUCCESS}
+
+  log.trace "cd \"${STFW_EXEC_DIR}\""
+  cd "${STFW_EXEC_DIR}"
+
+  # カレントディレクトリが scenario-dir 以外の場合、エラー
+  if [[ "$(stfw.is_in_scenario-dir)" != "true" ]]; then
+    log.error "current dir: $(pwd) is not scenario-dir."
+    return ${EXITCODE_ERROR}
+  fi
+
+  # scenario.dig生成
+  stfw.generate.scenario-dig "${_generate_mode}" "$(pwd)"
+  _retcode=$?
+
+  log.trace "cd -"
+  cd - >/dev/null 2>&1
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function private.setup() {
+  log.func_start_trace "$@"
+  local _trg_scenario_dir="$1"
+  local _retcode=${EXITCODE_SUCCESS}
+
+  log.trace "cd \"${_trg_scenario_dir}\""
+  cd "${_trg_scenario_dir}"
+
+  # 組み込みplugin.setup
+  local _sect_name="scenario-embedded-setup"
+  log.sect_start_debug "${_sect_name}"
+  local _dir_embed_setup="${DIR_PLUGIN}/scenario/__common/setup"
+  stfw.bulk_exec_scripts "${_dir_embed_setup}"
+  _retcode=$?
+  log.sect_end_debug "${_sect_name}" "${_retcode}"
+  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then return ${_retcode}; fi
+
+  # プロジェクトplugin.setup
+  _sect_name="scenario-project-setup"
+  log.sect_start_debug "${_sect_name}"
+  local _dir_proj_setup="$(stfw.get_plugin_path scenario/_common/setup)"
+  if [[ "${_dir_proj_setup}x" != "x" ]]; then
+    stfw.bulk_exec_scripts "${_dir_proj_setup}"
+    _retcode=$?
+  fi
+  log.sect_end_debug "${_sect_name}" "${_retcode}"
+  log.sect_end_trace "scenario-project-setup" "${_retcode}"
+
+  log.trace "cd -"
+  cd - >/dev/null 2>&1
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function private.teardown() {
+  log.func_start_trace "$@"
+  local _trg_scenario_dir="$1"
+  local _retcode=${EXITCODE_SUCCESS}
+
+  log.trace "cd \"${_trg_scenario_dir}\""
+  cd "${_trg_scenario_dir}"
+
+  # プロジェクトplugin.teardown
+  local _sect_name="scenario-project-teardown"
+  log.sect_start_debug "${_sect_name}"
+  local _dir_proj_teardown="$(stfw.get_plugin_path scenario/_common/teardown)"
+  if [[ "${_dir_proj_teardown}x" != "x" ]]; then
+    stfw.bulk_exec_scripts "${_dir_proj_teardown}"
+    _retcode=$?
+  fi
+  log.sect_end_debug "${_sect_name}" "${_retcode}"
+  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then return ${_retcode}; fi
+
+  # 組み込みplugin.teardown
+  _sect_name="scenario-embedded-teardown"
+  log.sect_start_debug "${_sect_name}"
+  local _dir_embed_teardown="${DIR_PLUGIN}/scenario/__common/teardown"
+  stfw.bulk_exec_scripts "${_dir_embed_teardown}"
+  _retcode=$?
+  log.sect_end_debug "${_sect_name}" "${_retcode}"
+
+  log.trace "cd -"
+  cd - >/dev/null 2>&1
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# 事前処理
+#---------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+# オプション解析
+#-------------------------------------------------------------------------------
+# 実行コマンド
+cmd=""
+# generate mode
+generate_mode=""
+# シナリオディレクトリ
+trg_scenario_dir=""
+
+while :; do
+  case $1 in
+    --description)
+      private.description
+      exit ${EXITCODE_ERROR}
+      ;;
+
+    -h|--help)
+      private.usage
+      exit ${EXITCODE_ERROR}
+      ;;
+
+    -i|--init)
+      if [[ "${cmd}x" != "x" ]]; then private.usage; fi
+      if [[ $# -lt 2 ]]; then private.usage; fi
+      cmd="init"
+      # シナリオ名
+      scenario_name="$2"
+      shift
+      ;;
+
+    -g|--generate-dig)
+      if [[ "${cmd}x" != "x" ]]; then private.usage; fi
+      cmd="generate-dig"
+      generate_mode="${STFW__GEN_MODE_SELF}"
+      shift
+      ;;
+
+    -G|--generate-dig-cascade)
+      if [[ "${cmd}x" != "x" ]]; then private.usage; fi
+      cmd="generate-dig"
+      generate_mode="${STFW__GEN_MODE_CASCADE}"
+      shift
+      ;;
+
+    -s|--setup)
+      if [[ "${cmd}x" != "x" ]]; then private.usage; fi
+      if [[ $# -lt 2 ]]; then private.usage; fi
+      cmd="setup"
+
+      # シナリオディレクトリ
+      trg_scenario_dir="$2"
+      if [[ ! -d "${trg_scenario_dir}" ]]; then
+        log.error "${trg_scenario_dir} is not exist."
+        exit ${EXITCODE_ERROR}
+      fi
+      shift 2
+      ;;
+
+    -t|--teardown)
+      if [[ "${cmd}x" != "x" ]]; then private.usage; fi
+      if [[ $# -lt 2 ]]; then private.usage; fi
+      cmd="teardown"
+
+      # シナリオディレクトリ
+      trg_scenario_dir="$2"
+      if [[ ! -d "${trg_scenario_dir}" ]]; then
+        log.error "${trg_scenario_dir} is not exist."
+        exit ${EXITCODE_ERROR}
+      fi
+      shift 2
+      ;;
+
+    --)
+      shift
+      break
+      ;;
+
+    *)
+      break
+      ;;
+  esac
+done
+
+
+#---------------------------------------------------------------------------------------------------
+# 本処理
+#---------------------------------------------------------------------------------------------------
+log.script_start "${PROGNAME} ${cmd}"
+
+#-------------------------------------------------------------------------------
+# 引数解析
+#-------------------------------------------------------------------------------
+# コマンド実行
+case ${cmd} in
+  init)
+    private.init "${scenario_name}"
+    ;;
+
+  generate-dig)
+    private.generate_dig "${generate_mode}"
+    ;;
+
+  setup)
+    private.setup "${trg_scenario_dir}"
+    ;;
+
+  teardown)
+    private.teardown "${trg_scenario_dir}"
+    ;;
+
+  *)
+    private.usage
+    exit ${EXITCODE_ERROR}
+    ;;
+esac
+exitcode=$?
+
+log.script_end "${PROGNAME} ${cmd}" "${exitcode}"
+exit ${exitcode}

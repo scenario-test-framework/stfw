@@ -1,0 +1,18 @@
+#!/bin/bash
+. "${STFW_HOME}/bin/lib/setenv"
+
+# プロジェクト設定の読み込み
+path_project_config="${STFW_PROJ_DIR_CONFIG}/plugins/process/scripts/config.yml"
+if [[ -f "${path_project_config}" ]]; then
+  export_yaml "${path_project_config}";
+fi
+
+# シナリオ設定の読み込み
+path_scenario_config="config/config.yml"
+if [[ -f "${path_scenario_config}" ]]; then
+  export_yaml "${path_scenario_config}";
+fi
+
+# 実行
+stfw.bulk_exec_scripts "scripts"
+exit $?

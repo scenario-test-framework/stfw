@@ -1,0 +1,462 @@
+#!/bin/bash
+#set -ex
+#===================================================================================================
+#
+# scenario test framework cli - scenario runner
+#
+#===================================================================================================
+#---------------------------------------------------------------------------------------------------
+# 設定
+#---------------------------------------------------------------------------------------------------
+dir_script="$(dirname $0)"
+cd "$(cd ${dir_script}; pwd)"
+
+# 共通設定
+readonly STFW_HOME="$(cd ../..; pwd)"
+. "${STFW_HOME}/bin/lib/setenv"
+
+# loggingユーティリティ
+. "${DIR_BIN_LIB}/logging_utils"
+# stfw generate共通ユーティリティ
+. "${DIR_BIN_LIB}/stfw_generate_utils"
+# stfw digdag共通ユーティリティ
+. "${DIR_BIN_LIB}/stfw_digdag_utils"
+
+readonly PROGNAME="stfw $(basename $0)"
+
+
+
+#---------------------------------------------------------------------------------------------------
+# 関数定義
+#---------------------------------------------------------------------------------------------------
+function private.description() {
+  echo "  $(basename $0) <scenario-names...> : run a scenario"
+}
+
+
+function private.usage() {
+  cat << __EOT__ >&2
+usage: ${PROGNAME} [options...] <scenario-names...>
+
+options:
+  -d, --dry-run                       : dry-run mode doesn't execute tasks
+  -f, --follow                        : show new logs until attempt or task finishes
+  -s, --setup <scenario-names...>     : run setup scripts
+  -t, --teardown <scenario-names...>  : run teardown scripts
+
+__EOT__
+  exit ${EXITCODE_ERROR}
+}
+
+
+function private.get_uniq_id() {
+  echo "$(date '+%Y%m%d%H%M%S')_$$"
+}
+
+
+function private.get_run_id() {
+  echo "_$(private.get_uniq_id)"
+}
+
+
+function private.setup() {
+  log.func_start_trace "$@"
+  local _retcode=${EXITCODE_SUCCESS}
+
+  # 組み込みplugin.setup
+  local _sect_name="run-embedded-setup"
+  log.sect_start_debug "${_sect_name}"
+  local _dir_embed_setup="${DIR_PLUGIN}/run/__common/setup"
+  stfw.bulk_exec_scripts "${_dir_embed_setup}"
+  _retcode=$?
+  log.sect_end_debug "${_sect_name}" "${_retcode}"
+  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then return ${_retcode}; fi
+
+  # プロジェクトplugin.setup
+  _sect_name="run-project-setup"
+  log.sect_start_debug "${_sect_name}"
+  local _dir_proj_setup="$(stfw.get_plugin_path run/_common/setup)"
+  if [[ "${_dir_proj_setup}x" != "x" ]]; then
+    stfw.bulk_exec_scripts "${_dir_proj_setup}"
+    _retcode=$?
+  fi
+  log.sect_end_debug "${_sect_name}" "${_retcode}"
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function private.teardown() {
+  log.func_start_trace "$@"
+  local _retcode=${EXITCODE_SUCCESS}
+
+  # プロジェクトplugin.teardown
+  local _sect_name="run-project-teardown"
+  log.sect_start_debug "${_sect_name}"
+  local _dir_proj_teardown="$(stfw.get_plugin_path run/_common/teardown)"
+  if [[ "${_dir_proj_teardown}x" != "x" ]]; then
+    stfw.bulk_exec_scripts "${_dir_proj_teardown}"
+    _retcode=$?
+  fi
+  log.sect_end_debug "${_sect_name}" "${_retcode}"
+  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then return ${_retcode}; fi
+
+  # 組み込みplugin.teardown
+  _sect_name="run-embedded-teardown"
+  log.sect_start_debug "${_sect_name}"
+  local _dir_embed_teardown="${DIR_PLUGIN}/run/__common/teardown"
+  stfw.bulk_exec_scripts "${_dir_embed_teardown}"
+  _retcode=$?
+  log.sect_end_debug "${_sect_name}" "${_retcode}"
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function private.gen_symlinks() {
+  log.func_start_trace "$@"
+  local _input_dir="$1"
+  local _output_dir="$2"
+
+  if [[ ! -d "${_input_dir}" ]]; then
+    log.warn "${_input_dir} is not exist."
+    return ${EXITCODE_SUCCESS}
+  fi
+
+  local _tmp_dir_list="${STFW_PROJ_DIR_DATA}/${FUNCNAME[0]}_dir_$(private.get_uniq_id)"
+  local _tmp_file_list="${STFW_PROJ_DIR_DATA}/${FUNCNAME[0]}_file_$(private.get_uniq_id)"
+
+  # dir相対パスリスト作成
+  find "${_input_dir}" -follow -type d                                                             | # ディレクトリリストから
+  grep -v "/\.digdag"                                                                              | # digdagデータディレクトリを除外
+  grep -v "^${_input_dir}$"                                                                        | # 自ディレクトリを除外
+  sed -e "s|${_input_dir}/||"                                                                      | # 相対パス化
+  sort > ${_tmp_dir_list}
+
+  # file相対パスリスト作成
+  find "${_input_dir}" -follow -type f                                                             | # ファイルリストから
+  grep -v "/\.digdag"                                                                              | # digdagデータディレクトリを除外
+  sed -e "s|${_input_dir}/||"                                                                      | # 相対パス化
+  sort > ${_tmp_file_list}
+
+  # dirリストループ
+  local _before_IFS="$IFS"
+  IFS=$'\n'
+  for _cur_reldir in $(cat "${_tmp_dir_list}"); do
+    # dir作成
+    local _cur_output_dir="${_output_dir}/${_cur_reldir}"
+    if [[ ! -d "${_cur_output_dir}" ]]; then
+      log.trace "mkdir -p \"${_cur_output_dir}\""
+      mkdir -p "${_cur_output_dir}"
+    fi
+  done
+
+  # ファイルリストループ
+  for _cur_relfile in $(cat "${_tmp_file_list}"); do
+    # sym link作成
+    local _cur_from_file="${_input_dir}/${_cur_relfile}"
+    local _cur_to_file="${_output_dir}/${_cur_relfile}"
+    log.trace "ln -s \"${_cur_from_file}\" \"${_cur_to_file}\""
+    ln -s "${_cur_from_file}" "${_cur_to_file}"
+  done
+  IFS="${_before_IFS}"
+
+  # 一時ファイルの削除
+  rm -f "${_tmp_dir_list}"
+  rm -f "${_tmp_file_list}"
+
+  log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function private.gen_symlink_digdag_proj() {
+  log.func_start_trace "$@"
+
+  local _digdag_proj_dir="$1"
+  shift
+  local _target_scenarios=( "$@" )
+
+  # 起動設定
+  ln -sf "${PATH_PROJ_CONFIG}" "${_digdag_proj_dir}/$(basename ${PATH_PROJ_CONFIG})"
+  # config
+  private.gen_symlinks "${STFW_PROJ_DIR}/config" "${_digdag_proj_dir}/config"
+  # plugins
+  private.gen_symlinks "${STFW_PROJ_DIR}/plugins" "${_digdag_proj_dir}/plugins"
+  # modules
+  private.gen_symlinks "${STFW_PROJ_DIR}/modules" "${_digdag_proj_dir}/modules"
+  # scenario
+  for _cur_scenario in ${_target_scenarios[*]}; do
+    private.gen_symlinks "${STFW_PROJ_DIR}/scenario/${_cur_scenario}" "${_digdag_proj_dir}/scenario/${_cur_scenario}"
+  done
+
+  log.func_end_trace ${EXITCODE_SUCCESS}
+}
+
+
+function private.move_dig_files() {
+  log.func_start_trace "$@"
+  local _input_dir="$1"
+  local _output_dir="$2"
+
+  if [[ ! -d "${_input_dir}" ]]; then
+    log.warn "${_input_dir} is not exist."
+    return ${EXITCODE_SUCCESS}
+  fi
+
+  local _tmp_dir_list="${STFW_PROJ_DIR_DATA}/${FUNCNAME[0]}_dir_$(private.get_uniq_id)"
+  local _tmp_file_list="${STFW_PROJ_DIR_DATA}/${FUNCNAME[0]}_file_$(private.get_uniq_id)"
+
+  # dir相対パスリスト作成
+  find "${_input_dir}" -follow -type d                                                             | # ディレクトリリストから
+  grep -v "/\.digdag"                                                                              | # digdagデータディレクトリを除外
+  grep -v "^${_input_dir}$"                                                                        | # 自ディレクトリを除外
+  sed -e "s|${_input_dir}/||"                                                                      | # 相対パス化
+  sort > ${_tmp_dir_list}
+
+  # file相対パスリスト作成
+  find "${_input_dir}" -follow -type f -name "*.dig"                                               | # digファイルリストから
+  grep -v "/\.digdag"                                                                              | # digdagデータディレクトリを除外
+  sed -e "s|${_input_dir}/||"                                                                      | # 相対パス化
+  sort > ${_tmp_file_list}
+
+  # dirリストループ
+  local _before_IFS="$IFS"
+  IFS=$'\n'
+  for _cur_reldir in $(cat "${_tmp_dir_list}"); do
+    # dir作成
+    local _cur_output_dir="${_output_dir}/${_cur_reldir}"
+    if [[ ! -d "${_cur_output_dir}" ]]; then
+      log.trace "mkdir -p \"${_cur_output_dir}\""
+      mkdir -p "${_cur_output_dir}"
+    fi
+  done
+
+  # ファイルリストループ
+  for _cur_relfile in $(cat "${_tmp_file_list}"); do
+    # sym link作成
+    local _cur_from_file="${_input_dir}/${_cur_relfile}"
+    local _cur_to_file="${_output_dir}/${_cur_relfile}"
+    log.trace "mv \"${_cur_from_file}\" \"${_cur_to_file}\""
+    mv "${_cur_from_file}" "${_cur_to_file}"
+  done
+  IFS="${_before_IFS}"
+
+  # 一時ファイルの削除
+  rm -f "${_tmp_dir_list}"
+  rm -f "${_tmp_file_list}"
+
+  log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function private.move_to_digdag_proj() {
+  log.func_start_trace "$@"
+
+  local _digdag_proj_dir="$1"
+  shift
+  local _target_scenarios=( "$@" )
+
+  # scenario配下のdigファイルを移動
+  mkdir "${_digdag_proj_dir}/scenario"
+  for _cur_scenario in ${_target_scenarios[*]}; do
+    private.move_dig_files                                                                         \
+      "${STFW_PROJ_DIR}/scenario/${_cur_scenario}"                                                 \
+      "${_digdag_proj_dir}/scenario/${_cur_scenario}"
+  done
+
+  log.func_end_trace ${EXITCODE_SUCCESS}
+}
+
+
+function private.restore_moved_digdag_proj() {
+  log.func_start_trace "$@"
+
+  local _digdag_proj_dir="$1"
+  # scenario配下のdigファイルを移動
+  private.move_dig_files "${_digdag_proj_dir}/scenario" "${STFW_PROJ_DIR}/scenario"
+
+  log.func_end_trace ${EXITCODE_SUCCESS}
+}
+
+
+function private.run_on_server() {
+  log.func_start_trace "$@"
+
+  local _run_opt="$1"
+  local _is_follow="$2"
+  shift 2
+  local _target_scenarios=( "$@" )
+
+  # scenarioディレクトリ存在チェック
+  for _cur_scenario in ${_target_scenarios[*]}; do
+    if [ ! -d "${STFW_PROJ_DIR}/scenario/${_cur_scenario}" ]; then
+      log.error "${STFW_PROJ_DIR}/scenario/${_cur_scenario} is not exist."
+      return ${EXITCODE_ERROR}
+    fi
+  done
+
+  # サーバ起動チェック
+  if [[ "$(stfw.digdag.server.is_running)" != "true" ]]; then
+    log.error "digdag server is not running."
+    return ${EXITCODE_ERROR}
+  fi
+
+  local _retcode=${EXITCODE_SUCCESS}
+
+  # run_id発行
+  local _run_id=$(private.get_run_id)
+
+  # digdag projectディレクトリに必要なファイルをmove
+  local _digdag_proj_dir="${STFW_PROJ_DIR_DATA}/runs/${_run_id}"
+  mkdir -p "${_digdag_proj_dir}"
+  private.move_to_digdag_proj "${_digdag_proj_dir}" "${_target_scenarios[@]}"
+
+  # run.dig作成
+  stfw.generate.run-dig "${_run_opt}" "${_run_id}" "${_digdag_proj_dir}" "${_target_scenarios[@]}"
+
+  # digdag push
+  stfw.digdag.push "${_digdag_proj_dir}" "${_run_id}" "${_target_scenarios[@]}"
+  _retcode=$?
+
+  # digdag projectディレクトリからファイル群を戻す
+  private.restore_moved_digdag_proj "${_digdag_proj_dir}"
+  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then return ${_retcode}; fi
+
+  # push内容がsymlinkで動くようにdigdag projetディレクトリを生成
+  private.gen_symlink_digdag_proj "${_digdag_proj_dir}" "${_target_scenarios[@]}"
+
+  # digdag start
+  stfw.digdag.start "${_digdag_proj_dir}" "${_run_id}" "$(basename ${FILENAME_DIG_RUN} .dig)"
+  _retcode=$?
+  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then return ${_retcode}; fi
+  log.info "start info"
+  log.add_indent
+  log.info "$(stfw.digdag.show_start_info ${_digdag_proj_dir})"
+  log.remove_indent
+
+  # attempt id取得
+  local _attempt_id=$(stfw.digdag.get_attempt_id "${_digdag_proj_dir}")
+  if [[ "${_attempt_id}x" = "x" ]]; then return ${EXITCODE_ERROR}; fi
+
+  # url表示
+  local _ip=$(get_ip)
+  # shellcheck disable=SC2154
+  local _url_attempt="http://${_ip}:${stfw_server_port}/attempts/${_attempt_id}"
+  log.info "If you want to check progress status on browser, execute \`open ${_url_attempt}\`"
+
+  # log follow
+  if [[ "${_is_follow}" = "true" ]]; then
+    stfw.digdag.log_follow "${_digdag_proj_dir}" "${_attempt_id}"
+    _retcode=$?
+  fi
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# 事前処理
+#---------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+# オプション解析
+#-------------------------------------------------------------------------------
+# 実行コマンド
+cmd=""
+# run opt
+run_opt="--run"
+# log followモード
+is_follow="false"
+
+while :; do
+  case $1 in
+    --description)
+      private.description
+      exit ${EXITCODE_ERROR}
+      ;;
+
+    -h|--help)
+      private.usage
+      exit ${EXITCODE_ERROR}
+      ;;
+
+    -s|--setup)
+      if [[ "${cmd}x" != "x" ]]; then private.usage; fi
+      cmd="setup"
+      shift
+      ;;
+
+    -t|--teardown)
+      if [[ "${cmd}x" != "x" ]]; then private.usage; fi
+      cmd="teardown"
+      shift
+      ;;
+
+    -d|--dry-run)
+      run_opt="--dry-run"
+      shift
+      ;;
+
+    -f|--follow)
+      is_follow="true"
+      shift
+      ;;
+
+    --)
+      shift
+      break
+      ;;
+
+    *)
+      break
+      ;;
+  esac
+done
+
+# デフォルト設定
+if [[ "${cmd}x" = "x" ]]; then cmd="run_on_server"; fi
+
+# 引数チェック
+if [[ $# -lt 1 ]]; then
+  private.usage
+fi
+
+# シナリオリスト
+target_scenarios=( "$*" )
+
+
+#---------------------------------------------------------------------------------------------------
+# 本処理
+#---------------------------------------------------------------------------------------------------
+log.script_start "${PROGNAME} ${cmd}"
+
+#-------------------------------------------------------------------------------
+# 引数解析
+#-------------------------------------------------------------------------------
+# コマンド実行
+case ${cmd} in
+  run_on_server)
+    private.run_on_server "${run_opt}" "${is_follow}" "${target_scenarios[@]}"
+    ;;
+
+  setup)
+    private.setup "${target_scenarios[@]}"
+    ;;
+
+  teardown)
+    private.teardown "${target_scenarios[@]}"
+    ;;
+
+  *)
+    private.usage
+    exit ${EXITCODE_ERROR}
+    ;;
+esac
+exitcode=$?
+
+log.script_end "${PROGNAME} ${cmd}" "${exitcode}"
+exit ${exitcode}

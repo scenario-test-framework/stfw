@@ -1,0 +1,8 @@
+#!/bin/bash
+echo "script  : $(basename $0) $*"
+echo "whoami  : $(whoami)"
+echo "pwd     : $(pwd)"
+echo "printenv:"
+echo "$(printenv | sort)"
+
+exit 0

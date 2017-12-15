@@ -1,0 +1,8 @@
+#!/bin/bash
+echo "process: embedded-scripts $* START"
+
+echo "target scripts:"
+find scripts -mindepth 1 -maxdepth 1 -follow -type f | sort
+echo ""
+
+exit 0

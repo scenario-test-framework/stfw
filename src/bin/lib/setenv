@@ -1,0 +1,178 @@
+#!/bin/bash
+#===================================================================================================
+#
+# 共通設定
+#
+# 前提:
+#   - STFW_HOME が定義されていること
+#
+#===================================================================================================
+#---------------------------------------------------------------------------------------------------
+# 定数
+#---------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+# 終了コード
+#-------------------------------------------------------------------------------
+readonly EXITCODE_SUCCESS=0
+readonly EXITCODE_WARN=3
+readonly EXITCODE_ERROR=6
+
+#-------------------------------------------------------------------------------
+# ログレベル
+#-------------------------------------------------------------------------------
+readonly LOGLEVEL_TRACE="TRACE"
+readonly LOGLEVEL_DEBUG="DEBUG"
+readonly LOGLEVEL_INFO=" INFO"
+readonly LOGLEVEL_WARN=" WARN"
+readonly LOGLEVEL_ERROR="ERROR"
+
+LOG__PREFIX_SCRIPT_START="<START> "
+LOG__PREFIX_SCRIPT_END="< END > "
+# shellcheck disable=SC2034
+LOG__PREFIX_FUNC_START="${LOG__PREFIX_SCRIPT_START}"
+# shellcheck disable=SC2034
+LOG__PREFIX_FUNC_END="${LOG__PREFIX_SCRIPT_END}"
+# shellcheck disable=SC2034
+LOG__PREFIX_SECT_START="${LOG__PREFIX_SCRIPT_START}"
+# shellcheck disable=SC2034
+LOG__PREFIX_SECT_END="${LOG__PREFIX_SCRIPT_END}"
+
+
+
+#---------------------------------------------------------------------------------------------------
+# 前提チェック
+#---------------------------------------------------------------------------------------------------
+# 環境変数
+if [[ "${STFW_HOME}x" = "x" ]]; then
+  echo "STFW_HOME is not defined" >&2
+  exit ${EXITCODE_ERROR}
+fi
+
+if [[ "${STFW_PROJ_DIR}x" = "x" ]]; then
+  echo "STFW_PROJ_DIR is not defiend." >&2
+  exit ${EXITCODE_ERROR}
+fi
+
+
+
+#---------------------------------------------------------------------------------------------------
+# stfw配置ディレクトリ定数
+#---------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+# ディレクトリ
+#-------------------------------------------------------------------------------
+# スクリプト
+readonly DIR_BIN="${STFW_HOME}/bin"
+# サブコマンド
+readonly DIR_BIN_CMD="${DIR_BIN}/cmd"
+# スクリプトライブラリ
+readonly DIR_BIN_LIB="${DIR_BIN}/lib"
+
+# 設定
+readonly DIR_CONFIG="${STFW_HOME}/config"
+# プラグイン
+readonly DIR_PLUGIN="${STFW_HOME}/plugins"
+
+# プロジェクトテンプレート
+readonly DIR_TEMPLATE="${STFW_HOME}/template"
+
+# ダウンロードアーカイブ
+readonly DIR_ARCHIVE="${STFW_HOME}/archives"
+# 外部ライブラリ
+readonly DIR_MODULE="${STFW_HOME}/modules"
+
+#-------------------------------------------------------------------------------
+# ファイル
+#-------------------------------------------------------------------------------
+# 起動設定ファイル
+readonly FILENAME_SYSTEM_CONFIG="stfw.yml"
+readonly PATH_DEFAULT_CONFIG="${DIR_CONFIG}/${FILENAME_SYSTEM_CONFIG}"
+
+# digファイル
+readonly FILENAME_DIG_RUN="run.dig"
+readonly FILENAME_DIG_SCENARIO="scenario.dig"
+readonly FILENAME_DIG_DATE="bizdate.dig"
+
+# メタ情報ファイル
+readonly FILENAME_META="meta.yml"
+
+#-------------------------------------------------------------------------------
+# 依存モジュール
+#-------------------------------------------------------------------------------
+# ダウンロードタイムアウト秒
+readonly DL_TIMEOUT=1800
+
+# digdag
+readonly URL_DIGDAG="https://dl.bintray.com/digdag/maven/digdag-0.9.21.jar"
+readonly PATH_DIGDAG="${DIR_MODULE}/digdag"
+
+# embulk
+readonly URL_EMBULK="https://dl.bintray.com/embulk/maven/embulk-0.8.39.jar"
+readonly PATH_EMBULK="${DIR_MODULE}/embulk"
+
+
+
+#--------------------------------------------------------------------------------------------------
+# デフォルト設定ファイル存在チェック
+#--------------------------------------------------------------------------------------------------
+if [[ ! -f "${PATH_DEFAULT_CONFIG}" ]]; then
+  echo "ERROR ${PATH_DEFAULT_CONFIG} is not exist." >&2
+  exit ${EXITCODE_ERROR}
+fi
+
+
+
+#---------------------------------------------------------------------------------------------------
+# プロジェクトディレクトリ定数
+#---------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+# ディレクトリ
+#-------------------------------------------------------------------------------
+# 設定
+export STFW_PROJ_DIR_CONFIG="${STFW_PROJ_DIR}/config"
+# プラグイン
+export STFW_PROJ_DIR_PLUGIN="${STFW_PROJ_DIR}/plugins"
+# 内部データ
+export STFW_PROJ_DIR_DATA="${STFW_PROJ_DIR}/.stfw"
+
+#-------------------------------------------------------------------------------
+# ファイル
+#-------------------------------------------------------------------------------
+# プロセスファイル
+readonly PATH_PROJ_PID="${STFW_PROJ_DIR_DATA}/pid"
+# 起動設定ファイル
+readonly PATH_PROJ_CONFIG="${STFW_PROJ_DIR}/${FILENAME_SYSTEM_CONFIG}"
+
+
+
+#--------------------------------------------------------------------------------------------------
+# 共通関数読込み
+#--------------------------------------------------------------------------------------------------
+. "${DIR_BIN_LIB}/common_utils"
+. "${DIR_BIN_LIB}/stfw_utils"
+
+
+
+#--------------------------------------------------------------------------------------------------
+# OS依存設定
+#--------------------------------------------------------------------------------------------------
+# mac
+if [[ "$(is_mac)" = "true" ]]; then
+  if [[ "${JAVA_HOME}x" = "x" ]]; then export JAVA_HOME="$(/usr/libexec/java_home)"; fi
+  if [[ "${_JAVA_OPTIONS}x" = "x" ]]; then export _JAVA_OPTIONS="-Dfile.encoding=UTF-8"; fi
+fi
+
+# linux
+#if [ $(is_linux) = "true" ]; then
+#fi
+
+# cygwin
+#if [ $(is_cygwin) = "true" ]; then
+#fi
+
+
+
+#--------------------------------------------------------------------------------------------------
+# PATH追加
+#--------------------------------------------------------------------------------------------------
+PATH="${DIR_BIN_LIB}/Tukubai:${DIR_BIN_LIB}/Parsrs:${PATH}"

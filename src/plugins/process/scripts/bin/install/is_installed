@@ -1,0 +1,15 @@
+#!/bin/bash
+function is_installed_cmd() {
+  local _target_cmd="$1"
+  if [[ "$(which ${_target_cmd})x" = "x" ]]; then
+    echo "${_target_cmd} is not installed."
+    exit 1
+  fi
+}
+
+is_installed_cmd "find"
+is_installed_cmd "sed"
+is_installed_cmd "awk"
+
+echo "true"
+exit 0
