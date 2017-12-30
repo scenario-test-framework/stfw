@@ -11,7 +11,7 @@ stfw:
     max_task_threads: 64
 
   # ログレベル trace | debug | info | warn | error
-  loglevel: "debug"
+  loglevel: "info"
 
   # sample
   list_sample:
