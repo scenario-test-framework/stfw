@@ -17,26 +17,6 @@ readonly EXITCODE_SUCCESS=0
 readonly EXITCODE_WARN=3
 readonly EXITCODE_ERROR=6
 
-#-------------------------------------------------------------------------------
-# ログレベル
-#-------------------------------------------------------------------------------
-readonly LOGLEVEL_TRACE="TRACE"
-readonly LOGLEVEL_DEBUG="DEBUG"
-readonly LOGLEVEL_INFO=" INFO"
-readonly LOGLEVEL_WARN=" WARN"
-readonly LOGLEVEL_ERROR="ERROR"
-
-LOG__PREFIX_SCRIPT_START="<START> "
-LOG__PREFIX_SCRIPT_END="< END > "
-# shellcheck disable=SC2034
-LOG__PREFIX_FUNC_START="${LOG__PREFIX_SCRIPT_START}"
-# shellcheck disable=SC2034
-LOG__PREFIX_FUNC_END="${LOG__PREFIX_SCRIPT_END}"
-# shellcheck disable=SC2034
-LOG__PREFIX_SECT_START="${LOG__PREFIX_SCRIPT_START}"
-# shellcheck disable=SC2034
-LOG__PREFIX_SECT_END="${LOG__PREFIX_SCRIPT_END}"
-
 
 
 #---------------------------------------------------------------------------------------------------
@@ -146,11 +126,49 @@ readonly PATH_PROJ_CONFIG="${STFW_PROJ_DIR}/${FILENAME_SYSTEM_CONFIG}"
 
 
 #--------------------------------------------------------------------------------------------------
+# PATH追加
+#--------------------------------------------------------------------------------------------------
+PATH="${DIR_BIN_LIB}/Tukubai:${DIR_BIN_LIB}/Parsrs:${PATH}"
+
+
+
+#--------------------------------------------------------------------------------------------------
 # 共通関数読込み
 #--------------------------------------------------------------------------------------------------
+# 共通ユーティリティ
 . "${DIR_BIN_LIB}/common_utils"
-. "${DIR_BIN_LIB}/stfw_utils"
 
+# loggingユーティリティ
+#   logファイル
+export PATH_LOG="${STFW_PROJ_DIR_DATA}/stfw.log"
+#   log level
+readonly LOGLEVEL_TRACE="TRACE"
+readonly LOGLEVEL_DEBUG="DEBUG"
+readonly LOGLEVEL_INFO=" INFO"
+readonly LOGLEVEL_WARN=" WARN"
+readonly LOGLEVEL_ERROR="ERROR"
+#   prefix
+LOG__PREFIX_SCRIPT_START="<START> "
+LOG__PREFIX_SCRIPT_END="< END > "
+# shellcheck disable=SC2034
+LOG__PREFIX_FUNC_START="${LOG__PREFIX_SCRIPT_START}"
+# shellcheck disable=SC2034
+LOG__PREFIX_FUNC_END="${LOG__PREFIX_SCRIPT_END}"
+# shellcheck disable=SC2034
+LOG__PREFIX_SECT_START="${LOG__PREFIX_SCRIPT_START}"
+# shellcheck disable=SC2034
+LOG__PREFIX_SECT_END="${LOG__PREFIX_SCRIPT_END}"
+#   mask
+function log.mask() {
+    cat -                                                                                          |
+    sed -e "s|${PASSWORD:-PASSWORD}|PASSWORD|g"                                                    | # パスワード
+    sed -e "s|${TOKENN:-TOKENN}|TOKENN|g"                                                          | # tokenn
+    tee
+}
+. "${DIR_BIN_LIB}/logging_utils"
+
+# stfwユーティリティ
+. "${DIR_BIN_LIB}/stfw_utils"
 
 
 #--------------------------------------------------------------------------------------------------
@@ -169,10 +187,3 @@ fi
 # cygwin
 #if [ $(is_cygwin) = "true" ]; then
 #fi
-
-
-
-#--------------------------------------------------------------------------------------------------
-# PATH追加
-#--------------------------------------------------------------------------------------------------
-PATH="${DIR_BIN_LIB}/Tukubai:${DIR_BIN_LIB}/Parsrs:${PATH}"

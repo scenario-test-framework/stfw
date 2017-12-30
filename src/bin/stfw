@@ -31,11 +31,6 @@ cd "$(cd ${dir_script}; pwd)"
 export readonly STFW_HOME="$(cd ..; pwd)"
 . "${STFW_HOME}/bin/lib/setenv"
 
-# loggingユーティリティ
-export readonly PATH_LOG="${STFW_PROJ_DIR_DATA}/stfw.log"
-export LOGLEVEL="${LOGLEVEL_INFO}"
-. "${DIR_BIN_LIB}/logging_utils"
-
 
 
 #--------------------------------------------------------------------------------------------------
@@ -79,7 +74,7 @@ $(                                                                              
   xargs -0 -I{} bash -c '{} --description'                                                         | \
   sed -e 's| |@|g'                                                                                 | \
   sed -e 's|:| : |g'                                                                               | \
-  ${DIR_BIN_LIB}/Tukubai/keta --                                                                   | \
+  keta --                                                                                          | \
   sed -e 's| : |:|g'                                                                               | \
   sed -e 's|@| |g'                                                                                   \
 )

@@ -31,11 +31,6 @@ cd "$(cd ${dir_script}; pwd)"
 export readonly STFW_HOME="$(cd ..; pwd)"
 . "${STFW_HOME}/bin/lib/setenv"
 
-# loggingユーティリティ
-export readonly PATH_LOG="${STFW_PROJ_DIR_DATA}/stfw.log"
-export LOGLEVEL="${LOGLEVEL_INFO}"
-. "${DIR_BIN_LIB}/logging_utils"
-
 readonly __TMP_PIP_LIST="/tmp/pip_freeze_$$"
 
 
@@ -217,9 +212,9 @@ function private.extract() {
   cd - > /dev/null
 
   # 展開結果を一つ上のディレクトリに移動
-  local _dirname_extracted="$(ls ${_dir_to} | head -n 1)"
-  mv "${_dir_to}/${_dirname_extracted}"/* "${_dir_to}/"
-  rm -fr "${_dir_to:?}/${_dirname_extracted}"
+  local _dir_extracted="$(find ${_dir_to} -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+  mv "${_dir_extracted}"/* "${_dir_to}/"
+  rm -fr "${_dir_extracted}"
 
   log.func_end_trace ${_exitcode}
   return ${_exitcode}
@@ -359,7 +354,7 @@ log.info "switch binaries"
 __TMP_DIR_BINARY="${DIR_BIN_LIB}/binary/linux"
 if [ "$(is_mac)" = "true" ]; then __TMP_DIR_BINARY="${DIR_BIN_LIB}/binary/mac"; fi
 
-# shellcheck disable=SC2038
+# shellcheck disable=SC2038 disable=SC2016
 find "${__TMP_DIR_BINARY}" -type f                                                                 |
 xargs -I {} bash -c 'cur_file_path={}; ln -sf ${cur_file_path} $(cd $(dirname ${cur_file_path})/../..; pwd)/$(basename ${cur_file_path})'
 

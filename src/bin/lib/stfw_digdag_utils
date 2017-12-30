@@ -353,9 +353,8 @@ function stfw.digdag.server.stop() {
   local _retcode=${EXITCODE_SUCCESS}
 
   # Process Kill
-  local _pid=`cat ${PATH_PROJ_PID}`
-  local _ps_row=`ps -ef | grep ${_pid} | grep -v grep`
-  if [[ "${_ps_row}x" != "x" ]]; then
+  local _pid=$(cat ${PATH_PROJ_PID})
+  if [[ "$(pgrep -F ${PATH_PROJ_PID})x" != "x" ]]; then
     kill -s SIGTERM ${_pid}
     _retcode=$?
   fi
@@ -400,8 +399,7 @@ function stfw.digdag.server.is_running() {
 
   # プロセスの存在確認
   local _pid=$(cat "${PATH_PROJ_PID}")
-  local _ps_row=$(ps -ef | grep ${_pid} | grep -v grep)
-  if [[ "${_ps_row}x" = "x" ]]; then
+  if [[ "$(pgrep -F ${PATH_PROJ_PID})x" = "x" ]]; then
     # PIDファイルがあって、プロセスが存在しない場合、PIDファイルを削除して、停止中扱い
     log.trace "${_pid} is not running."
     rm -f ${PATH_PROJ_PID}
@@ -469,7 +467,7 @@ function private.stfw.digdag.server.wait_response() {
   log.func_start_trace
   local _RETRY_COUNT=10
 
-  local _path_tmp_retry="/${STFW_PROJ_DIR_DATA}/${FUNCNAME[0]}_$$"
+  local _path_tmp_retry="${STFW_PROJ_DIR_DATA}/${FUNCNAME[0]}_retry_$$"
   echo ${_RETRY_COUNT} >"${_path_tmp_retry}"
 
   local _retcode=${EXITCODE_SUCCESS}
@@ -488,6 +486,7 @@ function private.stfw.digdag.server.wait_response() {
   )
 
   if [[ "${_is_success}" != "true" ]]; then _retcode=${EXITCODE_ERROR}; fi
+  rm -f "${_path_tmp_retry}"
 
   log.func_end_trace ${_retcode}
   return ${_retcode}

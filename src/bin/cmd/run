@@ -15,8 +15,6 @@ cd "$(cd ${dir_script}; pwd)"
 readonly STFW_HOME="$(cd ../..; pwd)"
 . "${STFW_HOME}/bin/lib/setenv"
 
-# loggingユーティリティ
-. "${DIR_BIN_LIB}/logging_utils"
 # stfw generate共通ユーティリティ
 . "${DIR_BIN_LIB}/stfw_generate_utils"
 # stfw digdag共通ユーティリティ
@@ -142,9 +140,7 @@ function private.gen_symlinks() {
   sort > ${_tmp_file_list}
 
   # dirリストループ
-  local _before_IFS="$IFS"
-  IFS=$'\n'
-  for _cur_reldir in $(cat "${_tmp_dir_list}"); do
+  grep -v '^ *#' < "${_tmp_dir_list}" | while IFS= read -r _cur_reldir; do
     # dir作成
     local _cur_output_dir="${_output_dir}/${_cur_reldir}"
     if [[ ! -d "${_cur_output_dir}" ]]; then
@@ -154,14 +150,13 @@ function private.gen_symlinks() {
   done
 
   # ファイルリストループ
-  for _cur_relfile in $(cat "${_tmp_file_list}"); do
+  grep -v '^ *#' < "${_tmp_file_list}" | while IFS= read -r _cur_relfile; do
     # sym link作成
     local _cur_from_file="${_input_dir}/${_cur_relfile}"
     local _cur_to_file="${_output_dir}/${_cur_relfile}"
     log.trace "ln -s \"${_cur_from_file}\" \"${_cur_to_file}\""
     ln -s "${_cur_from_file}" "${_cur_to_file}"
   done
-  IFS="${_before_IFS}"
 
   # 一時ファイルの削除
   rm -f "${_tmp_dir_list}"
@@ -223,9 +218,7 @@ function private.move_dig_files() {
   sort > ${_tmp_file_list}
 
   # dirリストループ
-  local _before_IFS="$IFS"
-  IFS=$'\n'
-  for _cur_reldir in $(cat "${_tmp_dir_list}"); do
+  grep -v '^ *#' < "${_tmp_dir_list}" | while IFS= read -r _cur_reldir; do
     # dir作成
     local _cur_output_dir="${_output_dir}/${_cur_reldir}"
     if [[ ! -d "${_cur_output_dir}" ]]; then
@@ -235,14 +228,13 @@ function private.move_dig_files() {
   done
 
   # ファイルリストループ
-  for _cur_relfile in $(cat "${_tmp_file_list}"); do
+  grep -v '^ *#' < "${_tmp_file_list}" | while IFS= read -r _cur_relfile; do
     # sym link作成
     local _cur_from_file="${_input_dir}/${_cur_relfile}"
     local _cur_to_file="${_output_dir}/${_cur_relfile}"
     log.trace "mv \"${_cur_from_file}\" \"${_cur_to_file}\""
     mv "${_cur_from_file}" "${_cur_to_file}"
   done
-  IFS="${_before_IFS}"
 
   # 一時ファイルの削除
   rm -f "${_tmp_dir_list}"

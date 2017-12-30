@@ -200,6 +200,7 @@ function stfw.generate.scenario-dig() {
   tee > "${_path_tmp_bizdate_list}"
 
   # dig作成: 開始〜setup
+  # shellcheck disable=SC2016
   (
     echo 'timezone: '${stfw_server_timezone}
     echo ''
@@ -208,9 +209,10 @@ function stfw.generate.scenario-dig() {
   ) > "${_path_output}"
 
   # dig作成: tasks
-  for _cur_bizdate_dirname in $(cat "${_path_tmp_bizdate_list}"); do
+  grep -v '^ *#' < "${_path_tmp_bizdate_list}" | while IFS= read -r _cur_bizdate_dirname; do
     local _cur_seq="$(     echo ${_cur_bizdate_dirname} | cut -d '_' -f 2 )"
     local _cur_bizdate="$( echo ${_cur_bizdate_dirname} | cut -d '_' -f 3 )"
+    # shellcheck disable=SC2016
     (
       echo ''
       echo '+'${_cur_bizdate_dirname}':'
@@ -223,6 +225,7 @@ function stfw.generate.scenario-dig() {
   done
 
   # dig作成: teardown
+  # shellcheck disable=SC2016
   (
     echo ''
     echo '+scenario_teardown:'
@@ -233,7 +236,7 @@ function stfw.generate.scenario-dig() {
 
   # cascade
   if [[ "${_generate_mode}" = "cascade" ]]; then
-    for _cur_bizdate_dirname in $(cat "${_path_tmp_bizdate_list}"); do
+    grep -v '^ *#' < "${_path_tmp_bizdate_list}" | while IFS= read -r _cur_bizdate_dirname; do
       local _cur_seq="$(     echo ${_cur_bizdate_dirname} | cut -d '_' -f 2 )"
       local _cur_bizdate="$( echo ${_cur_bizdate_dirname} | cut -d '_' -f 3 )"
       stfw.generate.bizdate-dig "${_dir_scenario}/${_cur_bizdate_dirname}"
@@ -294,6 +297,7 @@ function stfw.generate.bizdate-dig() {
   tee > "${_path_tmp_process_list}"
 
   # dig作成: 開始〜setup
+  # shellcheck disable=SC2016
   (
     echo 'timezone: '${stfw_server_timezone}
     echo ''
@@ -302,10 +306,11 @@ function stfw.generate.bizdate-dig() {
   ) > "${_path_output}"
 
   # dig作成: tasks
-  for _cur_process_dirname in $(cat "${_path_tmp_process_list}"); do
+  grep -v '^ *#' < "${_path_tmp_process_list}" | while IFS= read -r _cur_process_dirname; do
     local _cur_seq="$(     echo ${_cur_process_dirname} | cut -d '_' -f 2 )"
     local _cur_group="$(   echo ${_cur_process_dirname} | cut -d '_' -f 3 )"
     local _cur_process="$( echo ${_cur_process_dirname} | cut -d '_' -f 4 )"
+    # shellcheck disable=SC2016
     (
       echo ''
       echo '+'${_cur_process_dirname}':'
@@ -320,6 +325,7 @@ function stfw.generate.bizdate-dig() {
   done
 
   # dig作成: teardown
+  # shellcheck disable=SC2016
   (
     echo ''
     echo '+bizdate_teardown:'

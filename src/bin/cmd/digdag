@@ -15,9 +15,6 @@ cd "$(cd ${dir_script}; pwd)"
 readonly STFW_HOME="$(cd ../..; pwd)"
 . "${STFW_HOME}/bin/lib/setenv"
 
-# loggingユーティリティ
-. "${DIR_BIN_LIB}/logging_utils"
-
 readonly PROGNAME="stfw $(basename $0)"
 
 

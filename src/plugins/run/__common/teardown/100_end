@@ -1,9 +1,8 @@
 #!/bin/bash
 . "${STFW_HOME:?}/bin/lib/setenv"
-. "${DIR_BIN_LIB:?}/logging_utils"
 
 # 処理時間を表示
-processing_time=$(log.processing_time.calc "${run_id:?}")
+processing_time=$(processing_time.calc "${run_id:?}")
 (
   echo "result:"
   echo "  run:"

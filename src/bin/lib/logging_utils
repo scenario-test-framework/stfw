@@ -11,9 +11,11 @@
 #
 # 前提
 #   システム設定を事前に読み込んでいること
-#     ${LOGLEVEL}が事前に設定されていること
-#     ${DIR_BIN_LIB}/Tukubai が配置されていること
-#     ${PATH_LOG}が事前に設定されていること ※ファイル出力系を利用する場合のみ必須。
+#     ${EXITCODE_SUCCESS}, ${EXITCODE_WARN}, ${EXITCODE_ERROR} が事前に設定されていること
+#     ${LOGLEVEL} が事前に設定されていること
+#     ${PATH_LOG} が事前に設定されていること
+#     log.mask が事前に定義されていること
+#
 #   パイプモードで利用する場合、必ず 標準入力に何らかの文字列が渡されること
 #     ※cat - で受けるため、cdなど、出力のないコマンドからパイプでつなぐと予期せぬ動作が起こります。
 #
@@ -29,6 +31,9 @@
 #   log.info
 #   log.warn
 #   log.error
+#
+#   log.tee
+#   log.split
 #
 #   log.is_trace_enabled
 #   log.is_debug_enabled
@@ -49,16 +54,12 @@
 #   log.sect_start_info
 #   log.sect_end_info
 #
-#   log.processing_time.start
-#   log.processing_time.calc
-#
-#   log.tee
-#   log.split
-#
 #===================================================================================================
 #---------------------------------------------------------------------------------------------------
 # プロセス単位の環境変数 ※定数ですが、複数回sourceされることを考慮して変数として定義しています。
 #---------------------------------------------------------------------------------------------------
+LOGLEVEL=${LOGLEVEL:-${LOGLEVEL_INFO}}
+
 # TODO フォーマットは、ここでの出力定義と、rotateでの正規表現の2箇所のメンテナンスが必要。
 LOG__RAW_OUTPUT=${LOG__RAW_OUTPUT:-false}
 LOG__FORMAT_DATE="+%Y-%m-%d"
@@ -85,46 +86,16 @@ export LOG__SAVED_INDENT_FILE_COUNT
 
 
 
-#---------------------------------------------------------------------------------------------------
-# private.マスキング
-#
-# 概要
-#    パイプで渡された文言をマスキングします。
-#    マスキングの内容は、固定のロジックなので、プロジェクトに応じて書き換えが必要です。
-#
-# 前提
-#   ・出力内容がパイプで渡されること
-#     some_command 2>&1 | mask > /path/to/log
-#
-# 引数
-#   なし
-#
-# 出力
-#   標準出力
-#
-#---------------------------------------------------------------------------------------------------
-function log.private.mask() {
-    cat -                                                                                          |
-#    sed -e "s|${PASSWORD}|PASSWORD|g"     | # パスワード
-    tee
-}
-
-
 
 #---------------------------------------------------------------------------------------------------
 # インデント追加
 #
 # 引数
-#   ・1: インデント追加数 ※デフォルト:1
+#   なし
 #
 #---------------------------------------------------------------------------------------------------
-# shellcheck disable=SC2120
 function log.add_indent() {
-  local _count=$1
-  if [ "${_count}" = "" ]; then
-    _count=1
-  fi
-  LOG__INDENT_COUNT=$(( LOG__INDENT_COUNT + ${_count} ))
+  LOG__INDENT_COUNT=$(( LOG__INDENT_COUNT + 1 ))
 }
 #---------------------------------------------------------------------------------------------------
 # インデント削除
@@ -134,11 +105,8 @@ function log.add_indent() {
 #
 #---------------------------------------------------------------------------------------------------
 function log.remove_indent() {
-  local _count=$1
-  if [ "${_count}" = "" ]; then
-    _count=1
-  fi
-  LOG__INDENT_COUNT=$(( LOG__INDENT_COUNT - ${_count} ))
+  local _count=${1:-1}
+  LOG__INDENT_COUNT=$(( LOG__INDENT_COUNT - _count ))
 }
 #---------------------------------------------------------------------------------------------------
 # インデントクリア
@@ -149,7 +117,7 @@ function log.clear_indent() {
 #---------------------------------------------------------------------------------------------------
 # インデント一時保存ディレクトリ ※PID毎に一意
 #---------------------------------------------------------------------------------------------------
-function log.private.get_stack_dir() {
+function private.log.get_stack_dir() {
   echo "/tmp/$(basename $0 .sh)_$$"
 }
 #---------------------------------------------------------------------------------------------------
@@ -160,46 +128,46 @@ function log.save_indent() {
   LOG__SAVED_INDENT_FILE_COUNT=$(( LOG__SAVED_INDENT_FILE_COUNT + 1 ))
 
   # 保存ディレクトリの存在チェック
-  if [ ! -d "$(log.private.get_stack_dir)" ]; then
-    mkdir -p "$(log.private.get_stack_dir)"
+  if [ ! -d "$(private.log.get_stack_dir)" ]; then
+    mkdir -p "$(private.log.get_stack_dir)"
   fi
 
   # 現在インデント深度をファイル保存
-  echo ${LOG__INDENT_COUNT} > "$(log.private.get_stack_dir)/${LOG__SAVED_INDENT_FILE_COUNT}"
+  echo ${LOG__INDENT_COUNT} > "$(private.log.get_stack_dir)/${LOG__SAVED_INDENT_FILE_COUNT}"
 
   # TRACE出力
-  log.private.trace.echo_saved_indent_info
+  private.log.trace.echo_saved_indent_info
 }
 #---------------------------------------------------------------------------------------------------
 # インデントリストア
 #---------------------------------------------------------------------------------------------------
 function log.restore_indent() {
   # インデント深度のリストア
-  LOG__INDENT_COUNT=$(cat "$(log.private.get_stack_dir)/${LOG__SAVED_INDENT_FILE_COUNT}")
+  LOG__INDENT_COUNT=$(cat "$(private.log.get_stack_dir)/${LOG__SAVED_INDENT_FILE_COUNT}")
 
   # 保存ファイルの削除
-  rm -f "$(log.private.get_stack_dir)/${LOG__SAVED_INDENT_FILE_COUNT}"
+  rm -f "$(private.log.get_stack_dir)/${LOG__SAVED_INDENT_FILE_COUNT}"
 
   # 保存ファイル数のデクリメント
   LOG__SAVED_INDENT_FILE_COUNT=$(( LOG__SAVED_INDENT_FILE_COUNT - 1 ))
 
   # ディレクトリ毎のファイル数確認
-  local _stack_dir="$(log.private.get_stack_dir)"
-  local _file_count="$(ls ${_stack_dir} | wc -l)"
+  local _stack_dir="$(private.log.get_stack_dir)"
+  local _file_count="$(find ${_stack_dir} -mindepth 1 -maxdepth 1 -type f | wc -l)"
   if [ ${_file_count} -le 0 ]; then
     # 0以下の場合、保存ディレクトリ削除
-    rm -fr "$(log.private.get_stack_dir)"
+    rm -fr "$(private.log.get_stack_dir)"
   fi
 
   # TRACE出力
-  log.private.trace.echo_saved_indent_info
+  private.log.trace.echo_saved_indent_info
 }
-function log.private.trace.echo_saved_indent_info() {
+function private.log.trace.echo_saved_indent_info() {
   if [ "${LOGLEVEL}" != "${LOGLEVEL_TRACE}" ]; then
     return ${EXITCODE_SUCCESS}
   fi
 
-#  local _stack_dir=$(log.private.get_stack_dir)
+#  local _stack_dir=$(private.log.get_stack_dir)
 #  log.trace "-------------------------------------------------- TRACE-START --------------------------------------------------"
 #  log.trace "- INVOKER                       : ${FUNCNAME[1]}"
 #  log.trace "  - STACK_DIR                   : ${_stack_dir}"
@@ -253,7 +221,7 @@ function log.set_indent() {
 #   標準出力
 #
 #---------------------------------------------------------------------------------------------------
-function log.private.format() {
+function private.log.format() {
   local _log_level="$1"
   local _timestamp=$(date "${LOG__FORMAT_TIMESTAMP}")
   shift
@@ -262,7 +230,7 @@ function log.private.format() {
   if [ "${LOG__RAW_OUTPUT}" = "true" ]; then
     # メッセージのみを出力
     echo "${_msg}"                                                                                 |
-    log.private.mask
+    log.mask
     return ${EXITCODE_SUCCESS}
   fi
 
@@ -293,7 +261,7 @@ function log.private.format() {
       print " "$0
     }
   '                                                                                                |
-  log.private.mask
+  log.mask
 }
 
 
@@ -314,10 +282,10 @@ function log.private.format() {
 #   PATH_LOG ※空ファイル
 #
 #---------------------------------------------------------------------------------------------------
-function log.private.check_file() {
+function private.log.check_file() {
   # 環境変数チェック
   if [ "${PATH_LOG}" = "" ]; then
-    log.private.format "${LOGLEVEL_ERROR}" "ログファイルパス：PATH_LOG が設定されていません。" 1>&2
+    private.log.format "${LOGLEVEL_ERROR}" "ログファイルパス：PATH_LOG が設定されていません。" 1>&2
     return ${EXITCODE_ERROR}
   fi
 
@@ -326,10 +294,10 @@ function log.private.check_file() {
     local _dir_log=$(dirname "${PATH_LOG}")
     if [ ! -d "${_dir_log}" ]; then
       mkdir -p "${_dir_log}"
-      local _ret_code=$?
+      local _retcode=$?
 
-      if [ ${_ret_code} -ne ${EXITCODE_SUCCESS} ]; then
-        log.private.format "${LOGLEVEL_ERROR}" "ログ出力ディレクトリが作成できません。対象：${_dir_log}" 1>&2
+      if [ ${_retcode} -ne ${EXITCODE_SUCCESS} ]; then
+        private.log.format "${LOGLEVEL_ERROR}" "ログ出力ディレクトリが作成できません。対象：${_dir_log}" 1>&2
         return ${EXITCODE_ERROR}
       fi
     fi
@@ -363,7 +331,7 @@ function log.private.check_file() {
 #   判定できない場合: 6
 #
 #---------------------------------------------------------------------------------------------------
-function log.private.is_write() {
+function private.log.is_write() {
   local _trg_log_lebel="$1"
 
   #-------------------------------------------------------------------------------------------------
@@ -371,7 +339,7 @@ function log.private.is_write() {
   #-------------------------------------------------------------------------------------------------
   # ログレベル
   if [ "${LOGLEVEL}" = "" ]; then
-    log.private.format "${LOGLEVEL_ERROR}" "出力ログレベル：LOGLEVEL が設定されていません。" 1>&2
+    private.log.format "${LOGLEVEL_ERROR}" "出力ログレベル：LOGLEVEL が設定されていません。" 1>&2
     return ${EXITCODE_ERROR}
   fi
 
@@ -383,7 +351,7 @@ function log.private.is_write() {
      [ "${_trg_log_lebel}" != "${LOGLEVEL_INFO}"  ] && \
      [ "${_trg_log_lebel}" != "${LOGLEVEL_WARN}"  ] && \
      [ "${_trg_log_lebel}" != "${LOGLEVEL_ERROR}" ] ; then
-    log.private.format "${LOGLEVEL_ERROR}" "ログレベル：「${_trg_log_lebel}」は想定外の値です。" 1>&2
+    private.log.format "${LOGLEVEL_ERROR}" "ログレベル：「${_trg_log_lebel}」は想定外の値です。" 1>&2
     return ${EXITCODE_ERROR}
   fi
 
@@ -454,9 +422,9 @@ function private.log.console() {
   #-------------------------------------------------------------------------------------------------
   # 出力判定
   #-------------------------------------------------------------------------------------------------
-  log.private.is_write "${_trg_log_level}"
-  local _ret_code=$?
-  if [ ${_ret_code} -eq ${EXITCODE_ERROR} ]; then
+  private.log.is_write "${_trg_log_level}"
+  local _retcode=$?
+  if [ ${_retcode} -eq ${EXITCODE_ERROR} ]; then
     # 判定できない場合、エラー終了
     return ${EXITCODE_ERROR}
   fi
@@ -466,27 +434,24 @@ function private.log.console() {
   #-------------------------------------------------------------------------------------------------
   if [ -p /dev/stdin ] && [ $# -eq 0 ]; then
     # パイプの場合
-    if [ ${_ret_code} -eq ${EXITCODE_WARN} ]; then
+    if [ ${_retcode} -eq ${EXITCODE_WARN} ]; then
       # 出力が不要な場合、ここで終了
       cat - >/dev/null 2>&1
       return ${EXITCODE_SUCCESS}
     fi
 
-    local _before_IFS=$IFS
-    IFS=$'\n'
-    for _cur_row in $(cat -); do
-        log.private.format "${_trg_log_level}" "${_cur_row}" 1>&2
-    done
-    IFS=${_before_IFS}
+    while IFS= read -r _cur_row; do
+        private.log.format "${_trg_log_level}" "${_cur_row}" 1>&2
+    done < <(cat -)
 
   else
     # 引数指定の場合
-    if [ ${_ret_code} -eq ${EXITCODE_WARN} ]; then
+    if [ ${_retcode} -eq ${EXITCODE_WARN} ]; then
       # 出力が不要な場合、ここで終了
       return ${EXITCODE_SUCCESS}
     fi
 
-    log.private.format "${_trg_log_level}" "$@" 1>&2
+    private.log.format "${_trg_log_level}" "$@" 1>&2
   fi
 
   return ${EXITCODE_SUCCESS}
@@ -578,6 +543,57 @@ function log.error() {
 }
 
 
+
+#---------------------------------------------------------------------------------------------------
+# 概要
+#   パイプで渡された標準出力を、PATH_LOGに追記して、標準エラー出力します。
+#   ※バウンダリスクリプトなどで、標準エラー出力されたログをファイルにteeする状況を想定しています。
+#
+#   stdin ----> stdout   ----> stderr
+#          |--> PATH_LOG
+#
+# 引数
+#   なし
+#
+# 出力
+#   なし
+#
+# サンプル
+#   command 2>&1 | log.tee
+#
+#---------------------------------------------------------------------------------------------------
+function log.tee() {
+  local _dir_log="$(dirname ${PATH_LOG})"
+  if [[ ! -d "${_dir_log}" ]]; then mkdir -p "${_dir_log}"; fi
+  cat - | tee -a ${PATH_LOG} 1>&2
+}
+
+
+
+#---------------------------------------------------------------------------------------------------
+# 概要
+#   パイプで渡された標準出力を標準出力と標準エラーに分岐します。
+#   ※標準出力で実行結果を返す機能で、ログにも出力したい状況を想定しています。
+#
+#   stdin ----> stdout
+#          |--> stderr
+#
+# 引数
+#   なし
+#
+# 出力
+#   なし
+#
+# サンプル
+#   command | log.split
+#
+#---------------------------------------------------------------------------------------------------
+function log.split() {
+  cat - | tee -a /dev/stderr
+}
+
+
+
 function log.is_trace_enabled() {
   if [ "${LOGLEVEL}" = "${LOGLEVEL_TRACE}" ]; then
     echo "true"
@@ -586,6 +602,9 @@ function log.is_trace_enabled() {
   fi
   return ${EXITCODE_SUCCESS}
 }
+
+
+
 function log.is_debug_enabled() {
   if [ "${LOGLEVEL}" = "${LOGLEVEL_TRACE}" ] ||
      [ "${LOGLEVEL}" = "${LOGLEVEL_DEBUG}" ]; then
@@ -595,6 +614,7 @@ function log.is_debug_enabled() {
   fi
   return ${EXITCODE_SUCCESS}
 }
+
 
 
 #---------------------------------------------------------------------------------------------------
@@ -613,11 +633,8 @@ function log.rotatelog_by_day() {
   # 事前処理
   #-------------------------------------------------------------------------------------------------
   # ログファイルチェック
-  log.private.check_file
-  local _ret_code=$?
-  if [ ${_ret_code} -ne ${EXITCODE_SUCCESS} ]; then
-    return ${_ret_code}
-  fi
+  private.log.check_file
+  if [ ${_retcode} -ne ${EXITCODE_SUCCESS} ]; then return ${_retcode}; fi
 
   #-------------------------------------------------------------------------------------------------
   # 本処理
@@ -626,7 +643,7 @@ function log.rotatelog_by_day() {
   local _cur_date=$(date ${LOG__FORMAT_DATE})
 
   # 最終行の日付
-  local _last_date=$(cat ${PATH_LOG} | grep "${LOG__GREP_FORMAT}" | tail -n 1 | cut -d " " -f 1)
+  local _last_date=$(grep "${LOG__GREP_FORMAT}" "${PATH_LOG}" | tail -n 1 | cut -d " " -f 1)
   if [ "${_last_date}x" = "x" ]; then
     return ${EXITCODE_SUCCESS}
   fi
@@ -635,26 +652,28 @@ function log.rotatelog_by_day() {
   if [ "${_last_date}" != "${_cur_date}" ]; then
 
     # 一致しない場合、ローテーション
-    local _path_output=${PATH_LOG}.$(echo ${_last_date} | sed -e 's|/||g')
+    local _path_output="${PATH_LOG}.${_last_date//\//}"
 
     # ローテーション先ファイルが存在する場合、現在時刻でリネーム
     if [ -f "${_path_output}" ]; then
-        mv "${_path_output}" "${_path_output}.$(date '+%Y%m%d%H%M%S')"
+      mv "${_path_output}" "${_path_output}.$(date '+%Y%m%d%H%M%S')"
     fi
 
     # コピー
     cp -p "${PATH_LOG}" "${_path_output}"
-    if [ $? -ne 0 ]; then
+    _retcode=$?
+    if [ ${_retcode} -ne 0 ]; then
       local _filename_output="$(basename ${_path_output})"
-      log.private.format "${LOGLEVEL_ERROR}" \
+      private.log.format "${LOGLEVEL_ERROR}" \
         "ログローテーション（日次）に失敗しました。${PATH_LOG} を ${_filename_output} にコピーできません。" 1>&2
       return ${EXITCODE_ERROR}
     fi
 
     # 本体を空に置き換え
     cp /dev/null ${PATH_LOG}
-    if [ $? -ne 0 ]; then
-      log.private.format "${LOGLEVEL_ERROR}" \
+    _retcode=$?
+    if [ ${_retcode} -ne 0 ]; then
+      private.log.format "${LOGLEVEL_ERROR}" \
         "ログローテーション（日次）に失敗しました。${PATH_LOG} を 空ファイル に置き換えできません。" 1>&2
       return ${EXITCODE_ERROR}
     fi
@@ -683,11 +702,9 @@ function log.rotatelog_by_day_first() {
   # 事前処理
   #-------------------------------------------------------------------------------------------------
   # ログファイルチェック
-  log.private.check_file
-  local _ret_code=$?
-  if [ ${_ret_code} -ne ${EXITCODE_SUCCESS} ]; then
-    return ${_ret_code}
-  fi
+  private.log.check_file
+  local _retcode=$?
+  if [ ${_retcode} -ne ${EXITCODE_SUCCESS} ]; then return ${_retcode}; fi
 
   #-------------------------------------------------------------------------------------------------
   # 本処理
@@ -696,7 +713,7 @@ function log.rotatelog_by_day_first() {
   local _cur_date=$(date ${LOG__FORMAT_DATE})
 
   # 先頭行の日付
-  local _first_date=$(cat ${PATH_LOG} | grep "${LOG__GREP_FORMAT}" | head -n 1 | cut -d " " -f 1)
+  local _first_date=$(grep "${LOG__GREP_FORMAT}" "${PATH_LOG}" | head -n 1 | cut -d " " -f 1)
   if [ "${_first_date}x" = "x" ]; then
     return ${EXITCODE_SUCCESS}
   fi
@@ -705,7 +722,7 @@ function log.rotatelog_by_day_first() {
   if [ "${_first_date}" != "${_cur_date}" ]; then
 
     # 一致しない場合、ローテーション
-    local _path_output=${PATH_LOG}.$(echo ${_first_date} | sed -e 's|/||g')
+    local _path_output="${PATH_LOG}.${_first_date//\//}"
 
     # ローテーション先ファイルが存在する場合、現在時刻でリネーム
     if [ -f "${_path_output}" ]; then
@@ -713,18 +730,20 @@ function log.rotatelog_by_day_first() {
     fi
 
     # コピー
-    cp -p ${PATH_LOG} ${_path_output}
-    if [ $? -ne 0 ]; then
+    cp -p "${PATH_LOG}" "${_path_output}"
+    _retcode=$?
+    if [ ${_retcode} -ne 0 ]; then
       local _filename_output="$(basename ${_path_output})"
-      log.private.format "${LOGLEVEL_ERROR}" \
+      private.log.format "${LOGLEVEL_ERROR}" \
         "ログローテーション（日次）に失敗しました。${PATH_LOG} を ${_filename_output} にコピーできません。" 1>&2
       return ${EXITCODE_ERROR}
     fi
 
     # 本体を空に置き換え
     cp /dev/null ${PATH_LOG}
-    if [ $? -ne 0 ]; then
-      log.private.format "${LOGLEVEL_ERROR}" \
+    _retcode=$?
+    if [ ${_retcode} -ne 0 ]; then
+      private.log.format "${LOGLEVEL_ERROR}" \
         "ログローテーション（日次）に失敗しました。${PATH_LOG} を 空ファイル に置き換えできません。" 1>&2
       return ${EXITCODE_ERROR}
     fi
@@ -769,7 +788,7 @@ function log.script_start() {
   log.add_indent
 
   # 処理時間計測start
-  log.processing_time.start "${_script_path}_$$"
+  processing_time.start "${_script_path}_$$"
   return ${EXITCODE_SUCCESS}
 }
 
@@ -815,7 +834,7 @@ function log.script_end() {
   local _script_name=$(basename "${_script_path}")
 
   # 処理時間計算
-  local _processing_time=$(log.processing_time.calc "${_script_path}_$$")
+  local _processing_time=$(processing_time.calc "${_script_path}_$$")
   local _msg_processing_time="[processing_time=${_processing_time}]"
   local _msg="${LOG__PREFIX_SCRIPT_END}${_script_name} ${_msg_processing_time}"
 
@@ -867,7 +886,7 @@ function log.func_start_trace() {
   log.add_indent
 
   # 処理時間計測start
-  log.processing_time.start "${_invoker_name}_$$"
+  processing_time.start "${_invoker_name}_$$"
   return ${EXITCODE_SUCCESS}
 }
 
@@ -904,7 +923,7 @@ function log.func_end_trace() {
   local _exit_code="$1"
 
   # 処理時間計算
-  local _processing_time=$(log.processing_time.calc "${_invoker_name}_$$")
+  local _processing_time=$(processing_time.calc "${_invoker_name}_$$")
   local _msg_processing_time="[processing_time=${_processing_time}]"
   local _msg="${LOG__PREFIX_FUNC_END}${_invoker_name} ${_msg_processing_time}"
 
@@ -977,6 +996,8 @@ function log.sect_end_trace() {
   return $?
 }
 
+
+
 function log.sect_start_debug() {
   private.log.sect_start "${LOGLEVEL_DEBUG}" "$@"
   return $?
@@ -986,6 +1007,8 @@ function log.sect_end_debug() {
   return $?
 }
 
+
+
 function log.sect_start_info() {
   private.log.sect_start "${LOGLEVEL_INFO}" "$@"
   return $?
@@ -994,6 +1017,7 @@ function log.sect_end_info() {
   private.log.sect_end "${LOGLEVEL_INFO}" "$@"
   return $?
 }
+
 
 
 function private.log.sect_start() {
@@ -1012,7 +1036,7 @@ function private.log.sect_start() {
   log.add_indent
 
   # 処理時間計測start
-  log.processing_time.start "${_section_name}_$$"
+  processing_time.start "${_section_name}_$$"
 
   return ${EXITCODE_SUCCESS}
 }
@@ -1025,7 +1049,7 @@ function private.log.sect_end() {
   if [[ "${_log_level}" = "${LOGLEVEL_DEBUG}" ]] && [[ "$(log.is_debug_enabled)" != "true" ]]; then return ${EXITCODE_SUCCESS}; fi
 
   # 処理時間計算
-  local _processing_time=$(log.processing_time.calc "${_section_name}_$$")
+  local _processing_time=$(processing_time.calc "${_section_name}_$$")
   local _msg_processing_time="[processing_time=${_processing_time}]"
   local _msg="${LOG__PREFIX_SECT_END}${_section_name} ${_msg_processing_time}"
 
@@ -1041,102 +1065,4 @@ function private.log.sect_end() {
   fi
 
   return ${EXITCODE_SUCCESS}
-}
-
-function private.log.processing_time.get_filepath() {
-  local _key="$1"
-  local _DIR_STORE="/tmp/processing_time"
-  if [[ ! -d "${_DIR_STORE}" ]]; then mkdir -p "${_DIR_STORE}"; fi
-  echo "${_DIR_STORE}/$(echo ${_key} | sed -e 's| |_|g' | sed -e 's|/|_|g' | sed -e 's|:|_|g')"
-}
-function log.processing_time.start() {
-  local _key="$1"
-
-  local _filepath_processing_time=$(private.log.processing_time.get_filepath "${_key}")
-  if [[ -f "${_filepath_processing_time}" ]]; then
-    log.error "${_filepath_processing_time} is already exist."
-    return ${EXITCODE_ERROR}
-  fi
-
-  echo -n "$(date '+%Y%m%d%H%M%S')" >"${_filepath_processing_time}"
-}
-function log.processing_time.calc() {
-  local _key="$1"
-
-  local _filepath_processing_time=$(private.log.processing_time.get_filepath "${_key}")
-  if [[ ! -f "${_filepath_processing_time}" ]]; then
-    log.error "${_filepath_processing_time} is not exist."
-    return ${EXITCODE_ERROR}
-  fi
-  local _start_time=$(cat "${_filepath_processing_time}")
-  local _end_time=$(date '+%Y%m%d%H%M%S')
-  rm -f "${_filepath_processing_time}"
-
-  echo "${_start_time} ${_end_time}"                                                               | # 開始・終了時刻(YYYYMMddHHmmss)から
-  calclock 1 2 -                                                                                   | # エポックからのミリ秒に変換
-  awk '{ print $4 - $2}'                                                                           | # ミリ秒の差分を取得
-  calclock -r 1 -                                                                                  | # 差分をYYYYMMddHHmmssに変換
-  awk '{
-    # 197001ddHHmmss -> d
-    day = substr($2, 8, 1);
-    # 197001ddHHmmss -> HH
-    hour = substr($2, 9, 2)
-    # 197001ddHHmmss -> mm
-    min = substr($2, 11, 2)
-    # 197001ddHHmmss -> ss
-    sec = substr($2, 13, 2)
-    # 19700101からの相対日付なので、1日減算
-    if ( day > 1 ) {
-      hour = hour + ( (day - 1) * 24 )
-    }
-    print hour":"min":"sec
-  }'
-}
-
-#---------------------------------------------------------------------------------------------------
-# 概要
-#   パイプで渡された標準出力を、PATH_LOGに追記して、標準エラー出力します。
-#   ※バウンダリスクリプトなどで、標準エラー出力されたログをファイルにteeする状況を想定しています。
-#
-#   stdin ----> stdout   ----> stderr
-#          |--> PATH_LOG
-#
-# 引数
-#   なし
-#
-# 出力
-#   なし
-#
-# サンプル
-#   command 2>&1 | log.tee
-#
-#---------------------------------------------------------------------------------------------------
-function log.tee() {
-  local _dir_log="$(dirname ${PATH_LOG})"
-  if [[ ! -d "${_dir_log}" ]]; then mkdir -p "${_dir_log}"; fi
-  cat - | tee -a ${PATH_LOG} 1>&2
-}
-
-
-
-#---------------------------------------------------------------------------------------------------
-# 概要
-#   パイプで渡された標準出力を標準出力と標準エラーに分岐します。
-#   ※標準出力で実行結果を返す機能で、ログにも出力したい状況を想定しています。
-#
-#   stdin ----> stdout
-#          |--> stderr
-#
-# 引数
-#   なし
-#
-# 出力
-#   なし
-#
-# サンプル
-#   command | log.split
-#
-#---------------------------------------------------------------------------------------------------
-function log.split() {
-  cat - | tee -a /dev/stderr
 }

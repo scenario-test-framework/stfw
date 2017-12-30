@@ -15,8 +15,6 @@ cd "$(cd ${dir_script}; pwd)"
 readonly STFW_HOME="$(cd ../..; pwd)"
 . "${STFW_HOME}/bin/lib/setenv"
 
-# loggingユーティリティ
-. "${DIR_BIN_LIB}/logging_utils"
 # stfw generate共通ユーティリティ
 . "${DIR_BIN_LIB}/stfw_generate_utils"
 

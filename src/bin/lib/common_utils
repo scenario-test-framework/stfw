@@ -4,12 +4,16 @@
 # 共通関数定義
 # ※_で始まるfunctionは、パイプでの呼出しだけを想定しています。
 #
+# 依存
+#   open usp tukubai
+#   Parsrs
+#
 #==================================================================================================
 #--------------------------------------------------------------------------------------------------
 # 実行OS判定
 #--------------------------------------------------------------------------------------------------
 function is_mac() {
-  if [ "$(uname)" == 'Darwin' ]; then
+  if [[ "$(uname)" = 'Darwin' ]]; then
     echo "true"
   else
     echo "false"
@@ -18,8 +22,8 @@ function is_mac() {
 }
 
 function is_linux() {
-  local _uname=$(uname -s)
-  if [ "$(expr substr ${_uname} 1 5)" == 'Linux' ]; then
+  local _uname=$(awk -v "uname=$(uname -s)" 'BEGIN { print substr(uname, 1, 5) }')
+  if [[ "${_uname}" = 'Linux' ]]; then
     echo "true"
   else
     echo "false"
@@ -28,8 +32,8 @@ function is_linux() {
 }
 
 function is_cygwin() {
-  local _uname=$(uname -s)
-  if [ "$(expr substr ${_uname} 1 10)" == 'MINGW32_NT' ]; then
+  local _uname=$(awk -v "uname=$(uname -s)" 'BEGIN { print substr(uname, 1, 10) }')
+  if [[ "${_uname}" = 'MINGW32_NT' ]]; then
     echo "true"
   else
     echo "false"
@@ -101,7 +105,7 @@ function gen_ssh_server_key() {
   fi
 
   # キーの存在チェック
-  cat ${_PATH_KNOWN_HOSTS} | grep ${_ip} > /dev/null 2>&1
+  grep "${_ip}" "${_PATH_KNOWN_HOSTS}" > /dev/null 2>&1
   _ret_code=$?
   if [ ${_ret_code} -eq 0 ]; then
     echo "${_ip} のSSHサーバキーは既に存在します。"
@@ -256,28 +260,24 @@ function is_setoption_on() {
   set -o                                                                                           |
   grep "${_target}"                                                                                |
   tr '\t' ' '                                                                                      |
-  sed -E "s| +| |g"                                                                                |
+  _sp_multi2single                                                                                 |
   cut -d ' ' -f 2                                                                                  |
   sed -e 's|on|true|'                                                                              |
   sed -e 's|off|false|'
 }
+#
 # SAMPLE
-#local _before_set_errorexit=$(is_errorexit_on)
-#local _before_set_nounset=$(is_nounset_on)
-#local _before_set_xtrace=$(is_xtrace_on)
-#set +eux
+#
+# local _before_set_errorexit=$(is_errorexit_on)
+# local _before_set_nounset=$(is_nounset_on)
+# local _before_set_xtrace=$(is_xtrace_on)
+# set +eux
 #
 # 任意の処理...
 #
-#if [ "${_before_set_errorexit}" = "true" ]; then
-#  set -e
-#fi
-#if [ "${_before_set_nounset}" = "true" ]; then
-#  set -u
-#fi
-#if [ "${_before_set_xtrace}" = "true" ]; then
-#  set -x
-#fi
+# if [[ "${_before_set_errorexit}" = "true" ]]; then set -e; fi
+# if [[ "${_before_set_nounset}"   = "true" ]]; then set -u; fi
+# if [[ "${_before_set_xtrace}"    = "true" ]]; then set -x; fi
 
 
 
@@ -326,10 +326,11 @@ function yaml2properties() {
   #   MAP_KEY
   #   MAP_LIST_0
   #   MAP_LIST_1
+  # shellcheck disable=SC2002
   cat "${_path_input_yaml}"                                                                        | # yamlファイルから
   ${DIR_BIN_LIB}/yaml2json                                                                         | # jsonに変換
-  ${DIR_BIN_LIB}/Parsrs/parsrj.sh -rt -kd_                                                         | # json -> フィールド形式
-  ${DIR_BIN_LIB}/Tukubai/self 1                                                                    | # 項目名 をselect
+  parsrj.sh -rt -kd_                                                                               | # json -> フィールド形式
+  self 1                                                                                           | # 項目名 をselect
   sed -e 's|^_||'                                                                                  | # 行頭の_を除去
   sed -e 's|\[|_|g'                                                                                | # 配列のインデックスを除去
   sed -e 's|\]||g'                                                                                 |
@@ -341,10 +342,11 @@ function yaml2properties() {
   #   "value1"
   #   "list_value1"
   #   "list_value2"
+  # shellcheck disable=SC2002
   cat "${_path_input_yaml}"                                                                        | # yamlファイルから
   ${DIR_BIN_LIB}/yaml2json                                                                         | # jsonに変換
-  ${DIR_BIN_LIB}/Parsrs/parsrj.sh -rt -kd_                                                         | # json -> フィールド形式
-  ${DIR_BIN_LIB}/Tukubai/self 2/NF                                                                 | # 値 をselect
+  parsrj.sh -rt -kd_                                                                               | # json -> フィールド形式
+  self 2/NF                                                                                        | # 値 をselect
   xargs -I{} /bin/bash -c "eval 'echo {}'"                                                         | # 環境変数を展開
   sed -e 's|^|"|'                                                                                  | # ダブルクォートで括る
   sed -e 's|$|"|'                                                                                  |
@@ -354,6 +356,7 @@ function yaml2properties() {
   paste -d '=' "${_path_tmp_fields}" "${_path_tmp_values}" > "${_path_tmp_result}"
 
   # 結果表示
+  # shellcheck disable=SC2002
   cat "${_path_tmp_result}" | log.trace
   cat "${_path_tmp_result}"
 
@@ -436,4 +439,58 @@ function apply_dynamic_env() {
   eval ${_tmp_var}=\'${_tmp_value}\'
   # shellcheck disable=SC2163
   export "${_tmp_var}"
+}
+
+
+
+function private.processing_time.get_filepath() {
+  local _key="$1"
+  local _DIR_STORE="/tmp/processing_time"
+  if [[ ! -d "${_DIR_STORE}" ]]; then mkdir -p "${_DIR_STORE}"; fi
+  echo "${_DIR_STORE}/$(echo ${_key//\//_} | _urlencode)"
+}
+
+function processing_time.start() {
+  local _key="$1"
+
+  local _filepath_processing_time=$(private.processing_time.get_filepath "${_key}")
+  if [[ -f "${_filepath_processing_time}" ]]; then
+    log.error "${_filepath_processing_time} is already exist."
+    return ${EXITCODE_ERROR}
+  fi
+
+  echo -n "$(date '+%Y%m%d%H%M%S')" >"${_filepath_processing_time}"
+}
+
+function processing_time.calc() {
+  local _key="$1"
+
+  local _filepath_processing_time=$(private.processing_time.get_filepath "${_key}")
+  if [[ ! -f "${_filepath_processing_time}" ]]; then
+    log.error "${_filepath_processing_time} is not exist."
+    return ${EXITCODE_ERROR}
+  fi
+  local _start_time=$(cat "${_filepath_processing_time}")
+  local _end_time=$(date '+%Y%m%d%H%M%S')
+  rm -f "${_filepath_processing_time}"
+
+  echo "${_start_time} ${_end_time}"                                                               | # 開始・終了時刻(YYYYMMddHHmmss)から
+  calclock 1 2 -                                                                                   | # エポックからのミリ秒に変換
+  awk '{ print $4 - $2}'                                                                           | # ミリ秒の差分を取得
+  calclock -r 1 -                                                                                  | # 差分をYYYYMMddHHmmssに変換
+  awk '{
+    # 197001ddHHmmss -> d
+    day = substr($2, 8, 1)
+    # 197001ddHHmmss -> HH
+    hour = substr($2, 9, 2)
+    # 197001ddHHmmss -> mm
+    min = substr($2, 11, 2)
+    # 197001ddHHmmss -> ss
+    sec = substr($2, 13, 2)
+    # 19700101からの相対日付なので、1日減算
+    if ( day > 1 ) {
+      hour = hour + ( (day - 1) * 24 )
+    }
+    print hour":"min":"sec
+  }'
 }
