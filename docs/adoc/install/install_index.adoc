@@ -1,0 +1,68 @@
+== Installation
+
+=== Target OS
+
+* RHEL-derivatives / Fedora
+* Debian / Ubuntu
+* OSX
+
+=== Dependencies
+
+[format="csv", options="header"]
+|===
+include::dependencies.csv[]
+|===
+
+
+=== Getting Started
+
+- バージョンを選択
+** 最新安定版バージョンの場合: ```version="{Version}"```
+
+
+- ダウンロード
+
+[source, bash]
+----
+# アーカイブを選択
+#   通常版 ※installコマンド実行時にモジュールをダウンロード
+archive_name="stfw-${version}.tar.gz"
+#   モジュール同梱版
+archive_name="stfw-with-depends-${version}.tar.gz"
+
+# ダウンロードURL
+url_base="https://github.com/scenario-test-framework/stfw/releases/download/${version}"
+download_url="${url_base}/${archive_name}"
+
+# ダウンロード
+curl \
+  --request GET \
+  --url "${download_url}" \
+  --output "${archive_name}"
+----
+
+
+- インストール
+
+[source, bash]
+----
+tar xf "${archive_name}"
+cd "$(basename ${archive_name} .tar.gz)/"
+bin/install
+ln -s $(pwd)/bin/stfw /usr/local/bin/stfw
+----
+
+
+- sampleシナリオ実行
+
+[source, bash]
+----
+mkdir /tmp/stfw_proj
+cd /tmp/stfw_proj
+stfw init
+stfw server start
+stfw run -f sample
+----
+
+- digdag URL
+** http://localhost:65432

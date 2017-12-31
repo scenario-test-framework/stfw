@@ -6,5 +6,6 @@ src/bin/lib/jq
 
 dist/
 
+.analyze/
 .stfw/
 .digdag/
