@@ -10,7 +10,7 @@ install:
   - gem install asciidoctor
   - sudo apt-get update && sudo apt-get install oracle-java8-installer
   - sudo pip install pyaml
-  - pip install docopt
+  - sudo pip install docopt
 script:
   - ./build/docs/build.sh
   - ./build/product/build.sh
