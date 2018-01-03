@@ -2,7 +2,10 @@
 #set -eux
 #===================================================================================================
 #
-# Analyze Documents
+# Post Release
+#
+# env
+#   GITHUB_TOKEN
 #
 #===================================================================================================
 #---------------------------------------------------------------------------------------------------
@@ -13,66 +16,50 @@ cd "$(cd ${dir_script}; cd ../..; pwd)" || exit 1
 
 readonly DIR_BASE="$(pwd)"
 . "${DIR_BASE}/build/env.properties"
+. "${DIR_BUILD_LIB}/common.sh"
 
 
 #---------------------------------------------------------------------------------------------------
 # check
 #---------------------------------------------------------------------------------------------------
-if [[ "$(which redpen)x" = "x" ]]; then
-  echo "redpen is not installed." >&2
+if [[ "${GITHUB_TOKEN}x" = "x" ]]; then
+  echo "GITHUB_TOKEN is not defined." >&2
   exit 1
 fi
 
 
 #---------------------------------------------------------------------------------------------------
-# prepare
+# main
 #---------------------------------------------------------------------------------------------------
 echo "$(basename $0)"
 
-DIR_ANALYZE_DIST="${DIR_DOCS}/.analyze"
-if [[ -d "${DIR_ANALYZE_DIST}" ]]; then rm -fr "${DIR_ANALYZE_DIST}"; fi
-mkdir -p "${DIR_ANALYZE_DIST}"
-
-path_conf="${dir_script}/redpen-conf.xml"
-path_target="${DIR_ANALYZE_DIST}/target.lst"
-path_report="${DIR_ANALYZE_DIST}/report.txt"
-
-echo "  list sources"
-find "${DIR_DOCS_SRC}" -type f -name '*.adoc' >>"${path_target}"
-
-
-#---------------------------------------------------------------------------------------------------
-# analyze
-#---------------------------------------------------------------------------------------------------
-target_files=( $(cat "${path_target}") )
-cmd=(
-  redpen
-    --format asciidoc
-    --conf "${path_conf}"
-    --limit 0
-    "${target_files[@]}"
+echo "  update version file"
+released_version=$(cat "${PATH_VERSION}")
+# shellcheck disable=SC2034
+next_version=$(
+  echo ${released_version}                                                                         |
+  ( IFS=".$IFS" ; read major minor bugfix && echo ${major}.$(( minor + 1 )).0-SNAPSHOT )
 )
 
-echo -n '  '
-echo "${cmd[@]}"
-"${cmd[@]}" >"${path_report}"
-retcode=$?
+echo "    ${released_version} -> ${next_version}"
+echo "${next_version}" >"${PATH_VERSION}"
 
-if [[ ${retcode} -ne 0 ]]; then
-  count=$(cat "${path_report}" | grep " ValidationError" | wc -l | sed -E 's|^ +||')
-  cat "${path_report}"
-  (
-    echo "$(basename $0) failed."
-    echo "  count: ${count}"
-  ) >&2
-  exit ${retcode}
-fi
+add_git_config
+
+echo "  git add"
+git add --all .
+
+echo "  git commit"
+git commit -m "chore(VERSION): start ${next_version}"
+exit_on_fail "git commit" $?
+
+echo "  git push branch ${BRANCH_MASTER}"
+git push origin "${BRANCH_MASTER}"
+exit_on_fail "git push branch ${BRANCH_MASTER}" $?
 
 
 #---------------------------------------------------------------------------------------------------
 # teardown
 #---------------------------------------------------------------------------------------------------
-if [[ -d "${DIR_ANALYZE_DIST}" ]]; then rm -fr "${DIR_ANALYZE_DIST}"; fi
-
 echo "$(basename $0) success."
 exit 0

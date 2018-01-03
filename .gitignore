@@ -1,8 +1,11 @@
 .DS_Store
+.git_credentials
 
 src/archives
 src/modules
 src/bin/lib/jq
+
+docs/index.html
 
 dist/
 

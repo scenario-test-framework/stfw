@@ -11,16 +11,15 @@
 dir_script="$(dirname $0)"
 cd "$(cd ${dir_script}; cd ../..; pwd)" || exit 1
 
-DIR_BASE="$(pwd)"
-DIR_SRC="${DIR_BASE}/docs/adoc"
-DIR_DIST="${DIR_BASE}/docs"
+readonly DIR_BASE="$(pwd)"
+. "${DIR_BASE}/build/env.properties"
 
 
 #---------------------------------------------------------------------------------------------------
 # prepare
 #---------------------------------------------------------------------------------------------------
 echo "init dist file"
-if [[ -f "${DIR_DIST}/index.html" ]]; then rm -f "${DIR_DIST}/index.html"; fi
+if [[ -f "${DIR_DOCS}/index.html" ]]; then rm -f "${DIR_DOCS}/index.html"; fi
 
 
 #---------------------------------------------------------------------------------------------------
@@ -43,14 +42,14 @@ cmd=(
     -a "lang=ja"
     -b "html5"
     -d "book"
-    --destination-dir "${DIR_DIST}"
+    --destination-dir "${DIR_DOCS}"
     --attribute "source-highlighter=highlightjs"
     --attribute "linkcss"
     --attribute "stylesheet=readthedocs.css"
     --attribute "stylesdir=./stylesheets"
     --attribute "Version=${version}"
     --attribute "imagesdir=./images"
-    "${DIR_SRC}/index.adoc"
+    "${DIR_DOCS_SRC}/index.adoc"
 )
 
 echo -n '  '
@@ -58,7 +57,7 @@ echo "${cmd[@]}"
 "${cmd[@]}"
 retcode=$?
 
-if [[ ${retcode} -ne 0 ]] || [[ ! -f "${DIR_DIST}/index.html" ]]; then
+if [[ ${retcode} -ne 0 ]] || [[ ! -f "${DIR_DOCS}/index.html" ]]; then
   echo "    error occured in acsiidoctor." >&2
   exit 1
 fi
@@ -68,5 +67,5 @@ fi
 # teardown
 #---------------------------------------------------------------------------------------------------
 echo ""
-echo "build completed."
+echo "$(basename $0) completed."
 exit 0

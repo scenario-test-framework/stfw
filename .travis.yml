@@ -1,16 +1,34 @@
 language: ruby
+
 rvm:
   - 2.3.3
+
 env:
-  - URL=https://github.com/redpen-cc/redpen/releases/download/redpen-1.10.1
-install:
-  - wget $URL/redpen-1.10.1.tar.gz
-  - tar xvf redpen-1.10.1.tar.gz
-  - export PATH=$PATH:$PWD/redpen-distribution-1.10.1/bin
+  - REDPEN_URL=https://github.com/redpen-cc/redpen/releases/download
+  - REDPEN_VERSION=1.10.1
+
+before_script:
+  # CI Event判定
+  - EVENT="other"
+  - '[ "${TRAVIS_PULL_REQUEST}" != "false" ] && [ "${TRAVIS_BRANCH}" == "master" ]        && [ "${TRAVIS_TAG}" == "" ] && EVENT="pr_created"'
+  - '[ "${TRAVIS_PULL_REQUEST}" == "false" ] && [ "${TRAVIS_BRANCH}" == "master" ]        && [ "${TRAVIS_TAG}" == "" ] && EVENT="pr_merged"'
+  - '[ "${TRAVIS_PULL_REQUEST}" == "false" ] && [ "${TRAVIS_BRANCH}" == "master" ]        && [ "${TRAVIS_TAG}" == "" ] && EVENT="master_pushed"'
+  - '[ "${TRAVIS_PULL_REQUEST}" == "false" ] && [ "${TRAVIS_BRANCH}" == "${TRAVIS_TAG}" ] && [ "${TRAVIS_TAG}" != "" ] && EVENT="tag_pushed"'
+  - 'echo "EVENT               = ${EVENT}"'
+  - 'echo "TRAVIS_BRANCH       = ${TRAVIS_BRANCH}"'
+  - 'echo "TRAVIS_PULL_REQUEST = ${TRAVIS_PULL_REQUEST}"'
+  - 'echo "TRAVIS_TAG          = ${TRAVIS_TAG}"'
+  # 対象外の場合、終了
+  - '[ "${EVENT}" == "other" ] && echo "SKIP"; exit 0'
+  # 依存ライブラリのインストール
+  - sudo apt-get update
+  - wget --continue ${REDPEN_URL}/redpen-${REDPEN_VERSION}/redpen-${REDPEN_VERSION}.tar.gz --output ${HOME}/redpen-${REDPEN_VERSION}.tar.gz
+  - tar xvf ${HOME}/redpen-${REDPEN_VERSION}.tar.gz
+  - export PATH=$PATH:$PWD/redpen-distribution-${REDPEN_VERSION}/bin
   - gem install asciidoctor
-  - sudo apt-get update && sudo apt-get install oracle-java8-installer
   - sudo pip install pyaml
   - sudo pip install docopt
+
 script:
-  - ./build/docs/build.sh
-  - ./build/product/build.sh
+  # CI Event Scriptを実行
+  - '[ -f "./build/ci_event/${EVENT}.sh" ] && "./build/ci_event/${EVENT}.sh" || echo "${EVENT}.sh is not exist" >&2; exit 1'

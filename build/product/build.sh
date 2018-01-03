@@ -11,9 +11,22 @@
 dir_script="$(dirname $0)"
 cd "$(cd ${dir_script}; cd ../..; pwd)" || exit 1
 
-DIR_BASE="$(pwd)"
-DIR_SRC="${DIR_BASE}/src"
-DIR_DIST="${DIR_BASE}/dist"
+readonly DIR_BASE="$(pwd)"
+. "${DIR_BASE}/build/env.properties"
+
+product="stfw"
+version="$(cat ${DIR_SRC}/VERSION)"
+archive_name="${product}-${version}"
+archive_name_with_dpends="${product}-with-depends-${version}"
+
+
+#---------------------------------------------------------------------------------------------------
+# check
+#---------------------------------------------------------------------------------------------------
+if [[ "$(which md5sum)x" = "x" ]]; then
+  echo "md5sum is not installed." >&2
+  exit 1
+fi
 
 
 #---------------------------------------------------------------------------------------------------
@@ -36,12 +49,6 @@ if [[ ${retcode} -ne 0 ]]; then exit ${retcode}; fi
 # package
 #---------------------------------------------------------------------------------------------------
 echo "package"
-
-product="$(basename ${DIR_BASE})"
-version="$(cat ${DIR_SRC}/VERSION)"
-
-archive_name="${product}-${version}"
-archive_name_with_dpends="${product}-with-depends-${version}"
 
 echo "  copy sources"
 dir_dist_work="${DIR_DIST}/${archive_name_with_dpends}"
@@ -68,6 +75,7 @@ rm -fr "${dir_dist_work:?}/modules/"
 cd ${DIR_DIST}
 tar czf "./${archive_name_with_dpends}.tar.gz" "./${archive_name_with_dpends}"
 retcode=$?
+md5sum  "./${archive_name_with_dpends}.tar.gz" | cut -d ' ' -f 1 > "./${archive_name_with_dpends}.tar.gz.md5"
 if [[ ${retcode} -ne 0 ]]; then echo "    error occured in tar." >&2; exit 1; fi
 cd - >/dev/null 2>&1
 
@@ -77,6 +85,7 @@ cd ${DIR_DIST}
 mv "./${archive_name_with_dpends}" "./${archive_name}"
 tar czf "./${archive_name}.tar.gz" "./${archive_name}"
 retcode=$?
+md5sum  "./${archive_name}.tar.gz" | cut -d ' ' -f 1 > "./${archive_name}.tar.gz.md5"
 if [[ ${retcode} -ne 0 ]]; then echo "    error occured in tar." >&2; exit 1; fi
 cd - >/dev/null 2>&1
 
@@ -99,5 +108,5 @@ echo "results:"
 find "${DIR_DIST}" -type f
 
 echo ""
-echo "build completed."
+echo "$(basename $0) completed."
 exit 0

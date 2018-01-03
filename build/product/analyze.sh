@@ -11,9 +11,8 @@
 dir_script="$(dirname $0)"
 cd "$(cd ${dir_script}; cd ../..; pwd)" || exit 1
 
-DIR_BASE="$(pwd)"
-DIR_SRC="${DIR_BASE}/src"
-DIR_DIST="${DIR_BASE}/dist"
+readonly DIR_BASE="$(pwd)"
+. "${DIR_BASE}/build/env.properties"
 
 
 #---------------------------------------------------------------------------------------------------
@@ -28,7 +27,7 @@ fi
 #---------------------------------------------------------------------------------------------------
 # prepare
 #---------------------------------------------------------------------------------------------------
-echo "analyze"
+echo "$(basename $0)"
 DIR_ANALYZE_DIST="${DIR_DIST}/.analyze"
 if [[ -d "${DIR_ANALYZE_DIST}" ]]; then rm -fr "${DIR_ANALYZE_DIST}"; fi
 mkdir -p "${DIR_ANALYZE_DIST}"
@@ -68,8 +67,8 @@ if [[ ${retcode} -ne 0 ]]; then
   count=$(cat "${path_report}" | grep -- "-- SC....: " | wc -l | sed -E 's|^ +||')
   cat "${path_report}"
   (
-    echo "  analyze failed."
-    echo "    count: ${count}"
+    echo "$(basename $0) failed."
+    echo "  count: ${count}"
   ) >&2
   exit ${retcode}
 fi
@@ -80,5 +79,5 @@ fi
 #---------------------------------------------------------------------------------------------------
 if [[ -d "${DIR_ANALYZE_DIST}" ]]; then rm -fr "${DIR_ANALYZE_DIST}"; fi
 
-echo "  analyze success."
+echo "$(basename $0) success."
 exit 0

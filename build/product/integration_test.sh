@@ -11,8 +11,8 @@
 dir_script="$(dirname $0)"
 cd "$(cd ${dir_script}; cd ../..; pwd)" || exit 1
 
-DIR_BASE="$(pwd)"
-DIR_DIST="${DIR_BASE}/dist"
+readonly DIR_BASE="$(pwd)"
+. "${DIR_BASE}/build/env.properties"
 
 
 #---------------------------------------------------------------------------------------------------
@@ -33,7 +33,7 @@ fi
 #---------------------------------------------------------------------------------------------------
 # prepare
 #---------------------------------------------------------------------------------------------------
-echo "integration test"
+echo "$(basename $0)"
 
 echo "  prepare"
 DIR_TEST_WORK="${DIR_DIST}/test"
@@ -153,5 +153,5 @@ if [[ ${retcode} -ne 0 ]]; then echo "      error occurred in ${STEP} step." >&2
 #---------------------------------------------------------------------------------------------------
 if [[ -d "${DIR_TEST_WORK}" ]]; then rm -fr "${DIR_TEST_WORK}"; fi
 
-echo "  integration test success."
+echo "$(basename $0) success."
 exit 0
