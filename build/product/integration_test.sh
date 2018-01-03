@@ -65,87 +65,87 @@ export PATH="${DIR_TEST_HOME}/bin:${PATH}"
 # STEP: project init
 #---------------------------------------------------------------------------------------------------
 STEP="project init"
-echo "    ${STEP}"
+echo "  ${STEP}"
 
 if [[ -d "${DIR_TEST_PROJ}" ]]; then rm -fr "${DIR_TEST_PROJ}"; fi
 mkdir -p "${DIR_TEST_PROJ}"
 cd "${DIR_TEST_PROJ}"
 stfw init
 retcode=$?
-if [[ ${retcode} -ne 0 ]]; then echo "      error occurred in ${STEP} step." >&2; exit 1; fi
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
 
 
 #---------------------------------------------------------------------------------------------------
 # STEP: create scenario
 #---------------------------------------------------------------------------------------------------
 STEP="create scenario"
-echo "    ${STEP}"
+echo "  ${STEP}"
 
 # scenario init
 cd "${DIR_TEST_PROJ}/scenario"
 stfw scenario -i test
 retcode=$?
-if [[ ${retcode} -ne 0 ]]; then echo "      error occurred in ${STEP} step." >&2; exit 1; fi
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
 
 # bizdate init (day1)
 cd "${DIR_TEST_PROJ}/scenario/test"
 stfw bizdate -i 10 99990101
 retcode=$?
-if [[ ${retcode} -ne 0 ]]; then echo "      error occurred in ${STEP} step." >&2; exit 1; fi
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
 
 # process-scripts init
 cd "${DIR_TEST_PROJ}/scenario/test/_10_99990101"
 stfw process -i 10 pre scripts
 retcode=$?
-if [[ ${retcode} -ne 0 ]]; then echo "      error occurred in ${STEP} step." >&2; exit 1; fi
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
 
 # bizdate init (day2)
 cd "${DIR_TEST_PROJ}/scenario/test"
 stfw bizdate -i 20 99990102
 retcode=$?
-if [[ ${retcode} -ne 0 ]]; then echo "      error occurred in ${STEP} step." >&2; exit 1; fi
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
 
 # process-scripts init
 cd "${DIR_TEST_PROJ}/scenario/test/_20_99990102"
 stfw process -i 10 pre scripts
 retcode=$?
-if [[ ${retcode} -ne 0 ]]; then echo "      error occurred in ${STEP} step." >&2; exit 1; fi
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
 
 # scenario gen-dig
 cd "${DIR_TEST_PROJ}/scenario/test"
 stfw scenario -G
 retcode=$?
-if [[ ${retcode} -ne 0 ]]; then echo "      error occurred in ${STEP} step." >&2; exit 1; fi
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
 
 
 #---------------------------------------------------------------------------------------------------
 # STEP: run scenario
 #---------------------------------------------------------------------------------------------------
 STEP="run scenario"
-echo "    ${STEP}"
+echo "  ${STEP}"
 
 # server start
 stfw server start
 retcode=$?
-if [[ ${retcode} -ne 0 ]]; then echo "      error occurred in ${STEP} step." >&2; exit 1; fi
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
 
 stfw server status
 retcode=$?
-if [[ ${retcode} -ne 0 ]]; then echo "      error occurred in ${STEP} step." >&2; exit 1; fi
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
 
 # run scenario
 stfw run -f test
 retcode=$?
-if [[ ${retcode} -ne 0 ]]; then echo "      error occurred in ${STEP} step." >&2; exit 1; fi
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
 
 # server stop
 stfw server stop
 retcode=$?
-if [[ ${retcode} -ne 0 ]]; then echo "      error occurred in ${STEP} step." >&2; exit 1; fi
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
 
 stfw server status
 retcode=$?
-if [[ ${retcode} -ne 0 ]]; then echo "      error occurred in ${STEP} step." >&2; exit 1; fi
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
 
 
 #---------------------------------------------------------------------------------------------------

@@ -1,34 +1,58 @@
 language: ruby
 
 rvm:
-  - 2.3.3
+  - 2.2
 
-env:
-  - REDPEN_URL=https://github.com/redpen-cc/redpen/releases/download
-  - REDPEN_VERSION=1.10.1
+before_install:
+  - 'REDPEN_URL="https://github.com/redpen-cc/redpen/releases/download"'
+  - 'REDPEN_VERSION="1.10.1"'
+  - 'DIR_CACHE="${HOME}/custom_cache"'
+
+install:
+  - 'curl --request GET --location --continue-at - --create-dirs --output "${DIR_CACHE}/redpen-${REDPEN_VERSION}.tar.gz" "${REDPEN_URL}/redpen-${REDPEN_VERSION}/redpen-${REDPEN_VERSION}.tar.gz"'
+  - 'cd ${DIR_CACHE} && tar xvf "./redpen-${REDPEN_VERSION}.tar.gz" && cd -'
+  - 'export PATH="$PATH:${DIR_CACHE}/redpen-distribution-${REDPEN_VERSION}/bin"'
+  - 'gem install asciidoctor'
+  - 'pip install --user pyaml'
+  - 'pip install --user docopt'
 
 before_script:
   # CI Event判定
   - EVENT="other"
-  - '[ "${TRAVIS_PULL_REQUEST}" != "false" ] && [ "${TRAVIS_BRANCH}" == "master" ]        && [ "${TRAVIS_TAG}" == "" ] && EVENT="pr_created"'
-  - '[ "${TRAVIS_PULL_REQUEST}" == "false" ] && [ "${TRAVIS_BRANCH}" == "master" ]        && [ "${TRAVIS_TAG}" == "" ] && EVENT="pr_merged"'
-  - '[ "${TRAVIS_PULL_REQUEST}" == "false" ] && [ "${TRAVIS_BRANCH}" == "master" ]        && [ "${TRAVIS_TAG}" == "" ] && EVENT="master_pushed"'
-  - '[ "${TRAVIS_PULL_REQUEST}" == "false" ] && [ "${TRAVIS_BRANCH}" == "${TRAVIS_TAG}" ] && [ "${TRAVIS_TAG}" != "" ] && EVENT="tag_pushed"'
+  - '[ "${TRAVIS_PULL_REQUEST}" != "false" ] && [ "${TRAVIS_BRANCH}" == "master" ]        && [ "${TRAVIS_TAG}" == "" ] && EVENT="pr_created"    || EVENT="${EVENT}"'
+  - '[ "${TRAVIS_PULL_REQUEST}" == "false" ] && [ "${TRAVIS_BRANCH}" == "master" ]        && [ "${TRAVIS_TAG}" == "" ] && EVENT="pr_merged"     || EVENT="${EVENT}"'
+  - '[ "${TRAVIS_PULL_REQUEST}" == "false" ] && [ "${TRAVIS_BRANCH}" == "master" ]        && [ "${TRAVIS_TAG}" == "" ] && EVENT="master_pushed" || EVENT="${EVENT}"'
+  - '[ "${TRAVIS_PULL_REQUEST}" == "false" ] && [ "${TRAVIS_BRANCH}" == "${TRAVIS_TAG}" ] && [ "${TRAVIS_TAG}" != "" ] && EVENT="tag_pushed"    || EVENT="${EVENT}"'
   - 'echo "EVENT               = ${EVENT}"'
   - 'echo "TRAVIS_BRANCH       = ${TRAVIS_BRANCH}"'
   - 'echo "TRAVIS_PULL_REQUEST = ${TRAVIS_PULL_REQUEST}"'
   - 'echo "TRAVIS_TAG          = ${TRAVIS_TAG}"'
-  # 対象外の場合、終了
-  - '[ "${EVENT}" == "other" ] && echo "SKIP"; exit 0'
-  # 依存ライブラリのインストール
-  - sudo apt-get update
-  - wget --continue ${REDPEN_URL}/redpen-${REDPEN_VERSION}/redpen-${REDPEN_VERSION}.tar.gz --output ${HOME}/redpen-${REDPEN_VERSION}.tar.gz
-  - tar xvf ${HOME}/redpen-${REDPEN_VERSION}.tar.gz
-  - export PATH=$PATH:$PWD/redpen-distribution-${REDPEN_VERSION}/bin
-  - gem install asciidoctor
-  - sudo pip install pyaml
-  - sudo pip install docopt
+  # 対象外の場合、エラー終了
+  - '[ "${EVENT}" == "other" ] && echo "SKIP" && exit 1 || echo "EXECUTE ${EVENT}"'
 
 script:
-  # CI Event Scriptを実行
-  - '[ -f "./build/ci_event/${EVENT}.sh" ] && "./build/ci_event/${EVENT}.sh" || echo "${EVENT}.sh is not exist" >&2; exit 1'
+  - '"./build/ci_event/${EVENT}.sh"'
+
+cache:
+  directories:
+    - ${HOME}/.cache
+    - ${DIR_CACHE}
+
+after_success:
+  - 'echo "after_success"'
+  - 'echo "${EVENT} SUCCESS"'
+
+after_failure:
+  - 'echo "after_failure"'
+  - 'echo "BEFORE: TRAVIS_TEST_RESULT  = ${TRAVIS_TEST_RESULT}"'
+  # TODO 対象外の場合、エラー終了をハンドリングして正常終了に変換 はこれで良い？
+  - '[ "${EVENT}" == "other" ] && TRAVIS_TEST_RESULT=0 || echo "${EVENT} FAILURE"'
+  - 'echo "AFTER : TRAVIS_TEST_RESULT  = ${TRAVIS_TEST_RESULT}"'
+
+after_script:
+  - 'echo "after_script"'
+  - 'echo "EVENT               = ${EVENT}"'
+  - 'echo "TRAVIS_BRANCH       = ${TRAVIS_BRANCH}"'
+  - 'echo "TRAVIS_PULL_REQUEST = ${TRAVIS_PULL_REQUEST}"'
+  - 'echo "TRAVIS_TAG          = ${TRAVIS_TAG}"'
+  - 'echo "TRAVIS_TEST_RESULT  = ${TRAVIS_TEST_RESULT}"'

@@ -33,6 +33,11 @@ fi
 #---------------------------------------------------------------------------------------------------
 echo "$(basename $0)"
 
+echo "  clone"
+rm -rf versiron_work
+git clone -b "${BRANCH_MASTER}" "${GIT_URL}" versiron_work
+exit_on_fail "clone" $?
+
 echo "  update version file"
 released_version=$(cat "${PATH_VERSION}")
 # shellcheck disable=SC2034
@@ -40,22 +45,28 @@ next_version=$(
   echo ${released_version}                                                                         |
   ( IFS=".$IFS" ; read major minor bugfix && echo ${major}.$(( minor + 1 )).0-SNAPSHOT )
 )
-
 echo "    ${released_version} -> ${next_version}"
-echo "${next_version}" >"${PATH_VERSION}"
+before_dir="$(pwd)"
+cd versiron_work
+echo "${next_version}" >"${RELPATH_VERSION}"
 
 add_git_config
 
-echo "  git add"
+echo "  staging"
 git add --all .
+exit_on_fail "staging" $?
 
-echo "  git commit"
-git commit -m "chore(VERSION): start ${next_version}"
-exit_on_fail "git commit" $?
+echo "  commit"
+git commit -m "${MSG_PREFIX_RELEASE}start ${next_version}"
+exit_on_fail "commit" $?
 
-echo "  git push branch ${BRANCH_MASTER}"
+echo "  push"
 git push origin "${BRANCH_MASTER}"
-exit_on_fail "git push branch ${BRANCH_MASTER}" $?
+exit_on_fail "push" $?
+
+echo "  clear clone dir"
+cd "${before_dir}"
+rm -rf versiron_work/
 
 
 #---------------------------------------------------------------------------------------------------

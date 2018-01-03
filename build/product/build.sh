@@ -96,7 +96,7 @@ rm -fr "${DIR_DIST}/${archive_name:?}/"
 #---------------------------------------------------------------------------------------------------
 # test
 #---------------------------------------------------------------------------------------------------
-build/product/integration_test.sh "${DIR_DIST}/${archive_name_with_dpends}.tar.gz"
+build/product/integration_test.sh "${DIR_DIST}/${archive_name_with_dpends}.tar.gz" 2>/tmp/stfw_integration_test.log
 retcode=$?
 if [[ ${retcode} -ne 0 ]]; then exit ${retcode}; fi
 

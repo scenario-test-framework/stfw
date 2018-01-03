@@ -5,10 +5,12 @@
 function add_git_config() {
   echo "  ${FUNCNAME[0]}"
 
-  git config user.name "${COMMIT_USER}"
-  git config user.email "${COMMIT_MAIL}"
+  if [[ "$(git config --get user.name)x" = "x" ]]; then
+    git config user.name "${COMMIT_USER}"
+    git config user.email "${COMMIT_MAIL}"
+  fi
 
-  echo "https://${GITHUB_TOKEN}@github.com" > "${PATH_CREDENTIALS}"
+  echo "https://${GITHUB_TOKEN}:@github.com" > "${PATH_CREDENTIALS}"
   git config credential.helper "store --file=${PATH_CREDENTIALS}"
   exit_on_fail "${FUNCNAME[0]}" $?
 

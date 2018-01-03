@@ -30,66 +30,40 @@ if [[ "${GITHUB_TOKEN}x" = "x" ]]; then
 fi
 
 
-#-------------------------------------------------------------------------------
-# オプション解析
-#-------------------------------------------------------------------------------
-while :; do
-  case $1 in
-    --)
-      shift
-      break
-      ;;
-
-    *)
-      break
-      ;;
-  esac
-done
-
-
 #---------------------------------------------------------------------------------------------------
 # main
 #---------------------------------------------------------------------------------------------------
 echo "$(basename $0)"
 retcode=0
 
+echo "  clone"
+rm -rf gh_pages
+git clone -b "${BRANCH_GHPAGES}" "${GIT_URL}" gh_pages
+exit_on_fail "clone" $?
+
+echo "  update files"
+before_dir="$(pwd)"
+rm -rf gh_pages/*
+cp -a "${DIR_DOCS}"/* gh_pages/
+cd gh_pages
+
 add_git_config
 
-echo "  update"
-git pull
-git checkout "${BRANCH_GHPAGES}"
-exit_on_fail "git checkout \"${BRANCH_GHPAGES}\"" $?
-git reset
-exit_on_fail "git reset" $?
-
-echo "  clear"
-rm -f ./index.html
-rm -fr ./stylesheets/
-rm -fr ./images/
-
-echo "  move"
-if [[ -f ./docs/index.html   ]]; then mv ./docs/index.html ./;   fi
-if [[ -d ./docs/stylesheets/ ]]; then mv ./docs/stylesheets/ ./; fi
-if [[ -d ./docs/images/      ]]; then mv ./docs/images/ ./;      fi
-
 echo "  staging"
-if [[ -f ./index.html   ]]; then git add ./index.html;   fi
-if [[ -d ./stylesheets/ ]]; then git add ./stylesheets/; fi
-if [[ -d ./images/      ]]; then git add ./images/;      fi
+git add --all .
+exit_on_fail "staging" $?
 
 echo "  commit"
-git commit -m "chore(release docs): v${version}"
+git commit -m "${MSG_PREFIX_RELEASE}v${version}"
 exit_on_fail "commit" $?
 
 echo "  push"
 git push origin "${BRANCH_GHPAGES}"
 exit_on_fail "push" $?
 
-echo "  reset"
-git reset --hard
-git clean -df
-git checkout "${BRANCH_MASTER}"
-exit_on_fail "reset" $?
+echo "  clear clone dir"
+cd "${before_dir}"
+rm -rf gh_pages/
 
 
 #---------------------------------------------------------------------------------------------------

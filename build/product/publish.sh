@@ -72,37 +72,37 @@ function upload_bintray() {
     rm -f "${_output_path}"
     return 1
   fi
-
-  # snapshot版の場合、downloads表示なし
-  if [[ "${_package}" = "${BINTRAY_PKG_SNAPSHOT}" ]]; then return 0; fi
-
-  echo "    wait for bintray     : ${_filename}"
-  sleep 10
-
-  echo "    publish dl-list start: ${_filename}"
-  _url="${BINTRAY_URL}/file_metadata/${BINTRAY_ORG}/${BINTRAY_REPO}/${_filename}"
-  _output_path="/tmp/${FUNCNAME[0]}_publish-dl-list_${_filename}_$$"
-
-  _cur_status=$(                                                                                   \
-    curl                                                                                           \
-      --silent                                                                                     \
-      --request PUT                                                                                \
-      --write-out '%{http_code}'                                                                   \
-      --output "${_output_path}"                                                                   \
-      --user "${BINTRAY_USER}:${BINTRAY_TOKEN}"                                                    \
-      --header "Content-Type: application/json"                                                    \
-      --data-binary '{ "list_in_downloads" : true }'                                               \
-      "${_url}"                                                                                    \
-    2>/dev/null                                                                                    \
-  )
-  echo "    publish dl-list end  : ${_filename} responnse=${_cur_status}"
-
-  if [[ "$(echo ${_cur_status} | cut -c 1)" != "2" ]]; then
-    cat "${_output_path}"
-    echo ""
-    rm -f "${_output_path}"
-    return 1
-  fi
+# TODO list_in_downloads: true でリクエストしなくても、DLできる様子。
+#  # snapshot版の場合、downloads表示なし
+#  if [[ "${_package}" = "${BINTRAY_PKG_SNAPSHOT}" ]]; then return 0; fi
+#
+#  echo "    wait for bintray     : ${_filename}"
+#  sleep 10
+#
+#  echo "    publish dl-list start: ${_filename}"
+#  _url="${BINTRAY_URL}/file_metadata/${BINTRAY_ORG}/${BINTRAY_REPO}/${_filename}"
+#  _output_path="/tmp/${FUNCNAME[0]}_publish-dl-list_${_filename}_$$"
+#
+#  _cur_status=$(                                                                                   \
+#    curl                                                                                           \
+#      --silent                                                                                     \
+#      --request PUT                                                                                \
+#      --write-out '%{http_code}'                                                                   \
+#      --output "${_output_path}"                                                                   \
+#      --user "${BINTRAY_USER}:${BINTRAY_TOKEN}"                                                    \
+#      --header "Content-Type: application/json"                                                    \
+#      --data-binary '{ "list_in_downloads" : true }'                                               \
+#      "${_url}"                                                                                    \
+#    2>/dev/null                                                                                    \
+#  )
+#  echo "    publish dl-list end  : ${_filename} responnse=${_cur_status}"
+#
+#  if [[ "$(echo ${_cur_status} | cut -c 1)" != "2" ]]; then
+#    cat "${_output_path}"
+#    echo ""
+#    rm -f "${_output_path}"
+#    return 1
+#  fi
 
   return 0
 }

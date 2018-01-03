@@ -31,7 +31,7 @@ function update_version() {
   local _cur_version=$(cat "${PATH_VERSION}")
   local _release_version="${_cur_version//-SNAPSHOT/}"
   local _release_tag="v${_release_version}"
-  local _commit_message="chore(release): ${_release_tag}"
+  local _commit_message="${MSG_PREFIX_RELEASE}${_release_tag}"
 
   echo "  update version file"
   echo "    ${_cur_version} -> ${_release_version}"
