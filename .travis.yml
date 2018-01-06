@@ -3,32 +3,43 @@ language: ruby
 rvm:
   - 2.2
 
+notifications:
+  webhooks:
+    urls:
+      - https://webhooks.gitter.im/e/44fd4fc83c67b7c0ee13
+    # options: [always|never|change]
+    on_start: never
+    on_success: change
+    on_failure: always
+    on_cancel: always
+    on_error: always
+
 before_install:
   - 'REDPEN_URL="https://github.com/redpen-cc/redpen/releases/download"'
   - 'REDPEN_VERSION="1.10.1"'
   - 'DIR_CACHE="${HOME}/custom_cache"'
 
 install:
+  # build/docs: redpen
   - 'curl --request GET --location --continue-at - --create-dirs --output "${DIR_CACHE}/redpen-${REDPEN_VERSION}.tar.gz" "${REDPEN_URL}/redpen-${REDPEN_VERSION}/redpen-${REDPEN_VERSION}.tar.gz"'
-  - 'cd ${DIR_CACHE} && tar xvf "./redpen-${REDPEN_VERSION}.tar.gz" && cd -'
+  - 'cd ${DIR_CACHE} && tar xf "./redpen-${REDPEN_VERSION}.tar.gz" && cd -'
   - 'export PATH="$PATH:${DIR_CACHE}/redpen-distribution-${REDPEN_VERSION}/bin"'
+  # build/docs: asciidoctor
   - 'gem install asciidoctor'
+  # stfw dependencies
   - 'pip install --user pyaml'
   - 'pip install --user docopt'
 
 before_script:
   # CI Event判定
   - EVENT="other"
-  - '[ "${TRAVIS_PULL_REQUEST}" != "false" ] && [ "${TRAVIS_BRANCH}" == "master" ]        && [ "${TRAVIS_TAG}" == "" ] && EVENT="pr_created"    || EVENT="${EVENT}"'
-  - '[ "${TRAVIS_PULL_REQUEST}" == "false" ] && [ "${TRAVIS_BRANCH}" == "master" ]        && [ "${TRAVIS_TAG}" == "" ] && EVENT="pr_merged"     || EVENT="${EVENT}"'
-  - '[ "${TRAVIS_PULL_REQUEST}" == "false" ] && [ "${TRAVIS_BRANCH}" == "master" ]        && [ "${TRAVIS_TAG}" == "" ] && EVENT="master_pushed" || EVENT="${EVENT}"'
-  - '[ "${TRAVIS_PULL_REQUEST}" == "false" ] && [ "${TRAVIS_BRANCH}" == "${TRAVIS_TAG}" ] && [ "${TRAVIS_TAG}" != "" ] && EVENT="tag_pushed"    || EVENT="${EVENT}"'
+  - 'if [ "${TRAVIS_PULL_REQUEST}" != "false" ] && [ "${TRAVIS_BRANCH}" == "master" ]        && [ "${TRAVIS_TAG}" == "" ]; then EVENT="pr_created";    fi'
+  - 'if [ "${TRAVIS_PULL_REQUEST}" == "false" ] && [ "${TRAVIS_BRANCH}" == "master" ]        && [ "${TRAVIS_TAG}" == "" ]; then EVENT="master_pushed"; fi'
+  - 'if [ "${TRAVIS_PULL_REQUEST}" == "false" ] && [ "${TRAVIS_BRANCH}" == "${TRAVIS_TAG}" ] && [ "${TRAVIS_TAG}" != "" ]; then EVENT="tag_pushed";    fi'
   - 'echo "EVENT               = ${EVENT}"'
   - 'echo "TRAVIS_BRANCH       = ${TRAVIS_BRANCH}"'
   - 'echo "TRAVIS_PULL_REQUEST = ${TRAVIS_PULL_REQUEST}"'
   - 'echo "TRAVIS_TAG          = ${TRAVIS_TAG}"'
-  # 対象外の場合、エラー終了
-  - '[ "${EVENT}" == "other" ] && echo "SKIP" && exit 1 || echo "EXECUTE ${EVENT}"'
 
 script:
   - '"./build/ci_event/${EVENT}.sh"'
@@ -38,16 +49,13 @@ cache:
     - ${HOME}/.cache
     - ${DIR_CACHE}
 
-after_success:
-  - 'echo "after_success"'
-  - 'echo "${EVENT} SUCCESS"'
+#after_success:
+#  - 'echo "after_success"'
+#  - 'echo "TRAVIS_TEST_RESULT  = ${TRAVIS_TEST_RESULT}"'
 
-after_failure:
-  - 'echo "after_failure"'
-  - 'echo "BEFORE: TRAVIS_TEST_RESULT  = ${TRAVIS_TEST_RESULT}"'
-  # TODO 対象外の場合、エラー終了をハンドリングして正常終了に変換 はこれで良い？
-  - '[ "${EVENT}" == "other" ] && TRAVIS_TEST_RESULT=0 || echo "${EVENT} FAILURE"'
-  - 'echo "AFTER : TRAVIS_TEST_RESULT  = ${TRAVIS_TEST_RESULT}"'
+#after_failure:
+#  - 'echo "after_failure"'
+#  - 'echo "TRAVIS_TEST_RESULT  = ${TRAVIS_TEST_RESULT}"'
 
 after_script:
   - 'echo "after_script"'
