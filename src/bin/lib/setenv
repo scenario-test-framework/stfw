@@ -68,6 +68,11 @@ readonly DIR_MODULE="${STFW_HOME}/modules"
 readonly FILENAME_SYSTEM_CONFIG="stfw.yml"
 readonly PATH_DEFAULT_CONFIG="${DIR_CONFIG}/${FILENAME_SYSTEM_CONFIG}"
 
+# 暗号化・復号化
+readonly DIR_CONFIG_ENCRYPT="${DIR_CONFIG}/encrypt"
+readonly PATH_ENCRYPT_KEY="${DIR_CONFIG_ENCRYPT}/encrypt_key"
+readonly PATH_DECRYPT_KEY="${DIR_CONFIG_ENCRYPT}/decrypt_key"
+
 # digファイル
 readonly FILENAME_DIG_RUN="run.dig"
 readonly FILENAME_DIG_SCENARIO="scenario.dig"

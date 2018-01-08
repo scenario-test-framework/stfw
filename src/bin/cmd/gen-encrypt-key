@@ -1,0 +1,100 @@
+#!/bin/bash
+#set -ex
+#===================================================================================================
+#
+# scenario test framework cli - generate encrypt key
+#
+#===================================================================================================
+#---------------------------------------------------------------------------------------------------
+# 設定
+#---------------------------------------------------------------------------------------------------
+dir_script="$(dirname $0)"
+cd "$(cd ${dir_script}; pwd)"
+
+# 共通設定
+readonly STFW_HOME="$(cd ../..; pwd)"
+. "${STFW_HOME}/bin/lib/setenv"
+
+readonly PROGNAME="stfw $(basename $0)"
+
+
+#---------------------------------------------------------------------------------------------------
+# 関数定義
+#---------------------------------------------------------------------------------------------------
+function private.description() {
+  echo "  $(basename $0) : generate encrypt key"
+}
+
+
+function private.usage() {
+  cat << __EOT__ >&2
+usage: ${PROGNAME} [options...]
+
+options:
+  -f, --force : force generate
+
+__EOT__
+  exit ${EXITCODE_ERROR}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# 事前処理
+#---------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+# オプション解析
+#-------------------------------------------------------------------------------
+# 強制上書きモード
+is_force="false"
+
+while :; do
+  case $1 in
+    --description)
+      private.description
+      exit ${EXITCODE_ERROR}
+      ;;
+
+    -h|--help)
+      private.usage
+      exit ${EXITCODE_ERROR}
+      ;;
+
+    -f|--force)
+      is_force="true"
+      shift
+      ;;
+
+    --)
+      shift
+      break
+      ;;
+
+    *)
+      break
+      ;;
+  esac
+done
+
+
+#---------------------------------------------------------------------------------------------------
+# 本処理
+#---------------------------------------------------------------------------------------------------
+log.script_start "${PROGNAME}"
+
+if [[ -d "${DIR_CONFIG_ENCRYPT}" ]]; then
+  if [[ "${is_force}" != "true" ]]; then
+    log.error "${DIR_CONFIG_ENCRYPT} is already exists."
+    exit ${EXITCODE_ERROR}
+  fi
+
+  # ディレクトリ初期化
+  rm -fr "${DIR_CONFIG_ENCRYPT}"
+fi
+
+# キー生成
+mkdir "${DIR_CONFIG_ENCRYPT}"
+gen_encrypt_key "${PATH_ENCRYPT_KEY}" "${PATH_DECRYPT_KEY}"                                   2>&1 | log.debug
+exitcode=$?
+
+log.script_end "${PROGNAME}" "${exitcode}"
+exit ${exitcode}
