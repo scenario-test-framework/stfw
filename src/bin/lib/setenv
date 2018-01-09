@@ -91,10 +91,6 @@ readonly DL_TIMEOUT=1800
 readonly URL_DIGDAG="https://dl.bintray.com/digdag/maven/digdag-0.9.21.jar"
 readonly PATH_DIGDAG="${DIR_MODULE}/digdag"
 
-# embulk
-readonly URL_EMBULK="https://dl.bintray.com/embulk/maven/embulk-0.8.39.jar"
-readonly PATH_EMBULK="${DIR_MODULE}/embulk"
-
 
 
 #--------------------------------------------------------------------------------------------------
