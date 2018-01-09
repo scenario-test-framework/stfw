@@ -74,7 +74,11 @@ stfw init
 retcode=$?
 if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
 
-stfw gen-encrypt-key -f
+stfw gen-encrypt-key
+retcode=$?
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
+
+stfw gen-encrypt-key --force
 retcode=$?
 if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
 
