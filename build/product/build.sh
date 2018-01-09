@@ -58,6 +58,7 @@ cp -pr "${DIR_SRC}/"* "${dir_dist_work}/"
 echo "  remove UT work files"
 rm -fr "${dir_dist_work}"/archives
 rm -fr "${dir_dist_work}"/modules
+rm -fr "${dir_dist_work}"/config/encrypt
 
 echo "  remove exclude files"
 # shellcheck disable=SC2038

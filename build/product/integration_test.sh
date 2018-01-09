@@ -74,6 +74,33 @@ stfw init
 retcode=$?
 if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
 
+stfw gen-encrypt-key
+retcode=$?
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
+
+stfw gen-encrypt-key --force
+retcode=$?
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
+
+
+#---------------------------------------------------------------------------------------------------
+# STEP: encrypt passwd
+#---------------------------------------------------------------------------------------------------
+STEP="encrypt passwd"
+echo "  ${STEP}"
+
+stfw passwd "127.0.0.1" "some_user" "password1"
+retcode=$?
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
+
+stfw passwd --force "127.0.0.1" "some_user" "password2"
+retcode=$?
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
+
+stfw passwd --show "127.0.0.1" "some_user"
+retcode=$?
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
+
 
 #---------------------------------------------------------------------------------------------------
 # STEP: create scenario

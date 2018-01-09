@@ -371,8 +371,11 @@ private.download_and_rename "digdag" "${URL_DIGDAG}" "${PATH_DIGDAG}"
 private.exit_on_fail $?
 
 # embulk
-private.download_and_rename "embulk" "${URL_EMBULK}" "${PATH_EMBULK}"
-private.exit_on_fail $?
+# TODO process pluginに移動
+#readonly URL_EMBULK="https://dl.bintray.com/embulk/maven/embulk-0.8.39.jar"
+#readonly PATH_EMBULK="${DIR_MODULE}/embulk"
+#private.download_and_rename "embulk" "${URL_EMBULK}" "${PATH_EMBULK}"
+#private.exit_on_fail $?
 
 # compare-files
 # TODO process pluginに移動

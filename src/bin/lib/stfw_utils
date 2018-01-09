@@ -10,6 +10,8 @@
 #   stfw.apply_log_level
 #   stfw.apply_dynamic_env
 #   stfw.get_plugin_path
+#   stfw.get_passwd_path
+#   stfw.show_passwd
 #   stfw.bulk_exec_scripts
 #   stfw.is_in_scenario-root-dir
 #   stfw.is_in_scenario-dir
@@ -147,6 +149,72 @@ function stfw.get_plugin_path() {
   fi
 
   log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# passwdファイルパス取得
+#
+# 概要
+#   指定ホスト x ユーザ のpasswdファイルパスを返します。
+#
+# 引数
+#   1: host
+#   2: user
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     passwdファイルパス
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.get_passwd_path() {
+  local _host="$1"
+  local _user="$2"
+
+  local _dir_passwd="${STFW_PROJ_DIR_CONFIG}/passwd"
+  echo "${_dir_passwd}/${_host//:/_}-${_user//:/_}"
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# password取得
+#
+# 概要
+#   指定ホスト x ユーザ のpasswordを返します。
+#
+# 引数
+#   1: host
+#   2: user
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     password
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.show_passwd() {
+  local _host="$1"
+  local _user="$2"
+
+  local _path_passwd="$(stfw.get_passwd_path ${_host} ${_user})"
+  if [[ ! -f "${_path_passwd}" ]]; then
+    log.error "${_path_passwd} is not exist. host: ${_host}, user: ${_user}"
+    return ${EXITCODE_ERROR}
+  fi
+
+  _decrypt "${PATH_DECRYPT_KEY}" <"${_path_passwd}"
+  local _retcode=$?
+
   return ${_retcode}
 }
 

@@ -4,6 +4,7 @@
 src/archives
 src/modules
 src/bin/lib/jq
+src/config/encrypt
 
 docs/index.html
 
