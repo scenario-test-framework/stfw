@@ -1,3 +1,5 @@
 #!/bin/bash
-# 処理なし
+. "${STFW_HOME}/bin/lib/setenv"
+
+# 依存なし
 exit 0

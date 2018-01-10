@@ -1,5 +1,4 @@
 stfw:
   process:
     scripts:
-      runtime:
-        some_key: defined at 20_exe_scripts
+      some_key: defined at 20_exe_scripts

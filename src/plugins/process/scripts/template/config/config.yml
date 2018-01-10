@@ -1,10 +1,9 @@
 stfw:
   process:
     scripts:
-      runtime:
-        some_key: value
-        list:
-          - list_key1: 0_list_key1_value
-            list_key2: 0_list_key2_value
-          - list_key1: 1_list_key1_value
-            list_key2: 1_list_key2_value
+      some_key: value defined at plugin
+      list:
+        - key1: list[0] value1
+          key2: list[0] value2
+        - key1: list[1] value1
+          key2: list[1] value2
