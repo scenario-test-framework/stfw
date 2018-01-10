@@ -1,0 +1,4 @@
+#payload:
+# run:
+    scenario:
+      name: ${stfw_scenario_name}

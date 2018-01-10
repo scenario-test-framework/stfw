@@ -29,8 +29,8 @@ cd "$(cd ${dir_script}; pwd)"
 
 # 共通設定
 export readonly STFW_HOME="$(cd ..; pwd)"
+export readonly STFW_VERSION="$(cat ${STFW_HOME}/VERSION)"
 . "${STFW_HOME}/bin/lib/setenv"
-
 
 
 #--------------------------------------------------------------------------------------------------
@@ -54,7 +54,7 @@ stfw.apply_log_level "${stfw_loglevel:-${LOGLEVEL_INFO}}"
 #---------------------------------------------------------------------------------------------------
 function private.version() {
   {
-    echo "$(basename $0) $(cat ${STFW_HOME}/VERSION)"
+    echo "$(basename $0) ${STFW_VERSION}"
     echo "STFW_HOME: ${STFW_HOME}"
   } >&2
 }
@@ -142,6 +142,9 @@ if [[ ! -f "${DIR_BIN_CMD}/${subcmd}" ]]; then
   exit ${EXITCODE_ERROR}
 fi
 
+if [[ "$subcmd" = "run" ]]; then
+  echo "$*" > ${STFW_PROJ_DIR_DATA}/param
+fi
 
 
 #---------------------------------------------------------------------------------------------------

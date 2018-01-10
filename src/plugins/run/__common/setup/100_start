@@ -3,4 +3,8 @@
 
 # 処理開始時刻を保存
 processing_time.start "${run_id:?}"
-exit $?
+retcode=$?
+
+webhook.createhook "${run_id:?}" run start
+
+exit $retcode

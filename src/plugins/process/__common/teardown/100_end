@@ -1,6 +1,8 @@
 #!/bin/bash
 . "${STFW_HOME:?}/bin/lib/setenv"
 
+webhook.createhook "${stfw_process_dir:?}" process end
+
 # 処理時間を表示
 processing_time=$(processing_time.calc "${stfw_process_dir:?}")
 (

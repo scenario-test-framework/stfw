@@ -483,7 +483,12 @@ function processing_time.calc() {
   local _start_time=$(cat "${_filepath_processing_time}")
   local _end_time=$(date '+%Y%m%d%H%M%S')
   rm -f "${_filepath_processing_time}"
+  private.calc_processing_time $_start_time $_end_time
+}
 
+function private.calc_processing_time() {
+  local _start_time=$1
+  local _end_time=$2
   echo "${_start_time} ${_end_time}"                                                               | # 開始・終了時刻(YYYYMMddHHmmss)から
   calclock 1 2 -                                                                                   | # エポックからのミリ秒に変換
   awk '{ print $4 - $2}'                                                                           | # ミリ秒の差分を取得
@@ -504,3 +509,95 @@ function processing_time.calc() {
     print hour":"min":"sec
   }'
 }
+
+function webhook.createhook() {
+  local _key=$1
+  local _type=$2
+  local _event=$3
+
+  local _filepath_processing_time=$(private.processing_time.get_filepath "${_key}")
+  local _start_time=$(cat "${_filepath_processing_time}")
+  export webhook_start_time=$(convert_date_for_display ${_start_time})
+  export webhook_end_time=
+  export webhook_processing_time=
+  if [[ "$_event" = "start" ]]; then
+    _status="started"
+    # shellcheck disable=SC2154
+    if [[ "$stfw_webhooks_on_start" = "false" ]]; then
+      return 0
+    fi
+  else
+    # get status from digdag
+    local _end_time=$(date '+%Y%m%d%H%M%S')
+    export webhook_end_time=$(convert_date_for_display $_end_time)
+    export webhook_processing_time=$(private.calc_processing_time $_start_time $_end_time)
+    _status="success"
+    # shellcheck disable=SC2154
+    if [[ "$status" = "error" ]]; then
+      _status="error"
+      # shellcheck disable=SC2154
+      if [[ "$stfw_webhooks_on_error" = "false" ]]; then
+        return 0
+      fi
+    else
+      # shellcheck disable=SC2154
+      if [[ "$stfw_webhooks_on_success" = "false" ]]; then
+        return 0
+      fi
+    fi
+  fi
+
+  local _configs=${STFW_PROJ_DIR_CONFIG}/webhook-payload.yml 
+  case $_type in
+    run)
+      _configs="$_configs ${STFW_PROJ_DIR_CONFIG}/webhook-run.yml"
+      ;;
+    scenario)
+      _configs="$_configs ${STFW_PROJ_DIR_CONFIG}/webhook-run.yml"
+      _configs="$_configs ${STFW_PROJ_DIR_CONFIG}/webhook-scenario.yml"
+      ;;
+    bizdate)
+      _configs="$_configs ${STFW_PROJ_DIR_CONFIG}/webhook-run.yml"
+      _configs="$_configs ${STFW_PROJ_DIR_CONFIG}/webhook-scenario.yml"
+      _configs="$_configs ${STFW_PROJ_DIR_CONFIG}/webhook-bizdate.yml"
+      ;;
+    process)
+      _configs="$_configs ${STFW_PROJ_DIR_CONFIG}/webhook-run.yml"
+      _configs="$_configs ${STFW_PROJ_DIR_CONFIG}/webhook-scenario.yml"
+      _configs="$_configs ${STFW_PROJ_DIR_CONFIG}/webhook-bizdate.yml"
+      _configs="$_configs ${STFW_PROJ_DIR_CONFIG}/webhook-process.yml"
+      ;;
+    *)
+      ;;
+  esac
+
+  export webhook_type=${_type}
+  export webhook_status=${_status}
+
+  export stfw_run_params=$(cat ${STFW_PROJ_DIR_DATA}/param)
+  export STFW_SERVER_VERSION=$(digdag version 2> /dev/null | grep Server | cut -d' ' -f3)
+
+  # 複数ファイル一括catのため
+  # shellcheck disable=SC2002
+  cat $_configs | grep -v "^#" |
+  while IFS= read -r _line
+  do
+    eval "echo \"$_line\""
+  done | ${DIR_BIN_LIB}/yaml2json > /tmp/stfw_webhook.json.$$
+
+  # post webhooks
+  env | grep stfw_webhooks_urls_ | cut -d= -f2 |
+  while read -r _webhooks_url
+  do
+    curl -sS -X POST --data-binary "@/tmp/stfw_webhook.json.$$" -H "Content-type: application/json" $_webhooks_url &
+  done
+  # 非同期起動しているので、このタイミングでファイルを消せない。
+}
+
+# yyyymmdd->yyyy-mm-ddThh:mm:ssZ
+function convert_date_for_display() {
+  local _date=$1
+  # shellcheck disable=SC2154
+  echo ${_date:0:4}-${_date:4:2}-${_date:6:2}T${_date:8:2}:${_date:10:2}:${_date:12:2}${session_tz_offset}
+}
+

@@ -1,0 +1,8 @@
+#payload:
+# run:
+#   scenario:
+#     bizdate:
+        process:
+          dirname: ${stfw_process_dirname}
+          seq: ${stfw_process_seq}
+          group: ${stfw_process_group}
