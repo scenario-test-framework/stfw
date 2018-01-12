@@ -3,4 +3,8 @@
 
 # 処理開始時刻を保存
 processing_time.start "${stfw_process_dir:?}"
-exit $?
+retcode=$?
+
+webhook.async_execute "${stfw_process_dir:?}" process start
+
+exit $retcode

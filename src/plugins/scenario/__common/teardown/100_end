@@ -1,6 +1,8 @@
 #!/bin/bash
 . "${STFW_HOME:?}/bin/lib/setenv"
 
+webhook.async_execute "${stfw_scenario_dir:?}" scenario end
+
 # 処理時間を表示
 processing_time=$(processing_time.calc "${stfw_scenario_dir:?}")
 (

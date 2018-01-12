@@ -17,3 +17,16 @@ stfw:
   list_sample:
   - list_value1
   - list_value2
+
+  project:
+    version: 0.1.0
+
+  # webhook
+  webhooks:
+    urls:
+      - https://webhook.site/7e769801-aac8-4335-91df-1ff1c8cfd972
+      - http://127.0.0.1:8000/1lazctj1
+    on_start: true
+    on_cancel: false
+    on_success: true
+    on_error: true

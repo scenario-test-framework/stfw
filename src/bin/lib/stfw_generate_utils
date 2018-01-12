@@ -127,6 +127,7 @@ function stfw.generate.run-dig() {
       echo '+'${_cur_scenario}':'
       echo '  _export:'
       echo '    stfw_scenario_dir : "'${_cur_scenario_dir}'"'
+      echo '    stfw_scenario_name : "'${_cur_scenario}'"'
       echo '  !include : scenario/'${_cur_scenario}'/scenario.dig'
     ) >> "${_path_dig}"
   done
@@ -138,6 +139,8 @@ function stfw.generate.run-dig() {
     echo '+run_teardown:'
     echo '  sh>: stfw run --teardown '"${_scenario_names[@]}"
     echo '_error:'
+    echo '  _export:'
+    echo '    stfw_run_status : "error"'
     echo '  sh>: stfw run --teardown '"${_scenario_names[@]}"
   ) >> "${_path_dig}"
 
@@ -218,6 +221,7 @@ function stfw.generate.scenario-dig() {
       echo '+'${_cur_bizdate_dirname}':'
       echo '  _export:'
       echo '    stfw_bizdate_dir : "${stfw_scenario_dir}/'${_cur_bizdate_dirname}'"'
+      echo '    stfw_bizdate_dirname : "'${_cur_bizdate_dirname}'"'
       echo '    stfw_bizdate_seq : "'${_cur_seq}'"'
       echo '    stfw_bizdate : "'${_cur_bizdate}'"'
       echo '  !include : '${_cur_bizdate_dirname}'/bizdate.dig'
@@ -231,6 +235,8 @@ function stfw.generate.scenario-dig() {
     echo '+scenario_teardown:'
     echo '  sh>: stfw scenario --teardown "${stfw_scenario_dir}"'
     echo '_error:'
+    echo '  _export:'
+    echo '    stfw_run_status : "error"'
     echo '  sh>: stfw scenario --teardown "${stfw_scenario_dir}"'
   ) >> "${_path_output}"
 
@@ -317,6 +323,7 @@ function stfw.generate.bizdate-dig() {
       echo '  _export:'
       echo '    stfw_process : "'${_cur_process}'"'
       echo '    stfw_process_dir : "${stfw_bizdate_dir}/'${_cur_process_dirname}'"'
+      echo '    stfw_process_dirname : "'${_cur_process_dirname}'"'
       echo '    stfw_process_seq : "'${_cur_seq}'"'
       echo '    stfw_process_group : "'${_cur_group}'"'
       echo '    stfw_process_retcode : 0'
@@ -331,6 +338,8 @@ function stfw.generate.bizdate-dig() {
     echo '+bizdate_teardown:'
     echo '  sh>: stfw bizdate --teardown "${stfw_bizdate_dir}"'
     echo '_error:'
+    echo '  _export:'
+    echo '    stfw_run_status : "error"'
     echo '  sh>: stfw bizdate --teardown "${stfw_bizdate_dir}"'
   ) >> "${_path_output}"
 

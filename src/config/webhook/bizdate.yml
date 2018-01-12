@@ -1,0 +1,7 @@
+#payload:
+# run:
+#   scenario:
+      bizdate:
+        dirname: ${stfw_bizdate_dirname}
+        seq: ${stfw_bizdate_seq}
+        bizdate: ${stfw_bizdate}
