@@ -21,6 +21,8 @@
 #   stfw.process.get_path
 #   stfw.process.is_installed
 #   stfw.process.install
+#   stfw.get_digdag_version
+#   stfw.get_run_params
 #
 #===================================================================================================
 #---------------------------------------------------------------------------------------------------
@@ -499,3 +501,43 @@ function stfw.process.install() {
   log.func_end_trace ${_retcode}
   return ${_retcode}
 }
+
+#---------------------------------------------------------------------------------------------------
+# digdagバージョン取得
+#
+# 概要
+#   digdagのバージョンを取得します。
+#
+# 引数
+#   なし
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     digdagバージョン
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.get_digdag_version() {
+  local run_id=$1
+  if [[ ! -f "${STFW_PROJ_DIR_DATA}/digdag_version.${run_id}" ]]; then
+    ${PATH_DIGDAG} version 2> /dev/null | \
+      grep Server | \
+      cut -d ' ' -f 3 > ${STFW_PROJ_DIR_DATA}/digdag_version.${run_id}
+  fi
+  cat ${STFW_PROJ_DIR_DATA}/digdag_version.${run_id}
+}
+
+function stfw.get_run_params() {
+  local run_id=$1
+  # shellcheck disable=SC2154
+  if [[ "${stfw_run_raw_params}" != "" ]]; then
+    echo "${stfw_run_raw_params}" > ${STFW_PROJ_DIR_DATA}/param.${run_id}
+    echo "${stfw_run_raw_params}" 
+  else
+    cat ${STFW_PROJ_DIR_DATA}/param.${run_id}
+  fi
+}
+

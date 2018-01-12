@@ -24,7 +24,7 @@ stfw:
   # webhook
   webhooks:
     urls:
-      - http://127.0.0.1:8000/1bmtzx91
+      - https://webhook.site/7e769801-aac8-4335-91df-1ff1c8cfd972
       - http://127.0.0.1:8000/1lazctj1
     on_start: true
     on_cancel: false

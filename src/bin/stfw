@@ -142,8 +142,8 @@ if [[ ! -f "${DIR_BIN_CMD}/${subcmd}" ]]; then
   exit ${EXITCODE_ERROR}
 fi
 
-if [[ "$subcmd" = "run" ]]; then
-  echo "$*" > ${STFW_PROJ_DIR_DATA}/param
+if [[ "${subcmd}" = "run" ]]; then
+  export stfw_run_raw_params="$*"
 fi
 
 
