@@ -1,0 +1,152 @@
+#!/bin/bash
+#set -eux
+#===================================================================================================
+# stfw インベントリ定義ファイルアクセス ユーティリティ
+#
+# 前提
+#   ・システム設定を事前に読み込んでいること
+#
+# インベントリ定義ファイル
+#   ファイル情報
+#     フェーマット: yaml
+#     文字コード  : utf8
+#     改行コード  : LF
+#
+#   レイアウト
+#     stfw_inventry:
+#       - <group-name>:
+#         - <ip | hostname>
+#
+#   サンプル
+#     stfw_inventry:
+#       - web:
+#         - 127.0.0.1
+#         - localhost
+#       - ap:
+#         - 127.0.0.1
+#       - db:
+#         - 12.0.0.1
+#
+# 定義リスト
+#   stfw.inventry.list_group_hosts
+#   stfw.inventry.is_exist_group
+#
+#===================================================================================================
+#---------------------------------------------------------------------------------------------------
+# 定数
+#---------------------------------------------------------------------------------------------------
+# 全件ホストグループ
+readonly STFW__INVENTRY_GROUP_ALL="all"
+
+
+#--------------------------------------------------------------------------------------------------
+# 共通関数読込み
+#--------------------------------------------------------------------------------------------------
+# 共通ユーティリティ
+. "${DIR_BIN_LIB}/common_utils"
+# stfw共通ユーティリティ
+. "${DIR_BIN_LIB}/stfw_utils"
+
+
+#---------------------------------------------------------------------------------------------------
+# グルーピングされたホスト一覧
+#
+# 概要
+#   指定のインベントリ定義ファイルから、グルーピングされたホストを改行区切りで表示します。
+#
+# 引数
+#   1: インベントリ定義ファイルパス
+#   2: グループ名 ※全件取得する場合 "all"
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     ホスト名リスト ※改行区切り
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.inventry.list_group_hosts() {
+  log.func_start_trace "$@"
+  local _path_config="$1"
+  local _arg_group="$2"
+
+  # 入力チェック
+  if [[ $# -ne 2 ]]; then
+    log.error "usage: ${FUNCNAME[0]} <config-path> <group>"
+    return ${EXITCODE_ERROR}
+  fi
+
+  if [[ ! -f "${_path_config}" ]]; then
+    log.error "${_path_config} is not exist."
+    return ${EXITCODE_ERROR}
+  fi
+
+  # allの場合、絞り込み条件を、任意の文字列に変更
+  local _group="${_arg_group}"
+  if [[ "${_group}" = "${STFW__INVENTRY_GROUP_ALL}" ]]; then _group=".*"; fi
+
+  # 定義からグループ名で絞り込み
+  local _criteria="^stfw_inventry_[0-9]*_${_group}_[0-9]*\="
+  log.trace "criteria: \"${_criteria}\""
+
+  yaml2properties "${_path_config}"                                                                | # yamlをpropertiesに変換
+  grep "${_criteria}"                                                                              | # グループ名で絞る
+  cut -d '=' -f 2                                                                                  | # 設定値（ホスト）を射影
+  _unquote                                                                                         | # クォートを除去
+  sort                                                                                             | # 一意に絞る
+  uniq
+
+  log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# ホストグループの存在チェック
+#
+# 概要
+#   指定のインベントリ定義ファイルに、グループが存在するか確認します。
+#
+# 引数
+#   1: インベントリ定義ファイルパス
+#   2: グループ名
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     存在する場合  : true
+#     存在しない場合: false
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.inventry.is_exist_group() {
+  log.func_start_trace "$@"
+  local _path_config="$1"
+  local _group="$2"
+
+  # 入力チェック
+  if [[ $# -ne 2 ]]; then
+    log.error "usage: ${FUNCNAME[0]} <config-path> <group>"
+    return ${EXITCODE_ERROR}
+  fi
+
+  if [[ ! -f "${_path_config}" ]]; then
+    log.error "${_path_config} is not exist."
+    return ${EXITCODE_ERROR}
+  fi
+
+  # ホスト一覧の取得結果で判断
+  local _hosts="$(stfw.inventry.list_group_hosts ${_path_config} ${_group})"
+  if [[ "${_hosts}x" = "x" ]]; then
+    echo "false"
+  else
+    echo "true"
+  fi
+
+  log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}

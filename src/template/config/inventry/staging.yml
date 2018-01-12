@@ -1,0 +1,8 @@
+stfw_inventry:
+  - web:
+    - 127.0.0.1
+    - localhost
+  - ap:
+    - 127.0.0.1
+  - db:
+    - localhost

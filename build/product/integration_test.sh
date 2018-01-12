@@ -103,6 +103,33 @@ if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; 
 
 
 #---------------------------------------------------------------------------------------------------
+# STEP: inventry
+#---------------------------------------------------------------------------------------------------
+STEP="inventry"
+echo "  ${STEP}"
+
+stfw inventry --list
+retcode=$?
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
+
+stfw inventry --list web
+retcode=$?
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
+
+stfw inventry --list NOTEXIST
+retcode=$?
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
+
+stfw inventry --is-exist ap
+retcode=$?
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
+
+stfw inventry --is-exist NOTEXIST
+retcode=$?
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
+
+
+#---------------------------------------------------------------------------------------------------
 # STEP: create scenario
 #---------------------------------------------------------------------------------------------------
 STEP="create scenario"

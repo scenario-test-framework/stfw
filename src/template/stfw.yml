@@ -13,6 +13,9 @@ stfw:
   # ログレベル trace | debug | info | warn | error
   loglevel: "info"
 
+  # インベントリファイル
+  inventry: staging.yml
+
   # sample
   list_sample:
   - list_value1
