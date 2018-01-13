@@ -295,15 +295,17 @@ function stfw.digdag.server.start() {
   log.trace "$(printenv | sort)"
   log.remove_indent
 
+  local _parsed_log_level=$(stfw.parse_log_level "${LOGLEVEL}")
+
   # digdag server 起動
-  # shellcheck disable=SC2046
+  # shellcheck disable=SC2206
   local _cmd=(
     "${PATH_DIGDAG}" server
-      --bind ${stfw_server_bind}
-      --port ${stfw_server_port}
+      --bind "${stfw_server_bind}"
+      --port "${stfw_server_port}"
       ${stfw_server_db_mode}
-      --max-task-threads ${stfw_server_max_task_threads}
-      --log-level $(stfw.parse_log_level "${LOGLEVEL}")
+      --max-task-threads "${stfw_server_max_task_threads}"
+      --log-level "${_parsed_log_level}"
       --log "${PATH_LOG}"
       --task-log "${STFW_PROJ_DIR_DATA}"
       --access-log "${STFW_PROJ_DIR_DATA}"

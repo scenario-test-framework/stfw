@@ -55,6 +55,7 @@ cmd=(
     -e SC2086
     -e SC2155
     -e SC2164
+    -e SC1117
     "${target_files[@]}"
 )
 
