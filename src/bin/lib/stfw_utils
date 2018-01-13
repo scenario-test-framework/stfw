@@ -249,8 +249,8 @@ function stfw.list_files() {
   sed -e "s|${_dir}/||"                                                                            |
   sort
 
-  log.func_end_trace ${_exitcode}
-  return ${_exitcode}
+  log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
 }
 
 
@@ -567,9 +567,8 @@ function stfw.get_run_params() {
   # shellcheck disable=SC2154
   if [[ "${stfw_run_raw_params}" != "" ]]; then
     echo "${stfw_run_raw_params}" > ${STFW_PROJ_DIR_DATA}/param.${run_id}
-    echo "${stfw_run_raw_params}" 
+    echo "${stfw_run_raw_params}"
   else
     cat ${STFW_PROJ_DIR_DATA}/param.${run_id}
   fi
 }
-
