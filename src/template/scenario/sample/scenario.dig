@@ -6,6 +6,7 @@ timezone: Asia/Tokyo
 +_100_99990101:
   _export:
     stfw_bizdate_dir : "${stfw_scenario_dir}/_100_99990101"
+    stfw_bizdate_dirname : "_100_99990101"
     stfw_bizdate_seq : "100"
     stfw_bizdate : "99990101"
   !include : _100_99990101/bizdate.dig
@@ -13,6 +14,7 @@ timezone: Asia/Tokyo
 +_200_99990201:
   _export:
     stfw_bizdate_dir : "${stfw_scenario_dir}/_200_99990201"
+    stfw_bizdate_dirname : "_200_99990201"
     stfw_bizdate_seq : "200"
     stfw_bizdate : "99990201"
   !include : _200_99990201/bizdate.dig
@@ -20,4 +22,6 @@ timezone: Asia/Tokyo
 +scenario_teardown:
   sh>: stfw scenario --teardown "${stfw_scenario_dir}"
 _error:
+  _export:
+    stfw_run_status : "error"
   sh>: stfw scenario --teardown "${stfw_scenario_dir}"
