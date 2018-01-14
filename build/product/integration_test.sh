@@ -112,21 +112,17 @@ stfw inventry --list
 retcode=$?
 if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
 
-stfw inventry --list web
-retcode=$?
-if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
+hosts=$(stfw inventry --list ap)
+if [[ "${hosts}" != "127.0.0.1" ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
 
-stfw inventry --list NOTEXIST
-retcode=$?
-if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
+hosts=$(stfw inventry --list NOTEXIST)
+if [[ "${hosts}" != "" ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
 
-stfw inventry --is-exist ap
-retcode=$?
-if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
+is_exist=$(stfw inventry --is-exist ap)
+if [[ "${is_exist}" != "true" ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
 
-stfw inventry --is-exist NOTEXIST
-retcode=$?
-if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
+is_exist=$(stfw inventry --is-exist NOTEXIST)
+if [[ "${is_exist}" != "false" ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
 
 
 #---------------------------------------------------------------------------------------------------
@@ -171,6 +167,20 @@ stfw scenario -G
 retcode=$?
 if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
 
+
+#------------------------------------------------------------------------------
+# ciの場合、webhook設定をON
+#------------------------------------------------------------------------------
+if [[ "${TRAVIS}" = "true" ]]; then
+  path_proj_config="${DIR_TEST_PROJ}/stfw.yml"
+  cp "${path_proj_config}" "${path_proj_config}.tmp"
+
+  cat "${path_proj_config}.tmp"                                                                    |
+  sed -e 's|^#      - https://webhook.site|      - https://webhook.site|'                          |
+  tee >"${path_proj_config}"
+
+  rm -f "${path_proj_config}.tmp"
+fi
 
 #---------------------------------------------------------------------------------------------------
 # STEP: run scenario
