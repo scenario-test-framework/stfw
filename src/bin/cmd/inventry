@@ -33,8 +33,8 @@ function private.usage() {
 usage: ${PROGNAME} [options...]
 
 options:
-  -e, --is-exist <group>          : check existence of group
-  -l, --list-hosts [<group>]      : list hosts belonging to group  (default: all)
+  -e, --is-exist <group> : check existence of group
+  -l, --list [<group>]   : list hosts belonging to group  (default: all)
 
 __EOT__
   exit ${EXITCODE_ERROR}
