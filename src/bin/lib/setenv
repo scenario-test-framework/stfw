@@ -163,7 +163,7 @@ LOG__PREFIX_SECT_END="${LOG__PREFIX_SCRIPT_END}"
 function log.mask() {
     cat -                                                                                          |
     sed -e "s|${PASSWORD:-PASSWORD}|[secret]|g"                                                    | # パスワード
-    sed -e "s|${TOKENN:-TOKENN}|[secret]|g"                                                          | # tokenn
+    sed -e "s|${TOKEN:-TOKEN}|[secret]|g"                                                          | # token
     tee
 }
 . "${DIR_BIN_LIB}/logging_utils"
