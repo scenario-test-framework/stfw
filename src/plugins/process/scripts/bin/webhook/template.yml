@@ -1,0 +1,8 @@
+#payload:
+#  run:
+#    scenario:
+#      bizdate:
+#        process:
+          plugin:
+            type: scripts
+            targets:

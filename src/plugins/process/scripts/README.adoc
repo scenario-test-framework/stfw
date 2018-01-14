@@ -26,6 +26,38 @@
 
 |====
 
+
+
+== webhook
+
+```json
+---
+"process": {
+  "plugin": {
+    "type": "scripts",
+    "targets": [
+      {
+        "{SCRIPT_NAME_1}": {
+          "result": "success | error | canceled",
+          "start time": "YYYY-MM-DDTHH:mm:ssZ | null",
+          "end time": "YYYY-MM-DDTHH:mm:ssZ | null",
+          "processing time": "HH:mm:ss | null",
+        }
+      },
+      {
+        "{SCRIPT_NAME_2}": {
+          "result": "success | error | canceled",
+          "start time": "YYYY-MM-DDTHH:mm:ssZ | null",
+          "end time": "YYYY-MM-DDTHH:mm:ssZ | null",
+          "processing time": "HH:mm:ss | null",
+        }
+      }
+    ]
+  }
+}
+```
+
+
 == 設定
 
 === Plugin設定

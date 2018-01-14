@@ -1,4 +1,5 @@
 #!/bin/bash
 . "${STFW_HOME}/bin/lib/setenv"
+. "${STFW_HOME}/plugins/process/scripts/bin/lib/common"
 
 exit 0

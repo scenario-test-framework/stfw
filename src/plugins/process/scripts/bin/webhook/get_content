@@ -1,0 +1,31 @@
+#!/bin/bash
+. "${STFW_HOME}/bin/lib/setenv"
+. "${STFW_HOME}/plugins/process/scripts/bin/lib/common"
+
+# webhook.async_execute でこれを呼ぶ
+# これを呼ぶと、値の入ったyamlが表示される
+if [[ "$1" != "start" ]]; then
+  # start以外は計算した結果を表示
+  cat ${STFW_HOME}/plugins/process/scripts/bin/webhook/template.yml ${STFW_PROJ_DIR_DATA}/stfw_script_plugin_detail.yml
+else
+  cat /dev/null > ${STFW_PROJ_DIR_DATA}/stfw_script_plugin_detail.yml
+
+  # startはスクリプト名のみ
+  _before_IFS="$IFS"
+  IFS=$'\n'
+  for _cur_file in $(plugin.process.scripts.list_files $2); do
+    script_name=${_cur_file}
+    script_result=
+    script_start_time=
+    script_end_time=
+    script_processing_time=
+    # shellcheck disable=SC2002
+    cat ${STFW_HOME}/plugins/process/scripts/bin/webhook/template_scripts.yml | grep -v "^#" |
+    while IFS= read -r _line
+    do
+      eval "echo \"${_line}\""
+    done >> ${STFW_PROJ_DIR_DATA}/stfw_script_plugin_detail.yml
+  done
+  IFS="${_before_IFS}"
+  cat ${STFW_HOME}/plugins/process/scripts/bin/webhook/template.yml ${STFW_PROJ_DIR_DATA}/stfw_script_plugin_detail.yml
+fi

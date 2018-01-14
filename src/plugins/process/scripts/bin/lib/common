@@ -1,0 +1,131 @@
+#!/bin/bash
+
+#---------------------------------------------------------------------------------------------------
+# プラグイン用指定ディレクトリ直下のファイル名リスト
+#
+# 概要
+#   指定ディレクトリ直下の全ファイル名を、文字列の昇順でソートしたリストを返します。
+#
+# 引数
+#   1: スクリプト配置ディレクトリ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     ファイル名リスト
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function plugin.process.scripts.list_files() {
+  log.func_start_trace "$@"
+
+  local _dir="$1"
+
+  find "${_dir}" -mindepth 1 -maxdepth 1 -follow -type f                                           |
+  sed -e "s|${_dir}/||"                                                                            |
+  sort
+
+  log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+#---------------------------------------------------------------------------------------------------
+# プラグイン用スクリプトの一括実行
+#
+# 概要
+#   指定ディレクトリ直下の全てのファイルを、スクリプトとみなして一括実行します。
+#   スクリプトから0以外のリターンコードが返された場合、後続は実行せずエラー終了します。
+#
+# 引数
+#   1: スクリプト配置ディレクトリ
+#
+# リターンコード
+#   ${EXITCODE_SUCCESS}: 正常終了した場合
+#   ${EXITCODE_ERROR}  : エラー発生時
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     スクリプトの標準出力&標準エラー
+#   ファイル
+#     ${STFW_PROJ_DIR_DATA}/stfw_script_plugin_detail.yml
+#
+#---------------------------------------------------------------------------------------------------
+function plugin.process.scripts.bulk_exec_scripts() {
+  log.func_start_trace "$@"
+
+  local _dir="$1"
+  local _before_dir="$(pwd)"
+
+  log.trace "cd \"${_dir}\""
+  cd "${_dir}"
+
+  cat /dev/null > ${STFW_PROJ_DIR_DATA}/stfw_script_plugin_detail.yml
+
+  local _exitcode=${EXITCODE_SUCCESS}
+  local _before_IFS="$IFS"
+  IFS=$'\n'
+  for _cur_file in $(plugin.process.scripts.list_files .); do
+    local _cur_retcode=${EXITCODE_SUCCESS}
+
+    # webhook info
+    # shellcheck disable=SC2034
+    local script_name=${_cur_file}
+    local script_result="error"
+    local _start_time=$(date '+%Y%m%d%H%M%S')
+    # shellcheck disable=SC2034
+    local script_start_time=$(convert_date_for_display ${_start_time})
+    if [[ ${_exitcode} -eq ${EXITCODE_ERROR} ]]; then
+      script_result="canceled"
+      # shellcheck disable=SC2034
+      script_start_time=
+    fi
+
+    if [[ ${_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
+      local _sect_name="${_dir}/${_cur_file}"
+      log.sect_start_info "${_sect_name}"
+      ./${_cur_file}
+      _cur_retcode=$?
+      log.sect_end_info "${_sect_name}" "${_cur_retcode}"
+
+      if [[ ${_cur_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
+        _exitcode=${EXITCODE_ERROR}
+      fi
+    fi
+
+    # shellcheck disable=SC2034
+    local script_end_time=
+    # shellcheck disable=SC2034
+    local script_processing_time=
+    if [[ ${_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
+      # shellcheck disable=SC2034
+      script_result="success"
+    fi
+    if [[ "${script_result}" != "canceled" ]]; then
+      local _end_time=$(date '+%Y%m%d%H%M%S')
+      # shellcheck disable=SC2034
+      script_end_time=$(convert_date_for_display ${_end_time})
+      # shellcheck disable=SC2034
+      script_processing_time=$(private.calc_processing_time ${_start_time} ${_end_time})
+    fi
+
+    # shellcheck disable=SC2002
+    cat ${STFW_HOME}/plugins/process/scripts/bin/webhook/template_scripts.yml | grep -v "^#" |
+    while IFS= read -r _line
+    do
+      eval "echo \"${_line}\""
+    done >> ${STFW_PROJ_DIR_DATA}/stfw_script_plugin_detail.yml
+
+  done
+  IFS="${_before_IFS}"
+
+  log.trace "cd \"${_before_dir}\""
+  cd "${_before_dir}"
+
+  log.func_end_trace ${_exitcode}
+  return ${_exitcode}
+}
+

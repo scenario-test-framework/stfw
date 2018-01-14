@@ -606,7 +606,18 @@ function webhook.async_execute() {
   while IFS= read -r _line
   do
     eval "echo \"${_line}\""
-  done | ${DIR_BIN_LIB}/yaml2json > /tmp/stfw_webhook.json.$$
+  done > /tmp/stfw_webhook.yml.$$
+
+  # プロセスの場合、プラグイン分を合成
+  if [[ ${_type} = "process" ]]; then
+    # shellcheck disable=SC2154
+    ${STFW_HOME}/plugins/process/scripts/bin/webhook/get_content "${_event}" "${stfw_process_dir}/scripts" | \
+      grep -v "^#" >> /tmp/stfw_webhook.yml.$$
+  fi
+
+  # yml -> json変換
+  ${DIR_BIN_LIB}/yaml2json /tmp/stfw_webhook.yml.$$ > /tmp/stfw_webhook.json.$$
+  rm /tmp/stfw_webhook.yml.$$
 
   # 非同期実行
   private.webhook_async_execute /tmp/stfw_webhook.json.$$ &

@@ -1,5 +1,6 @@
 #!/bin/bash
 . "${STFW_HOME}/bin/lib/setenv"
+. "${STFW_HOME}/plugins/process/scripts/bin/lib/common"
 
 # Process設定の読み込み
 path_scenario_config="config/config.yml"
@@ -8,5 +9,5 @@ if [[ -f "${path_scenario_config}" ]]; then
 fi
 
 # 実行
-stfw.bulk_exec_scripts "scripts"
+plugin.process.scripts.bulk_exec_scripts "scripts"
 exit $?
