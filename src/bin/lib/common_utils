@@ -553,9 +553,9 @@ function webhook.async_execute() {
   webhook_status=${_status}
 
   # shellcheck disable=SC2034,SC2154
-  stfw_run_params=$(stfw.get_run_params "${run_id}")
+  stfw_run_params=$(stfw.get_run_params)
   # shellcheck disable=SC2034,SC2154
-  STFW_SERVER_VERSION=$(stfw.get_digdag_version "${run_id}")
+  STFW_SERVER_VERSION=$(stfw.get_digdag_version)
 
   # 開始・終了時間計算
   local _filepath_processing_time=$(private.processing_time.get_filepath "${_key}")
@@ -642,7 +642,8 @@ function private.webhook_async_execute() {
 # yyyymmdd->yyyy-mm-ddThh:mm:ssZ
 function convert_date_for_display() {
   local _date=$1
+  local _zone=$(date '+%z')
   # shellcheck disable=SC2154
-  echo ${_date:0:4}-${_date:4:2}-${_date:6:2}T${_date:8:2}:${_date:10:2}:${_date:12:2}${session_tz_offset}
+  echo ${_date:0:4}-${_date:4:2}-${_date:6:2}T${_date:8:2}:${_date:10:2}:${_date:12:2}${_zone}
 }
 

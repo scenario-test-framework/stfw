@@ -1,4 +1,7 @@
 stfw:
+  # ログレベル trace | debug | info | warn | error
+  loglevel: "info"
+
   # digdag
   server:
     # バインドホスト
@@ -11,11 +14,3 @@ stfw:
     max_task_threads: 64
     # timezone
     timezone: "Asia/Tokyo"
-
-  # ログレベル trace | debug | info | warn | error
-  loglevel: "info"
-
-  # sample
-  list_sample:
-  - list_value1
-  - list_value2
