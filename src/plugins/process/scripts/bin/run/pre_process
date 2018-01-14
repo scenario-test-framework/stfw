@@ -1,8 +1,12 @@
 #!/bin/bash
-echo "process: embedded-scripts $* START"
+. "${STFW_HOME}/bin/lib/setenv"
 
 echo "target scripts:"
-find scripts -mindepth 1 -maxdepth 1 -follow -type f | sort
+for cur_script_name in $(stfw.list_files "scripts"); do
+  echo "  ${cur_script_name}"
+  log.trace "chmod +x \"scripts/${cur_script_name}\""
+  chmod +x "scripts/${cur_script_name}"
+done
 echo ""
 
 exit 0

@@ -1,0 +1,140 @@
+#!/bin/bash
+#set -ex
+#===================================================================================================
+#
+# scenario test framework cli - inventry
+#
+#===================================================================================================
+#---------------------------------------------------------------------------------------------------
+# 設定
+#---------------------------------------------------------------------------------------------------
+dir_script="$(dirname $0)"
+cd "$(cd ${dir_script}; pwd)"
+
+# 共通設定
+readonly STFW_HOME="$(cd ../..; pwd)"
+. "${STFW_HOME}/bin/lib/setenv"
+. "${DIR_BIN_LIB}/stfw_inventry_utils"
+
+readonly PROGNAME="stfw $(basename $0)"
+readonly PATH_PROJ_INVENTRY="${STFW_PROJ_DIR_CONFIG}/inventry/${stfw_inventry:?}"
+
+
+#---------------------------------------------------------------------------------------------------
+# 関数定義
+#---------------------------------------------------------------------------------------------------
+function private.description() {
+  echo "  $(basename $0) : read inventry settings"
+}
+
+
+function private.usage() {
+  cat << __EOT__ >&2
+usage: ${PROGNAME} [options...]
+
+options:
+  -e, --is-exist <group>          : check existence of group
+  -l, --list-hosts [<group>]      : list hosts belonging to group  (default: all)
+
+__EOT__
+  exit ${EXITCODE_ERROR}
+}
+
+
+function private.is_exist() {
+  log.func_start_trace "$@"
+  local _group="$1"
+
+  stfw.inventry.is_exist_group "${PATH_PROJ_INVENTRY}" "${_group}"
+  local _retcode=$?
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function private.list() {
+  log.func_start_trace "$@"
+  local _group="$1"
+
+  stfw.inventry.list_group_hosts "${PATH_PROJ_INVENTRY}" "${_group}"
+  local _retcode=$?
+
+  log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# 事前処理
+#---------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+# オプション解析
+#-------------------------------------------------------------------------------
+# 実行コマンド
+cmd=""
+
+while :; do
+  case $1 in
+    --description)
+      private.description
+      exit ${EXITCODE_ERROR}
+      ;;
+
+    -h|--help)
+      private.usage
+      exit ${EXITCODE_ERROR}
+      ;;
+
+    -e|--is-exist)
+      cmd="is_exist"
+      shift
+      ;;
+
+    -l|--list)
+      cmd="list"
+      shift
+      ;;
+
+    --)
+      shift
+      break
+      ;;
+
+    *)
+      break
+      ;;
+  esac
+done
+
+
+#---------------------------------------------------------------------------------------------------
+# 本処理
+#---------------------------------------------------------------------------------------------------
+log.script_start "${PROGNAME} ${cmd}"
+
+#-------------------------------------------------------------------------------
+# 引数解析
+#-------------------------------------------------------------------------------
+# コマンド実行
+case ${cmd} in
+  is_exist)
+    if [[ $# -ne 1 ]]; then private.usage; fi
+    group="$1"
+    private.is_exist "${group}"
+    ;;
+
+  list)
+    group="all"
+    if [[ $# -eq 1 ]]; then group="$1"; fi
+    private.list "${group}"
+    ;;
+
+  *)
+    private.usage
+    ;;
+esac
+exitcode=$?
+
+log.script_end "${PROGNAME} ${cmd}" "${exitcode}"
+exit ${exitcode}

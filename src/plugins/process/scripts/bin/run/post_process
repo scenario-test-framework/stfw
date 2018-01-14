@@ -1,3 +1,4 @@
 #!/bin/bash
-echo "process: embedded-scripts $* END"
+. "${STFW_HOME}/bin/lib/setenv"
+
 exit 0

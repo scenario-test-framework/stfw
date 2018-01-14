@@ -12,6 +12,7 @@
 #   stfw.get_plugin_path
 #   stfw.get_passwd_path
 #   stfw.show_passwd
+#   stfw.list_bulk_exec_scripts
 #   stfw.bulk_exec_scripts
 #   stfw.is_in_scenario-root-dir
 #   stfw.is_in_scenario-dir
@@ -222,6 +223,38 @@ function stfw.show_passwd() {
 
 
 #---------------------------------------------------------------------------------------------------
+# 指定ディレクトリ直下のファイル名リスト
+#
+# 概要
+#   指定ディレクトリ直下の全ファイル名を、文字列の昇順でソートしたリストを返します。
+#
+# 引数
+#   1: スクリプト配置ディレクトリ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     ファイル名リスト
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.list_files() {
+  log.func_start_trace "$@"
+
+  local _dir="$1"
+
+  find "${_dir}" -mindepth 1 -maxdepth 1 -follow -type f                                           |
+  sed -e "s|${_dir}/||"                                                                            |
+  sort
+
+  log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+#---------------------------------------------------------------------------------------------------
 # スクリプトの一括実行
 #
 # 概要
@@ -255,8 +288,7 @@ function stfw.bulk_exec_scripts() {
 
   local _before_IFS="$IFS"
   IFS=$'\n'
-  for _cur_path in $(find . -mindepth 1 -maxdepth 1 -follow -type f | sort); do
-    local _cur_file=$(basename "${_cur_path}")
+  for _cur_file in $(stfw.list_files .); do
     local _exitcode=${EXITCODE_SUCCESS}
     local _cur_retcode=${EXITCODE_SUCCESS}
 
@@ -437,7 +469,7 @@ function stfw.process.get_path() {
 #   環境変数
 #     なし
 #   標準出力
-#     なし
+#     true : インストール済みの場合
 #   ファイル
 #     なし
 #
@@ -535,9 +567,8 @@ function stfw.get_run_params() {
   # shellcheck disable=SC2154
   if [[ "${stfw_run_raw_params}" != "" ]]; then
     echo "${stfw_run_raw_params}" > ${STFW_PROJ_DIR_DATA}/param.${run_id}
-    echo "${stfw_run_raw_params}" 
+    echo "${stfw_run_raw_params}"
   else
     cat ${STFW_PROJ_DIR_DATA}/param.${run_id}
   fi
 }
-

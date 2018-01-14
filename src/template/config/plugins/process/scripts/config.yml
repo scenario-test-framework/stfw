@@ -1,4 +1,4 @@
 stfw:
   process:
     scripts:
-      some_key_at_project: value
+      some_key: value defined at proj

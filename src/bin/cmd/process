@@ -48,8 +48,18 @@ __EOT__
 function private.export_config() {
   local _plugin_path="$1"
 
+  local _retcode=${EXITCODE_SUCCESS}
+
+  # プラグイン設定の読み込み
   export_yaml "${_plugin_path}/config.yml"
-  return $?
+  _retcode=$?
+
+  # プロジェクト設定の読み込み
+  local _plugin_name=$(basename "${_plugin_path}")
+  path_project_config="${STFW_PROJ_DIR_CONFIG}/plugins/process/${_plugin_name}/config.yml"
+  if [[ -f "${path_project_config}" ]]; then export_yaml "${path_project_config}"; fi
+
+  return ${_retcode}
 }
 
 
