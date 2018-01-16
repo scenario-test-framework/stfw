@@ -600,27 +600,40 @@ function webhook.async_execute() {
       ;;
   esac
 
+  local _tmp_yml_file=/tmp/stfw_webhook.yml.$$
+  local _tmp_json_file=/tmp/stfw_webhook.json.$$
   # 複数ファイルをcatで合成しつつ、変数展開、jsonへ変換
   # shellcheck disable=SC2002
   cat ${_configs} | grep -v "^#" |
   while IFS= read -r _line
   do
     eval "echo \"${_line}\""
-  done > /tmp/stfw_webhook.yml.$$
+  done > ${_tmp_yml_file}
 
   # プロセスの場合、プラグイン分を合成
   if [[ ${_type} = "process" ]]; then
-    # shellcheck disable=SC2154
-    ${STFW_HOME}/plugins/process/scripts/bin/webhook/get_content "${_event}" "${stfw_process_dir}/scripts" | \
-      grep -v "^#" >> /tmp/stfw_webhook.yml.$$
+    if [[ -d ${STFW_PROJ_DIR_PLUGIN}/process/scripts ]]; then
+      _plugin_dir=${STFW_PROJ_DIR_PLUGIN}/process/scripts
+    else
+      _plugin_dir=${STFW_HOME}/plugins/process/scripts
+    fi
+    if [[ "${_event}" = "start" ]]; then
+      # shellcheck disable=SC2154
+      "${_plugin_dir}/bin/webhook/get_start_content" "${stfw_process_dir}/scripts" | \
+        grep -v "^#" >> ${_tmp_yml_file}
+    else
+      # shellcheck disable=SC2154
+      "${_plugin_dir}/bin/webhook/get_end_content" "${stfw_process_dir}/scripts" | \
+        grep -v "^#" >> ${_tmp_yml_file}
+    fi
   fi
 
   # yml -> json変換
-  ${DIR_BIN_LIB}/yaml2json /tmp/stfw_webhook.yml.$$ > /tmp/stfw_webhook.json.$$
-  rm /tmp/stfw_webhook.yml.$$
+  ${DIR_BIN_LIB}/yaml2json ${_tmp_yml_file} > ${_tmp_json_file}
+  rm ${_tmp_yml_file}
 
   # 非同期実行
-  private.webhook_async_execute /tmp/stfw_webhook.json.$$ &
+  private.webhook_async_execute ${_tmp_json_file} &
 }
 
 function private.webhook_async_execute() {

@@ -30,6 +30,7 @@
 
 == webhook
 
+=== json設定内容
 ```json
 ---
 "process": {
@@ -56,7 +57,44 @@
   }
 }
 ```
-
+=== 設定例）開始
+```sample:start
+---
+"process": {
+  "plugin": {
+    "type": "scripts",
+    "targets": [
+      {
+        "100_1st_step": {
+          "result": "pending",
+          "start time": null,
+          "end time": null,
+          "processing time": null
+        }
+      },
+    ]
+  }
+}
+```
+=== 設定例）終了
+```sample:end
+---
+"process": {
+  "plugin": {
+    "type": "scripts",
+    "targets": [
+      {
+        "100_1st_step": {
+          "result": "success",
+          "start time": "2018-01-16T18:08:49+0900",
+          "end time": "2018-01-16T18:08:49+0900",
+          "processing time": "00:00:00"
+        }
+      },
+    ]
+  }
+}
+```
 
 == 設定
 

@@ -63,7 +63,10 @@ function plugin.process.scripts.bulk_exec_scripts() {
   log.trace "cd \"${_dir}\""
   cd "${_dir}"
 
-  cat /dev/null > ${STFW_PROJ_DIR_DATA}/stfw_script_plugin_detail.yml
+  local _plugin_dir=$(cd $(dirname $0)/..;pwd)
+  local _template_script_file=${_plugin_dir}/webhook/template_scripts.yml 
+  local _tmp_plugin_detail=${STFW_PROJ_DIR_DATA}/stfw_script_plugin_detail.yml
+  cat /dev/null > ${_tmp_plugin_detail}
 
   local _exitcode=${EXITCODE_SUCCESS}
   local _before_IFS="$IFS"
@@ -113,11 +116,11 @@ function plugin.process.scripts.bulk_exec_scripts() {
     fi
 
     # shellcheck disable=SC2002
-    cat ${STFW_HOME}/plugins/process/scripts/bin/webhook/template_scripts.yml | grep -v "^#" |
+    cat ${_template_script_file} | grep -v "^#" |
     while IFS= read -r _line
     do
       eval "echo \"${_line}\""
-    done >> ${STFW_PROJ_DIR_DATA}/stfw_script_plugin_detail.yml
+    done >> ${_tmp_plugin_detail}
 
   done
   IFS="${_before_IFS}"
