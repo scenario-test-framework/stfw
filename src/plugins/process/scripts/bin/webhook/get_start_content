@@ -1,34 +1,27 @@
 #!/bin/bash
 . "${STFW_HOME}/bin/lib/setenv"
-_plugin_dir=$(cd $(dirname $0)/..;pwd)
-. "${_plugin_dir}/lib/common"
 
-# webhook.async_execute でこれを呼ぶ
-# これを呼ぶと、値の入ったyamlが表示される
+plugin_dir=$(cd "$(dirname $0)/.."; pwd)
+. "${plugin_dir}/lib/common"
 
-_template_file=${_plugin_dir}/webhook/template.yml 
-_template_script_file=${_plugin_dir}/webhook/template_scripts.yml 
+template_file="${plugin_dir}/webhook/template.yml"
+template_script_file="${plugin_dir}/webhook/template_scripts.yml"
 
-_tmp_plugin_detail=${STFW_PROJ_DIR_DATA}/stfw_script_plugin_detail.yml
-
-cat /dev/null > ${_tmp_plugin_detail}
+tmp_scripts_status_file=$(plugin.process.scripts.get_scripts_status_filepath)
+cat /dev/null >"${tmp_scripts_status_file}"
 
 # startはスクリプト名のみ
-_before_IFS="$IFS"
-IFS=$'\n'
-for _cur_file in $(plugin.process.scripts.list_files $1); do
-  script_name=${_cur_file}
-  script_result=pending
-  script_start_time=
-  script_end_time=
-  script_processing_time=
-  # shellcheck disable=SC2002
-  cat ${_template_script_file} | grep -v "^#" |
-  while IFS= read -r _line
-  do
-    eval "echo \"${_line}\""
-  done >> ${_tmp_plugin_detail}
-done
-IFS="${_before_IFS}"
-cat ${_template_file} ${_tmp_plugin_detail}
+for _cur_file in $(plugin.process.scripts.list_files "scripts"); do
+  export script_name="${_cur_file}"
+  export script_result="pending"
+  export script_start_time=
+  export script_end_time=
+  export script_processing_time=
 
+  cat "${template_script_file}" | grep -v "^#" |
+  while IFS= read -r _line; do
+    eval "echo \"${_line}\""
+  done >>"${tmp_scripts_status_file}"
+done
+
+cat "${template_file}" "${tmp_scripts_status_file}"

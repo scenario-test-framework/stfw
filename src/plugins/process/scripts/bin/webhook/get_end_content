@@ -1,13 +1,10 @@
 #!/bin/bash
 . "${STFW_HOME}/bin/lib/setenv"
-_plugin_dir=$(cd $(dirname $0)/..;pwd)
-. "${_plugin_dir}/lib/common"
 
-# webhook.async_execute でこれを呼ぶ
-# これを呼ぶと、値の入ったyamlが表示される
-# start以外は計算した結果を表示
-_template_file=${_plugin_dir}/webhook/template.yml 
-_tmp_plugin_detail=${STFW_PROJ_DIR_DATA}/stfw_script_plugin_detail.yml
+plugin_dir=$(cd "$(dirname $0)/..";pwd)
+. "${plugin_dir}/lib/common"
 
-cat ${_template_file} ${_tmp_plugin_detail}
+template_file="${plugin_dir}/webhook/template.yml"
+tmp_scripts_status_file=$(plugin.process.scripts.get_scripts_status_filepath)
 
+cat "${template_file}" "${tmp_scripts_status_file}"

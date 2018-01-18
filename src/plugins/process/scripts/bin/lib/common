@@ -1,5 +1,9 @@
 #!/bin/bash
 
+function plugin.process.scripts.get_scripts_status_filepath() {
+  echo "${STFW_PROJ_DIR}/tmp_stfw_process_scripts.yml"
+}
+
 #---------------------------------------------------------------------------------------------------
 # プラグイン用指定ディレクトリ直下のファイル名リスト
 #
@@ -63,27 +67,23 @@ function plugin.process.scripts.bulk_exec_scripts() {
   log.trace "cd \"${_dir}\""
   cd "${_dir}"
 
-  local _plugin_dir=$(cd $(dirname $0)/..;pwd)
-  local _template_script_file=${_plugin_dir}/webhook/template_scripts.yml 
-  local _tmp_plugin_detail=${STFW_PROJ_DIR_DATA}/stfw_script_plugin_detail.yml
-  cat /dev/null > ${_tmp_plugin_detail}
+  local _plugin_dir=$(cd "$(dirname $0)/.."; pwd)
+  local _template_script_file=${_plugin_dir}/webhook/template_scripts.yml
+
+  local _tmp_scripts_status_file=$(plugin.process.scripts.get_scripts_status_filepath)
+  cat /dev/null > ${_tmp_scripts_status_file}
 
   local _exitcode=${EXITCODE_SUCCESS}
-  local _before_IFS="$IFS"
-  IFS=$'\n'
   for _cur_file in $(plugin.process.scripts.list_files .); do
     local _cur_retcode=${EXITCODE_SUCCESS}
+    local _start_time=$(date '+%Y%m%d%H%M%S')
 
     # webhook info
-    # shellcheck disable=SC2034
-    local script_name=${_cur_file}
-    local script_result="error"
-    local _start_time=$(date '+%Y%m%d%H%M%S')
-    # shellcheck disable=SC2034
-    local script_start_time=$(convert_date_for_display ${_start_time})
+    export script_name="${_cur_file}"
+    export script_result="error"
+    export script_start_time=$(timestamp_to_iso ${_start_time})
     if [[ ${_exitcode} -eq ${EXITCODE_ERROR} ]]; then
       script_result="canceled"
-      # shellcheck disable=SC2034
       script_start_time=
     fi
 
@@ -99,31 +99,24 @@ function plugin.process.scripts.bulk_exec_scripts() {
       fi
     fi
 
-    # shellcheck disable=SC2034
-    local script_end_time=
-    # shellcheck disable=SC2034
-    local script_processing_time=
+    export script_end_time=
+    export script_processing_time=
     if [[ ${_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
-      # shellcheck disable=SC2034
       script_result="success"
     fi
+
     if [[ "${script_result}" != "canceled" ]]; then
       local _end_time=$(date '+%Y%m%d%H%M%S')
-      # shellcheck disable=SC2034
-      script_end_time=$(convert_date_for_display ${_end_time})
-      # shellcheck disable=SC2034
+      script_end_time=$(timestamp_to_iso ${_end_time})
       script_processing_time=$(private.calc_processing_time ${_start_time} ${_end_time})
     fi
 
-    # shellcheck disable=SC2002
-    cat ${_template_script_file} | grep -v "^#" |
-    while IFS= read -r _line
-    do
+    cat "${_template_script_file}" | grep -v "^#" |
+    while IFS= read -r _line; do
       eval "echo \"${_line}\""
-    done >> ${_tmp_plugin_detail}
+    done >>"${_tmp_scripts_status_file}"
 
   done
-  IFS="${_before_IFS}"
 
   log.trace "cd \"${_before_dir}\""
   cd "${_before_dir}"
@@ -131,4 +124,3 @@ function plugin.process.scripts.bulk_exec_scripts() {
   log.func_end_trace ${_exitcode}
   return ${_exitcode}
 }
-

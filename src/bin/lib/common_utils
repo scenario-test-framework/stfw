@@ -1,12 +1,42 @@
 #!/bin/bash
 #==================================================================================================
 #
-# 共通関数定義
+# bash共通関数定義
 # ※_で始まるfunctionは、パイプでの呼出しだけを想定しています。
 #
 # 依存
 #   open usp tukubai
 #   Parsrs
+#
+# 定義リスト
+#   is_mac
+#   is_linux
+#   is_cygwin
+#   _trim
+#   _ltrim
+#   _rtrim
+#   _sp_multi2single
+#   _unquote
+#   _except_comment_row
+#   _except_empty_row
+#   gen_ssh_server_key
+#   get_ip
+#   _urlencode
+#   _urldecode
+#   get_ext
+#   gen_encrypt_key
+#   _encrypt
+#   _decrypt
+#   is_errorexit_on
+#   is_nounset_on
+#   is_xtrace_on
+#   is_setoption_on
+#   yaml2properties
+#   export_yaml
+#   apply_dynamic_env
+#   processing_time.start
+#   processing_time.calc
+#   timestamp_to_iso
 #
 #==================================================================================================
 #--------------------------------------------------------------------------------------------------
@@ -517,156 +547,9 @@ function private.calc_processing_time() {
   }'
 }
 
-function webhook.async_execute() {
-  local _key=$1
-  local _type=$2
-  local _event=$3
-
-  # ステータスチェック
-  local _status="success"
-  if [[ "${_event}" = "start" ]]; then
-    _status="started"
-    # shellcheck disable=SC2154
-    if [[ "${stfw_webhooks_on_start}" != "true" ]]; then
-      return 0
-    fi
-  else
-    # check status from digdag
-    # shellcheck disable=SC2154
-    if [[ "${stfw_run_status}" = "error" ]]; then
-      _status="error"
-      # shellcheck disable=SC2154
-      if [[ "${stfw_webhooks_on_error}" != "true" ]]; then
-        return 0
-      fi
-    else
-      # shellcheck disable=SC2154
-      if [[ "${stfw_webhooks_on_success}" != "true" ]]; then
-        return 0
-      fi
-    fi
-  fi
-
-  # shellcheck disable=SC2034
-  webhook_type=${_type}
-  # shellcheck disable=SC2034
-  webhook_status=${_status}
-
-  # shellcheck disable=SC2034,SC2154
-  stfw_raw_params=$(stfw.get_raw_params)
-  # shellcheck disable=SC2034,SC2154
-  STFW_SERVER_VERSION=$(stfw.get_digdag_version)
-
-  # 開始・終了時間計算
-  local _filepath_processing_time=$(private.processing_time.get_filepath "${_key}")
-  local _start_time=$(cat "${_filepath_processing_time}")
-  # shellcheck disable=SC2034
-  local webhook_start_time=$(convert_date_for_display ${_start_time})
-  # shellcheck disable=SC2034
-  local webhook_end_time=
-  # shellcheck disable=SC2034
-  local webhook_processing_time=
-  if [[ "${_event}" != "start" ]]; then
-    local _end_time=$(date '+%Y%m%d%H%M%S')
-
-    # shellcheck disable=SC2034
-    webhook_end_time=$(convert_date_for_display ${_end_time})
-    # shellcheck disable=SC2034
-    webhook_processing_time=$(private.calc_processing_time ${_start_time} ${_end_time})
-  fi
-
-  # webhookに必要な設定をまとめる
-  local _configs=${DIR_CONFIG}/webhook/payload.yml
-  case ${_type} in
-    run)
-      _configs="${_configs} ${DIR_CONFIG}/webhook/run.yml"
-      ;;
-    scenario)
-      _configs="${_configs} ${DIR_CONFIG}/webhook/run.yml"
-      _configs="${_configs} ${DIR_CONFIG}/webhook/scenario.yml"
-      ;;
-    bizdate)
-      _configs="${_configs} ${DIR_CONFIG}/webhook/run.yml"
-      _configs="${_configs} ${DIR_CONFIG}/webhook/scenario.yml"
-      _configs="${_configs} ${DIR_CONFIG}/webhook/bizdate.yml"
-      ;;
-    process)
-      _configs="${_configs} ${DIR_CONFIG}/webhook/run.yml"
-      _configs="${_configs} ${DIR_CONFIG}/webhook/scenario.yml"
-      _configs="${_configs} ${DIR_CONFIG}/webhook/bizdate.yml"
-      _configs="${_configs} ${DIR_CONFIG}/webhook/process.yml"
-      ;;
-    *)
-      ;;
-  esac
-
-  local _tmp_yml_file=/tmp/stfw_webhook.yml.$$
-  local _tmp_json_file=/tmp/stfw_webhook.json.$$
-  # 複数ファイルをcatで合成しつつ、変数展開、jsonへ変換
-  # shellcheck disable=SC2002
-  cat ${_configs} | grep -v "^#" |
-  while IFS= read -r _line
-  do
-    eval "echo \"${_line}\""
-  done > ${_tmp_yml_file}
-
-  # プロセスの場合、プラグイン分を合成
-  if [[ ${_type} = "process" ]]; then
-    if [[ -d ${STFW_PROJ_DIR_PLUGIN}/process/scripts ]]; then
-      _plugin_dir=${STFW_PROJ_DIR_PLUGIN}/process/scripts
-    else
-      _plugin_dir=${STFW_HOME}/plugins/process/scripts
-    fi
-    if [[ "${_event}" = "start" ]]; then
-      # shellcheck disable=SC2154
-      "${_plugin_dir}/bin/webhook/get_start_content" "${stfw_process_dir}/scripts" | \
-        grep -v "^#" >> ${_tmp_yml_file}
-    else
-      # shellcheck disable=SC2154
-      "${_plugin_dir}/bin/webhook/get_end_content" "${stfw_process_dir}/scripts" | \
-        grep -v "^#" >> ${_tmp_yml_file}
-    fi
-  fi
-
-  # yml -> json変換
-  ${DIR_BIN_LIB}/yaml2json ${_tmp_yml_file} > ${_tmp_json_file}
-  rm ${_tmp_yml_file}
-
-  # 非同期実行
-  private.webhook_async_execute ${_tmp_json_file} &
-}
-
-function private.webhook_async_execute() {
-
-  local tmpfile="$1"
-
-  # 非同期実行
-  # webhooks post
-  printenv | grep stfw_webhooks_urls_ | cut -d "=" -f 2 |
-  while read -r _webhooks_url
-  do
-    curl                                         \
-      --silent                                   \
-      --show-error                               \
-      --request POST                             \
-      --data-binary "@${tmpfile}"                \
-      --header "Content-type: application/json"  \
-      "${_webhooks_url}"                         | log.debug
-    _retcode=${PIPESTATUS[0]}
-
-    if [[ ${_retcode} -eq ${EXITCODE_SUCCESS} ]]; then
-      log.info "webhook post to ${_webhooks_url}"
-    else
-      log.error "webhook post failed. target:${_webhooks_url}, retcode:${_retcode}"
-    fi
-  done
-  rm "${tmpfile}"
-}
-
-# yyyymmdd->yyyy-mm-ddThh:mm:ssZ
-function convert_date_for_display() {
+# yyyymmddhhmmss -> yyyy-mm-ddThh:mm:ssZ
+function timestamp_to_iso() {
   local _date=$1
   local _zone=$(date '+%z')
-  # shellcheck disable=SC2154
-  echo ${_date:0:4}-${_date:4:2}-${_date:6:2}T${_date:8:2}:${_date:10:2}:${_date:12:2}${_zone}
+  echo "${_date:0:4}-${_date:4:2}-${_date:6:2}T${_date:8:2}:${_date:10:2}:${_date:12:2}${_zone}"
 }

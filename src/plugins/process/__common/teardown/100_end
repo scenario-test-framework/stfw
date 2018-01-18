@@ -1,7 +1,7 @@
 #!/bin/bash
 . "${STFW_HOME:?}/bin/lib/setenv"
 
-webhook.async_execute "${stfw_process_dir:?}" process end
+stfw.webhook.async_execute "${stfw_process_dir:?}" process end "process/${stfw_process:?}"
 
 # 処理時間を表示
 processing_time=$(processing_time.calc "${stfw_process_dir:?}")
