@@ -2,4 +2,4 @@
   run:
     run id: ${run_id}
     workspace dir: ${STFW_PROJ_DIR}
-    params: ${stfw_run_params}
+    params: ${stfw_raw_params}

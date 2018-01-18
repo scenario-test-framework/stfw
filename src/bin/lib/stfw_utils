@@ -23,7 +23,7 @@
 #   stfw.process.is_installed
 #   stfw.process.install
 #   stfw.get_digdag_version
-#   stfw.get_run_params
+#   stfw.get_raw_params
 #
 #===================================================================================================
 #---------------------------------------------------------------------------------------------------
@@ -562,10 +562,10 @@ function stfw.get_digdag_version() {
 }
 
 #---------------------------------------------------------------------------------------------------
-# runパラメータ取得
+# シナリオ実行中チェック
 #
 # 概要
-#   runコマンドのパラメータを取得します。
+#   シナリオ実行中ではない場合、エラー終了します。
 #
 # 引数
 #   なし
@@ -574,17 +574,69 @@ function stfw.get_digdag_version() {
 #   環境変数
 #     なし
 #   標準出力
-#     runコマンドのパラメータ
+#     なし
 #   ファイル
-#     ${STFW_PROJ_DIR_DATA}/param
+#     なし
 #
 #---------------------------------------------------------------------------------------------------
-function stfw.get_run_params() {
-  # shellcheck disable=SC2154
-  if [[ "${stfw_run_raw_params}" != "" ]]; then
-    echo "${stfw_run_raw_params}" > ${STFW_PROJ_DIR_DATA}/param
-    echo "${stfw_run_raw_params}"
-  else
-    cat ${STFW_PROJ_DIR_DATA}/param
+function stfw.must_run_on_server() {
+  if [[ "${STFW_PROJ_DIR}" != "${STFW_PROJ_DIR//\/\.stfw//}" ]]; then
+    return ${EXITCODE_SUCCESS}
   fi
+
+  log.error "must run on server."
+  exit ${EXITCODE_ERROR}
+}
+
+#---------------------------------------------------------------------------------------------------
+# stfw起動パラメータ保存
+#
+# 概要
+#   stfwコマンドの実行時パラメータを保存します。
+#
+# 引数
+#   1: digdag project dir
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     {digdag_project_dir}/params
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.set_raw_params() {
+  local _path_params="${1:?}/params"
+  echo "${stfw_raw_params:?}" >"${_path_params}"
+}
+
+#---------------------------------------------------------------------------------------------------
+# stfw起動パラメータ取得
+#
+# 概要
+#   stfwコマンドの実行時パラメータを取得します。
+#
+# 引数
+#   なし
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     stfwコマンドのパラメータ
+#   ファイル
+#     ${STFW_PROJ_DIR_DATA}/params
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.get_raw_params() {
+  stfw.must_run_on_server
+
+  local _path_params="${STFW_PROJ_DIR}/params"
+  if [[ ! -f "${_path_params}" ]]; then
+    log.error "${_path_params} is not exist."
+    exit ${EXITCODE_ERROR}
+  fi
+
+  cat "${_path_params}"
 }

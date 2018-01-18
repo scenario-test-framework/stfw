@@ -553,7 +553,7 @@ function webhook.async_execute() {
   webhook_status=${_status}
 
   # shellcheck disable=SC2034,SC2154
-  stfw_run_params=$(stfw.get_run_params)
+  stfw_raw_params=$(stfw.get_raw_params)
   # shellcheck disable=SC2034,SC2154
   STFW_SERVER_VERSION=$(stfw.get_digdag_version)
 
@@ -576,7 +576,7 @@ function webhook.async_execute() {
   fi
 
   # webhookに必要な設定をまとめる
-  local _configs=${DIR_CONFIG}/webhook/payload.yml 
+  local _configs=${DIR_CONFIG}/webhook/payload.yml
   case ${_type} in
     run)
       _configs="${_configs} ${DIR_CONFIG}/webhook/run.yml"
@@ -670,4 +670,3 @@ function convert_date_for_display() {
   # shellcheck disable=SC2154
   echo ${_date:0:4}-${_date:4:2}-${_date:6:2}T${_date:8:2}:${_date:10:2}:${_date:12:2}${_zone}
 }
-
