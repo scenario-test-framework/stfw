@@ -10,7 +10,6 @@ timezone: Asia/Tokyo
     stfw_process_dirname : "_10_pre_scripts"
     stfw_process_seq : "10"
     stfw_process_group : "pre"
-    stfw_process_retcode : 0
   sh>: stfw process ${run_mode} "${stfw_process_dir}"
 
 +_20_exe_scripts:
@@ -20,7 +19,6 @@ timezone: Asia/Tokyo
     stfw_process_dirname : "_20_exe_scripts"
     stfw_process_seq : "20"
     stfw_process_group : "exe"
-    stfw_process_retcode : 0
   sh>: stfw process ${run_mode} "${stfw_process_dir}"
 
 +_30_post_scripts:
@@ -30,7 +28,6 @@ timezone: Asia/Tokyo
     stfw_process_dirname : "_30_post_scripts"
     stfw_process_seq : "30"
     stfw_process_group : "post"
-    stfw_process_retcode : 0
   sh>: stfw process ${run_mode} "${stfw_process_dir}"
 
 +bizdate_teardown:

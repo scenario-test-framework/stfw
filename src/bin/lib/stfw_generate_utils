@@ -326,7 +326,6 @@ function stfw.generate.bizdate-dig() {
       echo '    stfw_process_dirname : "'${_cur_process_dirname}'"'
       echo '    stfw_process_seq : "'${_cur_seq}'"'
       echo '    stfw_process_group : "'${_cur_group}'"'
-      echo '    stfw_process_retcode : 0'
       echo '  sh>: stfw process ${run_mode} "${stfw_process_dir}"'
     ) >> "${_path_output}"
   done
