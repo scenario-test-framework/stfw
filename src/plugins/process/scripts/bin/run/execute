@@ -1,8 +1,7 @@
 #!/bin/bash
 . "${STFW_HOME}/bin/lib/setenv"
-_plugin_dir=$(cd $(dirname $0)/..;pwd)
-. "${_plugin_dir}/lib/common"
-
+plugin_dir=$(cd "$(dirname $0)/.."; pwd)
+. "${plugin_dir}/lib/common"
 
 # Process設定の読み込み
 path_scenario_config="config/config.yml"

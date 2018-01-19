@@ -130,7 +130,7 @@
 |====
 |項目 |値 |説明
 
-|配置ディレクトリ | scenario/{scenario}/{bizdate}/{seq}_{group}_scripts/ |-
+|配置ディレクトリ | scenario/{scenario}/{bizdate}/{seq}_{group}_scripts/config/ |-
 |ファイル名       | config.yml |-
 |フォーマット     | yaml |-
 |文字コード       | utf8 |-
@@ -169,19 +169,19 @@
 
 == 処理内容
 
-=== pre_process
+=== pre_execute
 
 * 対象のスクリプト群を、リストアップします。
 * 対象のスクリプト群に、実行権限を追加します。
 
-=== process
+=== execute
 
 * Process設定を環境変数に設定します。
 * 対象のスクリプト群を、ファイル名の昇順に実行します。
 ** 途中のスクリプトでエラーが発生した場合、後続のスクリプトは実行せずシナリオをエラー終了します。
 
 
-=== post_process
+=== post_execute
 
 * 処理なし
 

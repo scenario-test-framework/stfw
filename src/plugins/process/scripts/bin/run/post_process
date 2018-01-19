@@ -1,6 +1,0 @@
-#!/bin/bash
-. "${STFW_HOME}/bin/lib/setenv"
-_plugin_dir=$(cd $(dirname $0)/..;pwd)
-. "${_plugin_dir}/lib/common"
-
-exit 0
