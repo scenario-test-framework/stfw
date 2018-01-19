@@ -668,19 +668,28 @@ function stfw.webhook.async_execute() {
   local _relpath_plugin="$4"
 
   # ステータスチェック
-  local _status="success"
+  local _status="Success"
   if [[ "${_event}" = "start" ]]; then
-    _status="started"
+    _status="Started"
     if [[ "${stfw_webhooks_on_start:?}" != "true" ]]; then return ${EXITCODE_SUCCESS}; fi
 
   else
     # check status from digdag
     # shellcheck disable=SC2154
     if [[ "${stfw_run_status}" = "error" ]]; then
-      _status="error"
+      _status="Error"
       if [[ "${stfw_webhooks_on_error:?}" != "true" ]]; then return ${EXITCODE_SUCCESS}; fi
     else
       if [[ "${stfw_webhooks_on_success:?}" != "true" ]]; then return ${EXITCODE_SUCCESS}; fi
+      # process スクリプトの結果判定
+      local _script_exit=${EXITCODE_SUCCESS}
+      if [[ -f "${STFW_PROJ_DIR}/tmp_stfw_process_scripts.exitcode" ]]; then
+        _script_exit=$(cat "${STFW_PROJ_DIR}/tmp_stfw_process_scripts.exitcode")
+        rm "${STFW_PROJ_DIR}/tmp_stfw_process_scripts.exitcode"
+      fi
+      if [[ ${_script_exit} -ne ${EXITCODE_SUCCESS} ]]; then
+        _status="Error"
+      fi
     fi
   fi
 

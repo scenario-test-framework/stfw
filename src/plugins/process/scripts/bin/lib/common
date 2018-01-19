@@ -4,6 +4,10 @@ function plugin.process.scripts.get_scripts_status_filepath() {
   echo "${STFW_PROJ_DIR}/tmp_stfw_process_scripts.yml"
 }
 
+function plugin.process.scripts.get_scripts_exitcode_filepath() {
+  echo "${STFW_PROJ_DIR}/tmp_stfw_process_scripts.exitcode"
+}
+
 #---------------------------------------------------------------------------------------------------
 # プラグイン用指定ディレクトリ直下のファイル名リスト
 #
@@ -71,6 +75,7 @@ function plugin.process.scripts.bulk_exec_scripts() {
   local _template_script_file=${_plugin_dir}/webhook/template_scripts.yml
 
   local _tmp_scripts_status_file=$(plugin.process.scripts.get_scripts_status_filepath)
+  local _tmp_scripts_exitcode_file=$(plugin.process.scripts.get_scripts_exitcode_filepath)
   cat /dev/null > ${_tmp_scripts_status_file}
 
   local _exitcode=${EXITCODE_SUCCESS}
@@ -80,10 +85,10 @@ function plugin.process.scripts.bulk_exec_scripts() {
 
     # webhook info
     export script_name="${_cur_file}"
-    export script_result="error"
+    export script_result="Error"
     export script_start_time=$(timestamp_to_iso ${_start_time})
     if [[ ${_exitcode} -eq ${EXITCODE_ERROR} ]]; then
-      script_result="canceled"
+      script_result="Blocked"
       script_start_time=
     fi
 
@@ -102,10 +107,10 @@ function plugin.process.scripts.bulk_exec_scripts() {
     export script_end_time=
     export script_processing_time=
     if [[ ${_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
-      script_result="success"
+      script_result="Success"
     fi
 
-    if [[ "${script_result}" != "canceled" ]]; then
+    if [[ "${script_result}" != "Blocked" ]]; then
       local _end_time=$(date '+%Y%m%d%H%M%S')
       script_end_time=$(timestamp_to_iso ${_end_time})
       script_processing_time=$(private.calc_processing_time ${_start_time} ${_end_time})
@@ -117,6 +122,7 @@ function plugin.process.scripts.bulk_exec_scripts() {
     done >>"${_tmp_scripts_status_file}"
 
   done
+  echo ${_exitcode} > ${_tmp_scripts_exitcode_file}
 
   log.trace "cd \"${_before_dir}\""
   cd "${_before_dir}"

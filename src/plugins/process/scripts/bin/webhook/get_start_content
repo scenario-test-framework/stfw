@@ -13,7 +13,7 @@ cat /dev/null >"${tmp_scripts_status_file}"
 # startはスクリプト名のみ
 for _cur_file in $(plugin.process.scripts.list_files "scripts"); do
   export script_name="${_cur_file}"
-  export script_result="pending"
+  export script_result="Pending"
   export script_start_time=
   export script_end_time=
   export script_processing_time=

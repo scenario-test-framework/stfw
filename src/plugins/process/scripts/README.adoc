@@ -39,7 +39,7 @@
     "targets": [
       {
         "{SCRIPT_NAME_1}": {
-          "result": "success | error | canceled",
+          "result": "Pending | Success | Error | Blocked",
           "start time": "YYYY-MM-DDTHH:mm:ssZ | null",
           "end time": "YYYY-MM-DDTHH:mm:ssZ | null",
           "processing time": "HH:mm:ss | null",
@@ -47,7 +47,7 @@
       },
       {
         "{SCRIPT_NAME_2}": {
-          "result": "success | error | canceled",
+          "result": "Pending | Success | Error | Blocked",
           "start time": "YYYY-MM-DDTHH:mm:ssZ | null",
           "end time": "YYYY-MM-DDTHH:mm:ssZ | null",
           "processing time": "HH:mm:ss | null",
@@ -66,7 +66,7 @@
     "targets": [
       {
         "100_1st_step": {
-          "result": "pending",
+          "result": "Pending",
           "start time": null,
           "end time": null,
           "processing time": null
@@ -85,7 +85,7 @@
     "targets": [
       {
         "100_1st_step": {
-          "result": "success",
+          "result": "Success",
           "start time": "2018-01-16T18:08:49+0900",
           "end time": "2018-01-16T18:08:49+0900",
           "processing time": "00:00:00"
