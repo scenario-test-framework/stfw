@@ -8,6 +8,6 @@
 #           targets:
               - ${script_name}:
                   result: "${script_result}"
-                  start time: "${script_start_time}"
-                  end time: "${script_end_time}"
-                  processing time: "${script_processing_time}"
+                  start_time: "${script_start_time}"
+                  end_time: "${script_end_time}"
+                  processing_time: "${script_processing_time}"

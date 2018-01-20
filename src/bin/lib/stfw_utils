@@ -730,7 +730,7 @@ function stfw.webhook.async_execute() {
 
   readonly webhook_type="${_type}"
   readonly webhook_status="${_status}"
-  readonly webhook_id=$(private.stfw.get_webhook_parent_id "${run_id:?}${task_name:?}")
+  readonly webhook_id=$(private.stfw.get_webhook_parent_id "${run_id:?}${task_name:?}" "${_type}")
   readonly webhook_parent_id=$(private.stfw.get_webhook_parent_id "${webhook_id}")
   readonly STFW_SERVER_VERSION=$(stfw.get_digdag_version)
 
@@ -774,14 +774,19 @@ function stfw.webhook.async_execute() {
 
 function private.stfw.get_webhook_parent_id() {
   local _base_id="$1"
+  local _type="$2"
 
-  # digdag task_name を path に変換
-  local _tmp_webhook_id=$(
-    echo "${_base_id}"                                                                             |
-    sed -e 's|\+|/|g'                                                                              | # 区切り文字を/に置換
-    sed -e 's|\^|/|g'
-  )
-  local _webhook_id=$(dirname "${_tmp_webhook_id}" | sed -e 's|/|+|g')
+  local  _webhook_id=${_base_id}
+  if [[ "${_type}" != "process" ]]; then
+
+   # digdag task_name を path に変換
+    local _tmp_webhook_id=$(
+      echo "${_base_id}"                                                                           |
+      sed -e 's|\+|/|g'                                                                            | # 区切り文字を/に置換
+      sed -e 's|\^|/|g'
+    )
+    _webhook_id=$(dirname "${_tmp_webhook_id}" | sed -e 's|/|+|g')
+  fi
   echo "${_webhook_id}"
 }
 
