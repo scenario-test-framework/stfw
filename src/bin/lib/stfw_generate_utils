@@ -140,7 +140,7 @@ function stfw.generate.run-dig() {
     echo '  sh>: stfw run --teardown '"${_scenario_names[@]}"
     echo '_error:'
     echo '  _export:'
-    echo '    stfw_run_status : "error"'
+    echo '    stfw_run_status : "'"${STATUS_ERROR}"'"'
     echo '  sh>: stfw run --teardown '"${_scenario_names[@]}"
   ) >> "${_path_dig}"
 
@@ -236,7 +236,7 @@ function stfw.generate.scenario-dig() {
     echo '  sh>: stfw scenario --teardown "${stfw_scenario_dir}"'
     echo '_error:'
     echo '  _export:'
-    echo '    stfw_run_status : "error"'
+    echo '    stfw_run_status : "'"${STATUS_ERROR}"'"'
     echo '  sh>: stfw scenario --teardown "${stfw_scenario_dir}"'
   ) >> "${_path_output}"
 
@@ -338,7 +338,7 @@ function stfw.generate.bizdate-dig() {
     echo '  sh>: stfw bizdate --teardown "${stfw_bizdate_dir}"'
     echo '_error:'
     echo '  _export:'
-    echo '    stfw_run_status : "error"'
+    echo '    stfw_run_status : "'"${STATUS_ERROR}"'"'
     echo '  sh>: stfw bizdate --teardown "${stfw_bizdate_dir}"'
   ) >> "${_path_output}"
 

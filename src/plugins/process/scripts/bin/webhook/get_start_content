@@ -1,27 +1,16 @@
 #!/bin/bash
 . "${STFW_HOME}/bin/lib/setenv"
 
-plugin_dir=$(cd "$(dirname $0)/.."; pwd)
+readonly plugin_dir=$(cd "$(dirname $0)/.."; pwd)
 . "${plugin_dir}/lib/common"
 
-template_file="${plugin_dir}/webhook/template.yml"
-template_script_file="${plugin_dir}/webhook/template_scripts.yml"
+# webhook詳細ファイルを初期化
+cat /dev/null >"${PATH_WEBHOOK_DETAIL}"
 
-tmp_scripts_status_file=$(plugin.process.scripts.get_scripts_status_filepath)
-cat /dev/null >"${tmp_scripts_status_file}"
-
-# startはスクリプト名のみ
 for _cur_file in $(plugin.process.scripts.list_files "scripts"); do
-  export script_name="${_cur_file}"
-  export script_result="Pending"
-  export script_start_time=
-  export script_end_time=
-  export script_processing_time=
-
-  cat "${template_script_file}" | grep -v "^#" |
-  while IFS= read -r _line; do
-    eval "echo \"${_line}\""
-  done >>"${tmp_scripts_status_file}"
+  # webhook詳細: Pending
+  plugin.process.scripts.webhook.append_detail "start" "${_cur_file}"
 done
 
-cat "${template_file}" "${tmp_scripts_status_file}"
+# 作成した、詳細ファイルと合わせて表示
+cat "${PATH_WEBHOOK_TEMPLATE}" "${PATH_WEBHOOK_DETAIL}"

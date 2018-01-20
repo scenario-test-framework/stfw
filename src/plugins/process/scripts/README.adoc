@@ -71,7 +71,7 @@
           "end time": null,
           "processing time": null
         }
-      },
+      }
     ]
   }
 }
@@ -87,8 +87,24 @@
         "100_1st_step": {
           "result": "Success",
           "start time": "2018-01-16T18:08:49+0900",
-          "end time": "2018-01-16T18:08:49+0900",
-          "processing time": "00:00:00"
+          "end time": "2018-01-16T18:08:50+0900",
+          "processing time": "00:00:01"
+        }
+      },
+      {
+        "200_2nd_step": {
+          "result": "Error",
+          "start time": "2018-01-16T18:08:50+0900",
+          "end time": "2018-01-16T18:08:51+0900",
+          "processing time": "00:00:01"
+        }
+      },
+      {
+        "300_3rd_step": {
+          "result": "Blocked",
+          "start time": null,
+          "end time": null,
+          "processing time": null
         }
       },
     ]

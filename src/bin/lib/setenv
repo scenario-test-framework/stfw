@@ -17,6 +17,14 @@ readonly EXITCODE_SUCCESS=0
 readonly EXITCODE_WARN=3
 readonly EXITCODE_ERROR=6
 
+#-------------------------------------------------------------------------------
+# ステータス
+#-------------------------------------------------------------------------------
+readonly STATUS_PENDING="Pending"
+readonly STATUS_STARTED="Started"
+readonly STATUS_SUCCESS="Success"
+readonly STATUS_ERROR="Error"
+readonly STATUS_BLOCKED="Blocked"
 
 
 #---------------------------------------------------------------------------------------------------

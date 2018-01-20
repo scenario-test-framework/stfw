@@ -4,7 +4,5 @@
 plugin_dir=$(cd "$(dirname $0)/..";pwd)
 . "${plugin_dir}/lib/common"
 
-template_file="${plugin_dir}/webhook/template.yml"
-tmp_scripts_status_file=$(plugin.process.scripts.get_scripts_status_filepath)
-
-cat "${template_file}" "${tmp_scripts_status_file}"
+# execute時に作成した、詳細ファイルと合わせて表示
+cat "${PATH_WEBHOOK_TEMPLATE}" "${PATH_WEBHOOK_DETAIL}"

@@ -1,12 +1,8 @@
 #!/bin/bash
+readonly PATH_WEBHOOK_TEMPLATE="${plugin_dir:?}/webhook/template.yml"
+readonly PATH_WEBHOOK_TEMPLATE_DETAIL="${plugin_dir:?}/webhook/template_detail.yml"
+readonly PATH_WEBHOOK_DETAIL="${STFW_PROJ_DIR}/tmp_process_scripts-webhook_detail.yml"
 
-function plugin.process.scripts.get_scripts_status_filepath() {
-  echo "${STFW_PROJ_DIR}/tmp_stfw_process_scripts.yml"
-}
-
-function plugin.process.scripts.get_scripts_exitcode_filepath() {
-  echo "${STFW_PROJ_DIR}/tmp_stfw_process_scripts.exitcode"
-}
 
 #---------------------------------------------------------------------------------------------------
 # プラグイン用指定ディレクトリ直下のファイル名リスト
@@ -39,6 +35,7 @@ function plugin.process.scripts.list_files() {
   return ${EXITCODE_SUCCESS}
 }
 
+
 #---------------------------------------------------------------------------------------------------
 # プラグイン用スクリプトの一括実行
 #
@@ -59,7 +56,7 @@ function plugin.process.scripts.list_files() {
 #   標準出力
 #     スクリプトの標準出力&標準エラー
 #   ファイル
-#     ${STFW_PROJ_DIR_DATA}/stfw_script_plugin_detail.yml
+#     PATH_WEBHOOK_DETAIL
 #
 #---------------------------------------------------------------------------------------------------
 function plugin.process.scripts.bulk_exec_scripts() {
@@ -71,62 +68,117 @@ function plugin.process.scripts.bulk_exec_scripts() {
   log.trace "cd \"${_dir}\""
   cd "${_dir}"
 
-  local _plugin_dir=$(cd "$(dirname $0)/.."; pwd)
-  local _template_script_file=${_plugin_dir}/webhook/template_scripts.yml
-
-  local _tmp_scripts_status_file=$(plugin.process.scripts.get_scripts_status_filepath)
-  local _tmp_scripts_exitcode_file=$(plugin.process.scripts.get_scripts_exitcode_filepath)
-  cat /dev/null > ${_tmp_scripts_status_file}
+  # webhook詳細ファイルを初期化
+  cat /dev/null >"${PATH_WEBHOOK_DETAIL}"
 
   local _exitcode=${EXITCODE_SUCCESS}
   for _cur_file in $(plugin.process.scripts.list_files .); do
+
+    # skip判定
+    if [[ ${_exitcode} -eq ${EXITCODE_ERROR} ]]; then
+      # webhook詳細: Blocked
+      plugin.process.scripts.webhook.append_detail "skip" "${_cur_file}"
+      continue
+    fi
+
+    # スクリプト実行
     local _cur_retcode=${EXITCODE_SUCCESS}
     local _start_time=$(date '+%Y%m%d%H%M%S')
 
-    # webhook info
-    export script_name="${_cur_file}"
-    export script_result="Error"
-    export script_start_time=$(timestamp_to_iso ${_start_time})
-    if [[ ${_exitcode} -eq ${EXITCODE_ERROR} ]]; then
-      script_result="Blocked"
-      script_start_time=
+    local _sect_name="${_dir}/${_cur_file}"
+    log.sect_start_info "${_sect_name}"
+    ./${_cur_file}
+    _cur_retcode=$?
+    log.sect_end_info "${_sect_name}" "${_cur_retcode}"
+
+    if [[ ${_cur_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
+      _exitcode=${EXITCODE_ERROR}
     fi
 
-    if [[ ${_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
-      local _sect_name="${_dir}/${_cur_file}"
-      log.sect_start_info "${_sect_name}"
-      ./${_cur_file}
-      _cur_retcode=$?
-      log.sect_end_info "${_sect_name}" "${_cur_retcode}"
-
-      if [[ ${_cur_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
-        _exitcode=${EXITCODE_ERROR}
-      fi
-    fi
-
-    export script_end_time=
-    export script_processing_time=
-    if [[ ${_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
-      script_result="Success"
-    fi
-
-    if [[ "${script_result}" != "Blocked" ]]; then
-      local _end_time=$(date '+%Y%m%d%H%M%S')
-      script_end_time=$(timestamp_to_iso ${_end_time})
-      script_processing_time=$(private.calc_processing_time ${_start_time} ${_end_time})
-    fi
-
-    cat "${_template_script_file}" | grep -v "^#" |
-    while IFS= read -r _line; do
-      eval "echo \"${_line}\""
-    done >>"${_tmp_scripts_status_file}"
+    # webhook詳細: Success | Error
+    plugin.process.scripts.webhook.append_detail "result" "${_cur_file}" "${_cur_retcode}" "${_start_time}"                                                                             \
 
   done
-  echo ${_exitcode} > ${_tmp_scripts_exitcode_file}
 
   log.trace "cd \"${_before_dir}\""
   cd "${_before_dir}"
 
   log.func_end_trace ${_exitcode}
   return ${_exitcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# webhook詳細ファイルへの追記
+#
+# 引数
+#   1: 実行モード start | skip | result
+#   2: スクリプト名
+#   3: リターンコード ※実行モード=result の場合のみ
+#       = 0: Success
+#      != 0: Error
+#   4: 開始タイムスタンプ ※実行モード=result の場合のみ
+#
+# リターンコード
+#   ${EXITCODE_SUCCESS}: 正常終了した場合
+#ｚ
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     PATH_WEBHOOK_DETAIL
+#
+#---------------------------------------------------------------------------------------------------
+function plugin.process.scripts.webhook.append_detail() {
+  local _mode="$1"
+  local _script_name="$2"
+  local _script_retcode="$3"
+  local _script_start_timestamp="$4"
+
+  case "${_mode}" in
+    start)
+      local _result="${STATUS_PENDING}"
+      local _start_time=""
+      local _end_time=""
+      local _processing_time=""
+      ;;
+
+    skip)
+      local _result="${STATUS_BLOCKED}"
+      local _start_time=""
+      local _end_time=""
+      local _processing_time=""
+      ;;
+
+    result)
+      _result="${STATUS_SUCCESS}"
+      if [[ ${_script_retcode} -ne ${EXITCODE_SUCCESS} ]]; then _result="${STATUS_ERROR}"; fi
+
+      local _timestamp="$(date '+%Y%m%d%H%M%S')"
+      _start_time=$(timestamp_to_iso ${_script_start_timestamp})
+      _end_time=$(timestamp_to_iso ${_timestamp})
+      _processing_time=$(private.calc_processing_time ${_script_start_timestamp} ${_timestamp})
+      ;;
+
+    *)
+      log.error "usage: ${FUNCNAME[0]} <mode> <script-name> <script-retcode> <script-start-timestamp>"
+      return ${EXITCODE_ERROR}
+      ;;
+  esac
+
+  # 出力 ※サブシェルにして、exportを局所化しています。
+  (
+    export script_name="${_script_name}"
+    export script_result="${_result}"
+    export script_start_time="${_start_time}"
+    export script_end_time="${_end_time}"
+    export script_processing_time="${_processing_time}"
+
+    cat "${PATH_WEBHOOK_TEMPLATE_DETAIL}" | grep -v "^#" |
+    while IFS= read -r _line; do
+      eval "echo \"${_line}\""
+    done >>"${PATH_WEBHOOK_DETAIL}"
+  )
 }

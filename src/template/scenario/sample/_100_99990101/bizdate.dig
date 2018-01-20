@@ -34,5 +34,5 @@ timezone: Asia/Tokyo
   sh>: stfw bizdate --teardown "${stfw_bizdate_dir}"
 _error:
   _export:
-    stfw_run_status : "error"
+    stfw_run_status : "Error"
   sh>: stfw bizdate --teardown "${stfw_bizdate_dir}"
