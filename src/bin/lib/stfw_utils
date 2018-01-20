@@ -608,6 +608,7 @@ function stfw.is_run_on_server() {
 }
 
 function stfw.project_home() {
+  # shellcheck disable=SC2001
   echo "${STFW_PROJ_DIR}" | sed -e 's|/.stfw/.*||'
   return ${EXITCODE_SUCCESS}
 }
