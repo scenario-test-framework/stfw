@@ -1,5 +1,5 @@
 #payload:
   run:
-    run id: ${run_id}
-    workspace dir: ${STFW_PROJ_DIR}
-    params: ${stfw_raw_params}
+    run_id: ${run_id}
+    workspace_dir: ${STFW_PROJ_DIR}
+    params: $(stfw.get_raw_params)

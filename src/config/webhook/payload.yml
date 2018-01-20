@@ -1,16 +1,20 @@
 payload:
-  id: "${run_id}${task_name}"
+  id: "${webhook_id}"
+  parent_id: ${webhook_parent_id}
   type: "${webhook_type}"
   status: "${webhook_status}"
-  start time: "${webhook_start_time}"
-  end time: "${webhook_end_time}"
-  processing time: "${webhook_processing_time}"
+  create_time: "$(timestamp_to_iso $(date '+%Y%m%d%H%M%S'))"
+  start_time: "${webhook_start_time}"
+  end_time: "${webhook_end_time}"
+  processing_time: "${webhook_processing_time}"
   stfw:
     host: "$(get_ip)"
     user: "$(whoami)"
     home: "${STFW_HOME}"
     version: "${STFW_VERSION}"
-    digdag url: "http://$(get_ip):${stfw_server_port}/"
-    digdag version: "${STFW_SERVER_VERSION}"
-    project home: "${STFW_PROJ_DIR}"
-    project version: "${stfw_project_version}"
+    digdag:
+      url: "http://$(get_ip):${stfw_server_port}/"
+      version: "${STFW_SERVER_VERSION}"
+    project:
+      home: "$(stfw.project_home)"
+      version: "${stfw_project_version}"

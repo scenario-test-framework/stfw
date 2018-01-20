@@ -598,12 +598,17 @@ function stfw.must_run_on_server() {
 }
 
 function stfw.is_run_on_server() {
-  if [[ "${STFW_PROJ_DIR}" = "${STFW_PROJ_DIR//\/\.stfw//}" ]]; then
+  if [[ "${STFW_PROJ_DIR}" = "$(stfw.project_home)" ]]; then
     echo "false"
     return ${EXITCODE_SUCCESS}
   fi
 
   echo "true"
+  return ${EXITCODE_SUCCESS}
+}
+
+function stfw.project_home() {
+  echo "${STFW_PROJ_DIR}" | sed -e 's|/.stfw/.*||'
   return ${EXITCODE_SUCCESS}
 }
 
@@ -667,54 +672,37 @@ function stfw.webhook.async_execute() {
   local _event="$3"
   local _relpath_plugin="$4"
 
-  # ステータスチェック
+  # 設定チェック
   local _status="${STATUS_SUCCESS}"
-  if [[ "${_event}" = "start" ]]; then
-    _status="${STATUS_STARTED}"
-    if [[ "${stfw_webhooks_on_start:?}" != "true" ]]; then return ${EXITCODE_SUCCESS}; fi
+  case "${_event}" in
+    start)
+      _status="${STATUS_STARTED}"
+      if [[ "${stfw_webhooks_on_start:?}" != "true" ]]; then return ${EXITCODE_SUCCESS}; fi
+      ;;
 
-  else
-    # check status from digdag
-    # shellcheck disable=SC2154
-    if [[ "${stfw_run_status}" = "${STATUS_ERROR}" ]]; then
-      _status="${STATUS_ERROR}"
-      if [[ "${stfw_webhooks_on_error:?}" != "true" ]]; then return ${EXITCODE_SUCCESS}; fi
-    else
-      if [[ "${stfw_webhooks_on_success:?}" != "true" ]]; then return ${EXITCODE_SUCCESS}; fi
-    fi
-  fi
+    *)
+      # check status from dig
+      # shellcheck disable=SC2154
+      if [[ "${stfw_run_status}" = "${STATUS_ERROR}" ]]; then
+        if [[ "${stfw_webhooks_on_error:?}" != "true" ]]; then return ${EXITCODE_SUCCESS}; fi
+        _status="${STATUS_ERROR}"
+
+      else
+        if [[ "${stfw_webhooks_on_success:?}" != "true" ]]; then return ${EXITCODE_SUCCESS}; fi
+      fi
+      ;;
+  esac
 
   # process status チェック
-  if [[ "${_type}" = "process" ]]; then
-    if [[ ${stfw_process_retcode:?} -ne ${EXITCODE_SUCCESS} ]]; then
-      _status="${STATUS_ERROR}"
-      if [[ "${stfw_webhooks_on_error:?}" != "true" ]]; then return ${EXITCODE_SUCCESS}; fi
-    fi
+  if [[ "${_type}" = "process" ]] &&  [[ ${stfw_process_retcode:?} -ne ${EXITCODE_SUCCESS} ]]; then
+    _status="${STATUS_ERROR}"
+    if [[ "${stfw_webhooks_on_error:?}" != "true" ]]; then return ${EXITCODE_SUCCESS}; fi
   fi
 
-  readonly webhook_type=${_type}
-  readonly webhook_status=${_status}
-
-  readonly stfw_raw_params=$(stfw.get_raw_params)
-  readonly STFW_SERVER_VERSION=$(stfw.get_digdag_version)
-
-  # 開始・終了時間計算
-  local _filepath_processing_time=$(private.processing_time.get_filepath "${_key}")
-  local _start_time=$(cat "${_filepath_processing_time}")
-  readonly webhook_start_time=$(timestamp_to_iso ${_start_time})
-
-  local webhook_end_time=
-  local webhook_processing_time=
-  if [[ "${_event}" != "start" ]]; then
-    local _end_time=$(date '+%Y%m%d%H%M%S')
-
-    readonly webhook_end_time=$(timestamp_to_iso ${_end_time})
-    readonly webhook_processing_time=$(private.calc_processing_time ${_start_time} ${_end_time})
-  fi
 
   # webhookに必要な設定をまとめる
   local _configs="${DIR_CONFIG}/webhook/payload.yml"
-  case ${_type} in
+  case "${_type}" in
     run)
       _configs="${_configs} ${DIR_CONFIG}/webhook/run.yml"
       ;;
@@ -738,6 +726,24 @@ function stfw.webhook.async_execute() {
   esac
 
   local _tmp_yml_file="/tmp/stfw_webhook_${_type}_${_event}_$$.yml"
+
+  readonly webhook_type="${_type}"
+  readonly webhook_status="${_status}"
+  readonly webhook_id=$(private.stfw.get_webhook_parent_id "${run_id:?}${task_name:?}")
+  readonly webhook_parent_id=$(private.stfw.get_webhook_parent_id "${webhook_id}")
+  readonly STFW_SERVER_VERSION=$(stfw.get_digdag_version)
+
+  # 開始・終了時間計算
+  local _filepath_processing_time=$(private.processing_time.get_filepath "${_key}")
+  local _start_time=$(cat "${_filepath_processing_time}")
+  readonly webhook_start_time=$(timestamp_to_iso ${_start_time})
+
+  if [[ "${_event}" != "start" ]]; then
+    local _end_time=$(date '+%Y%m%d%H%M%S')
+
+    readonly webhook_end_time=$(timestamp_to_iso ${_end_time})
+    readonly webhook_processing_time=$(private.calc_processing_time ${_start_time} ${_end_time})
+  fi
 
   # 複数ファイルをcatで合成しつつ、変数展開、jsonへ変換
   # shellcheck disable=SC2002
@@ -765,6 +771,19 @@ function stfw.webhook.async_execute() {
   private.stfw.webhook_async_execute "${_tmp_yml_file}" &
 }
 
+function private.stfw.get_webhook_parent_id() {
+  local _base_id="$1"
+
+  # digdag task_name を path に変換
+  local _tmp_webhook_id=$(
+    echo "${_base_id}"                                                                             |
+    sed -e 's|\+|/|g'                                                                              | # 区切り文字を/に置換
+    sed -e 's|\^|/|g'
+  )
+  local _webhook_id=$(dirname "${_tmp_webhook_id}" | sed -e 's|/|+|g')
+  echo "${_webhook_id}"
+}
+
 function private.stfw.webhook_async_execute() {
   local _tmp_yml_file="$1"
   local _tmp_json_file="${_tmp_yml_file}.json"
@@ -773,15 +792,22 @@ function private.stfw.webhook_async_execute() {
   "${DIR_BIN_LIB}/yaml2json" "${_tmp_yml_file}" >"${_tmp_json_file}"
   rm "${_tmp_yml_file}"
 
-  printenv | grep stfw_webhooks_urls_ | cut -d "=" -f 2 |
+  printenv | grep "stfw_webhooks_urls_" | cut -d "=" -f 2 |
   while read -r _webhooks_url; do
-    curl                                                                                           \
-      --silent                                                                                     \
-      --show-error                                                                                 \
-      --request POST                                                                               \
-      --data-binary "@${_tmp_json_file}"                                                           \
-      --header "Content-type: application/json"                                                    \
-      "${_webhooks_url}" | log.debug
+    log.sect_start_debug "${_webhooks_url}"
+
+    local _curl_cmd=(
+      curl
+        --silent
+        --show-error
+        --request POST
+        --data-binary "@${_tmp_json_file}"
+        --header "Content-type: application/json"
+        "${_webhooks_url}"
+    )
+
+    log.debug "${_curl_cmd[@]}"
+    "${_curl_cmd[@]}" 2>&1 | log.warn
     _retcode=${PIPESTATUS[0]}
 
     if [[ ${_retcode} -eq ${EXITCODE_SUCCESS} ]]; then
@@ -789,6 +815,7 @@ function private.stfw.webhook_async_execute() {
     else
       log.warn "webhook post failed. target:${_webhooks_url}, retcode:${_retcode}"
     fi
+    log.sect_end_debug "${_webhooks_url}"
   done
 
   rm "${_tmp_json_file}"
