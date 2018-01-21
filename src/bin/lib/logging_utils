@@ -834,7 +834,7 @@ function log.script_end() {
   local _script_name=$(basename "${_script_path}")
 
   # 処理時間計算
-  local _processing_time=$(processing_time.calc "${_script_path}_$$")
+  local _processing_time=$(processing_time.end "${_script_path}_$$")
   local _msg_processing_time="[processing_time=${_processing_time}]"
   local _msg="${LOG__PREFIX_SCRIPT_END}${_script_name} ${_msg_processing_time}"
 
@@ -923,7 +923,7 @@ function log.func_end_trace() {
   local _exit_code="$1"
 
   # 処理時間計算
-  local _processing_time=$(processing_time.calc "${_invoker_name}_$$")
+  local _processing_time=$(processing_time.end "${_invoker_name}_$$")
   local _msg_processing_time="[processing_time=${_processing_time}]"
   local _msg="${LOG__PREFIX_FUNC_END}${_invoker_name} ${_msg_processing_time}"
 
@@ -1049,7 +1049,7 @@ function private.log.sect_end() {
   if [[ "${_log_level}" = "${LOGLEVEL_DEBUG}" ]] && [[ "$(log.is_debug_enabled)" != "true" ]]; then return ${EXITCODE_SUCCESS}; fi
 
   # 処理時間計算
-  local _processing_time=$(processing_time.calc "${_section_name}_$$")
+  local _processing_time=$(processing_time.end "${_section_name}_$$")
   local _msg_processing_time="[processing_time=${_processing_time}]"
   local _msg="${LOG__PREFIX_SECT_END}${_section_name} ${_msg_processing_time}"
 

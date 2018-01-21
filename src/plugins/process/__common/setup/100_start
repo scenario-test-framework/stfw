@@ -5,6 +5,6 @@
 processing_time.start "${stfw_process_dir:?}"
 retcode=$?
 
-stfw.webhook.async_execute "${stfw_process_dir:?}" process start "process/${stfw_process:?}"
+stfw.webhook.async_execute process start "${stfw_process_dir:?}" "process/${stfw_process:?}" >/dev/null
 
 exit $retcode

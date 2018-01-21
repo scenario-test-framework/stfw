@@ -14,7 +14,7 @@ payload:
     version: "${STFW_VERSION}"
     digdag:
       url: "http://$(get_ip):${stfw_server_port}/"
-      version: "${STFW_SERVER_VERSION}"
+      version: "$(stfw.get_digdag_version)"
     project:
       home: "$(stfw.project_home)"
       version: "${stfw_project_version}"

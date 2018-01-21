@@ -5,6 +5,6 @@
 processing_time.start "${stfw_bizdate_dir:?}"
 retcode=$?
 
-stfw.webhook.async_execute "${stfw_bizdate_dir:?}" bizdate start
+stfw.webhook.async_execute bizdate start "${stfw_bizdate_dir:?}" >/dev/null
 
 exit $retcode
