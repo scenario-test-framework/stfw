@@ -18,7 +18,6 @@ stfw:
       # ※結果は https://webhook.site/#/7e769801-aac8-4335-91df-1ff1c8cfd972 で確認できます。
 #      - https://webhook.site/7e769801-aac8-4335-91df-1ff1c8cfd972
     on_start: true
-    on_cancel: true
     on_success: true
     on_error: true
 

@@ -26,6 +26,108 @@
 
 |====
 
+
+
+== webhook
+
+=== json設定内容
+```json
+---
+"process": {
+  "plugin": {
+    "type": "scripts",
+    "targets": [
+      {
+        "{SCRIPT_NAME_1}": {
+          "result": "Pending | Success | Error | Blocked",
+          "start time": "YYYY-MM-DDTHH:mm:ssZ | null",
+          "end time": "YYYY-MM-DDTHH:mm:ssZ | null",
+          "processing time": "HH:mm:ss | null",
+        }
+      },
+      {
+        "{SCRIPT_NAME_2}": {
+          "result": "Pending | Success | Error | Blocked",
+          "start time": "YYYY-MM-DDTHH:mm:ssZ | null",
+          "end time": "YYYY-MM-DDTHH:mm:ssZ | null",
+          "processing time": "HH:mm:ss | null",
+        }
+      }
+    ]
+  }
+}
+```
+=== 設定例）開始
+```sample:start
+---
+"process": {
+  "plugin": {
+    "type": "scripts",
+    "targets": [
+      {
+        "100_1st_step": {
+          "result": "Pending",
+          "start time": null,
+          "end time": null,
+          "processing time": null
+        }
+      },
+      {
+        "200_2nd_step": {
+          "result": "Error",
+          "start time": null,
+          "end time": null,
+          "processing time": null
+        }
+      },
+      {
+        "300_3rd_step": {
+          "result": "Blocked",
+          "start time": null,
+          "end time": null,
+          "processing time": null
+        }
+      }
+    ]
+  }
+}
+```
+=== 設定例）終了
+```sample:end
+---
+"process": {
+  "plugin": {
+    "type": "scripts",
+    "targets": [
+      {
+        "100_1st_step": {
+          "result": "Success",
+          "start time": "2018-01-16T18:08:49+0900",
+          "end time": "2018-01-16T18:08:50+0900",
+          "processing time": "00:00:01"
+        }
+      },
+      {
+        "200_2nd_step": {
+          "result": "Error",
+          "start time": "2018-01-16T18:08:50+0900",
+          "end time": "2018-01-16T18:08:51+0900",
+          "processing time": "00:00:01"
+        }
+      },
+      {
+        "300_3rd_step": {
+          "result": "Blocked",
+          "start time": null,
+          "end time": null,
+          "processing time": null
+        }
+      }
+    ]
+  }
+}
+```
+
 == 設定
 
 === Plugin設定
@@ -60,7 +162,7 @@
 |====
 |項目 |値 |説明
 
-|配置ディレクトリ | scenario/{scenario}/{bizdate}/{seq}_{group}_scripts/ |-
+|配置ディレクトリ | scenario/{scenario}/{bizdate}/{seq}_{group}_scripts/config/ |-
 |ファイル名       | config.yml |-
 |フォーマット     | yaml |-
 |文字コード       | utf8 |-
@@ -99,19 +201,19 @@
 
 == 処理内容
 
-=== pre_process
+=== pre_execute
 
 * 対象のスクリプト群を、リストアップします。
 * 対象のスクリプト群に、実行権限を追加します。
 
-=== process
+=== execute
 
 * Process設定を環境変数に設定します。
 * 対象のスクリプト群を、ファイル名の昇順に実行します。
 ** 途中のスクリプトでエラーが発生した場合、後続のスクリプトは実行せずシナリオをエラー終了します。
 
 
-=== post_process
+=== post_execute
 
 * 処理なし
 

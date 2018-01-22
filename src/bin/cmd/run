@@ -303,7 +303,8 @@ function private.run_on_server() {
   local _run_id=$(private.get_run_id)
 
   # digdag projectディレクトリに必要なファイルをmove
-  local _digdag_proj_dir="${STFW_PROJ_DIR_DATA}/runs/${_run_id}"
+  local _digdag_workspace_dir="${STFW_PROJ_DIR_DATA}/runs"
+  local _digdag_proj_dir="${_digdag_workspace_dir}/${_run_id}"
   mkdir -p "${_digdag_proj_dir}"
   private.move_to_digdag_proj "${_digdag_proj_dir}" "${_target_scenarios[@]}"
 
@@ -320,6 +321,9 @@ function private.run_on_server() {
 
   # push内容がsymlinkで動くようにdigdag projetディレクトリを生成
   private.gen_symlink_digdag_proj "${_digdag_proj_dir}" "${_target_scenarios[@]}"
+
+  # stfw起動パラメータを保存
+  stfw.set_raw_params "${_digdag_proj_dir}"
 
   # digdag start
   stfw.digdag.start "${_digdag_proj_dir}" "${_run_id}" "$(basename ${FILENAME_DIG_RUN} .dig)"

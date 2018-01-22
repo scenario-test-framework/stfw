@@ -1,0 +1,13 @@
+#payload:
+# run:
+#   scenario:
+#     bizdate:
+#       process:
+#         plugin:
+#           type: scripts
+#           targets:
+              - ${script_name}:
+                  result: "${script_result}"
+                  start_time: "${script_start_time}"
+                  end_time: "${script_end_time}"
+                  processing_time: "${script_processing_time}"

@@ -1,8 +1,10 @@
 #!/bin/bash
 . "${STFW_HOME}/bin/lib/setenv"
+plugin_dir=$(cd "$(dirname $0)/.."; pwd)
+. "${plugin_dir}/lib/common"
 
 echo "target scripts:"
-for cur_script_name in $(stfw.list_files "scripts"); do
+for cur_script_name in $(plugin.process.scripts.list_files "scripts"); do
   echo "  ${cur_script_name}"
   log.trace "chmod +x \"scripts/${cur_script_name}\""
   chmod +x "scripts/${cur_script_name}"

@@ -1,4 +1,0 @@
-#!/bin/bash
-. "${STFW_HOME}/bin/lib/setenv"
-
-exit 0

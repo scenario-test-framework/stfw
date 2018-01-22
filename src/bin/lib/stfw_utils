@@ -8,11 +8,11 @@
 #
 # 定義リスト
 #   stfw.apply_log_level
-#   stfw.apply_dynamic_env
+#   stfw.parse_log_level
 #   stfw.get_plugin_path
 #   stfw.get_passwd_path
 #   stfw.show_passwd
-#   stfw.list_bulk_exec_scripts
+#   stfw.list_files
 #   stfw.bulk_exec_scripts
 #   stfw.is_in_scenario-root-dir
 #   stfw.is_in_scenario-dir
@@ -23,7 +23,12 @@
 #   stfw.process.is_installed
 #   stfw.process.install
 #   stfw.get_digdag_version
-#   stfw.get_run_params
+#   stfw.must_run_on_server
+#   stfw.is_run_on_server
+#   stfw.project_home
+#   stfw.set_raw_params
+#   stfw.get_raw_params
+#   stfw.webhook.async_execute
 #
 #===================================================================================================
 #---------------------------------------------------------------------------------------------------
@@ -136,6 +141,13 @@ function stfw.get_plugin_path() {
   # プロジェクトplugin
   if [[ -d "${STFW_PROJ_DIR_PLUGIN}/${_plugin_name}" ]]; then
     _result="${STFW_PROJ_DIR_PLUGIN}/${_plugin_name}"
+  fi
+  if [[ "$(stfw.is_run_on_server)" = "true" ]]; then
+    # digdagでワークフロー実行中の場合、workspaceディレクトリになるので、実ディレクトリを明示
+    local _real_proj_plugin_dir="${STFW_PROJ_DIR//\/\.stfw.*$/}/plugins/${_plugin_name}"
+    if [[ -d "${_real_proj_plugin_dir}" ]]; then
+      _result="${_real_proj_plugin_dir}"
+    fi
   fi
 
   # 組み込みplugin
@@ -259,7 +271,7 @@ function stfw.list_files() {
 #
 # 概要
 #   指定ディレクトリ直下の全てのファイルを、スクリプトとみなして一括実行します。
-#   スクリプトから0以外のリターンコードが返された場合、皇族は実行せずエラー終了します。
+#   スクリプトから0以外のリターンコードが返された場合、後続は実行せずエラー終了します。
 #
 # 引数
 #   1: スクリプト配置ディレクトリ
@@ -562,10 +574,10 @@ function stfw.get_digdag_version() {
 }
 
 #---------------------------------------------------------------------------------------------------
-# runパラメータ取得
+# シナリオ実行中チェック
 #
 # 概要
-#   runコマンドのパラメータを取得します。
+#   シナリオ実行中ではない場合、エラー終了します。
 #
 # 引数
 #   なし
@@ -574,17 +586,263 @@ function stfw.get_digdag_version() {
 #   環境変数
 #     なし
 #   標準出力
-#     runコマンドのパラメータ
+#     なし
 #   ファイル
-#     ${STFW_PROJ_DIR_DATA}/param
+#     なし
 #
 #---------------------------------------------------------------------------------------------------
-function stfw.get_run_params() {
-  # shellcheck disable=SC2154
-  if [[ "${stfw_run_raw_params}" != "" ]]; then
-    echo "${stfw_run_raw_params}" > ${STFW_PROJ_DIR_DATA}/param
-    echo "${stfw_run_raw_params}"
-  else
-    cat ${STFW_PROJ_DIR_DATA}/param
+function stfw.must_run_on_server() {
+  if [[ "$(stfw.is_run_on_server)" = "true" ]]; then return ${EXITCODE_SUCCESS}; fi
+
+  log.error "must run on server."
+  exit ${EXITCODE_ERROR}
+}
+
+function stfw.is_run_on_server() {
+  if [[ "${STFW_PROJ_DIR}" = "$(stfw.project_home)" ]]; then
+    echo "false"
+    return ${EXITCODE_SUCCESS}
   fi
+
+  echo "true"
+  return ${EXITCODE_SUCCESS}
+}
+
+function stfw.project_home() {
+  # shellcheck disable=SC2001
+  echo "${STFW_PROJ_DIR}" | sed -e 's|/.stfw/.*||'
+  return ${EXITCODE_SUCCESS}
+}
+
+#---------------------------------------------------------------------------------------------------
+# stfw起動パラメータ保存
+#
+# 概要
+#   stfwコマンドの実行時パラメータを保存します。
+#
+# 引数
+#   1: digdag project dir
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     {digdag_project_dir}/params
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.set_raw_params() {
+  local _path_params="${1:?}/params"
+  echo "${stfw_raw_params:?}" >"${_path_params}"
+}
+
+#---------------------------------------------------------------------------------------------------
+# stfw起動パラメータ取得
+#
+# 概要
+#   stfwコマンドの実行時パラメータを取得します。
+#
+# 引数
+#   なし
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     stfwコマンドのパラメータ
+#   ファイル
+#     ${STFW_PROJ_DIR_DATA}/params
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.get_raw_params() {
+  stfw.must_run_on_server
+
+  local _path_params="${STFW_PROJ_DIR}/params"
+  if [[ ! -f "${_path_params}" ]]; then
+    log.error "${_path_params} is not exist."
+    exit ${EXITCODE_ERROR}
+  fi
+
+  cat "${_path_params}"
+}
+
+#---------------------------------------------------------------------------------------------------
+# webhook非同期実行
+#
+# 概要
+#   stfw.webhookの設定に従って、payloadをPOST送信します。
+#
+# 引数
+#   1: タイプ (run | scenario | bizdate | process)
+#   2: イベント (start | end)
+#   3: 処理時間計測キー
+#   4: プラグイン相対パス ※タイプ=processの場合のみ必須
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     payload(yaml形式)
+#   ファイル
+#     なし
+#   リクエスト
+#     stfw.webhook.urls
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.webhook.async_execute() {
+  local _type="$1"
+  local _event="$2"
+  local _processing_time_key="$3"
+  local _relpath_plugin="$4"
+
+  # 設定チェック
+  case "${_event}" in
+    start)
+      local _status="${STATUS_STARTED}"
+      if [[ "${stfw_webhooks_on_start:?}" != "true" ]]; then return ${EXITCODE_SUCCESS}; fi
+      ;;
+
+    *)
+      local _status="${STATUS_SUCCESS}"
+      # check status from dig
+      # shellcheck disable=SC2154
+      if [[ "${stfw_run_status}" = "${STATUS_ERROR}" ]]; then
+        if [[ "${stfw_webhooks_on_error:?}" != "true" ]]; then return ${EXITCODE_SUCCESS}; fi
+        _status="${STATUS_ERROR}"
+
+      else
+        if [[ "${stfw_webhooks_on_success:?}" != "true" ]]; then return ${EXITCODE_SUCCESS}; fi
+      fi
+      ;;
+  esac
+
+  # process status チェック
+  if [[ "${_type}" = "process" ]] &&  [[ ${stfw_process_retcode:?} -ne ${EXITCODE_SUCCESS} ]]; then
+    _status="${STATUS_ERROR}"
+    if [[ "${stfw_webhooks_on_error:?}" != "true" ]]; then return ${EXITCODE_SUCCESS}; fi
+  fi
+
+  # webhookに必要な設定をまとめる
+  local _configs=( "${DIR_CONFIG}/webhook/payload.yml" )
+  case "${_type}" in
+    run)
+      _configs+=( "${DIR_CONFIG}/webhook/run.yml" )
+      ;;
+    scenario)
+      _configs+=( "${DIR_CONFIG}/webhook/run.yml" )
+      _configs+=( "${DIR_CONFIG}/webhook/scenario.yml" )
+      ;;
+    bizdate)
+      _configs+=( "${DIR_CONFIG}/webhook/run.yml" )
+      _configs+=( "${DIR_CONFIG}/webhook/scenario.yml" )
+      _configs+=( "${DIR_CONFIG}/webhook/bizdate.yml" )
+      ;;
+    process)
+      _configs+=( "${DIR_CONFIG}/webhook/run.yml" )
+      _configs+=( "${DIR_CONFIG}/webhook/scenario.yml" )
+      _configs+=( "${DIR_CONFIG}/webhook/bizdate.yml" )
+      _configs+=( "${DIR_CONFIG}/webhook/process.yml" )
+      ;;
+    *)
+      ;;
+  esac
+
+  readonly webhook_type="${_type}"
+  readonly webhook_status="${_status}"
+
+  webhook_id="${run_id:?}${task_name:?}"
+  if [[ "${_type}" != "process" ]]; then
+    # process以外の場合、task_nameにsetup/teardownが含まれるので除外
+    webhook_id=$(private.stfw.get_webhook_parent_id "${webhook_id}}")
+  fi
+  readonly webhook_parent_id=$(private.stfw.get_webhook_parent_id "${webhook_id}")
+
+  # 開始・終了時間計算
+  local _start_time=$(processing_time.get_start_time "${_processing_time_key}")
+  readonly webhook_start_time=$(timestamp_to_iso ${_start_time})
+
+  if [[ "${_event}" != "start" ]]; then
+    local _end_time=$(date '+%Y%m%d%H%M%S')
+    readonly webhook_end_time=$(timestamp_to_iso ${_end_time})
+    readonly webhook_processing_time=$(processing_time.end "${_processing_time_key}")
+  fi
+
+  local _tmp_yml_file="/tmp/stfw_webhook_${_type}_${_event}_$$.yml"
+
+  # 複数ファイルをcatで合成しつつ、変数展開、jsonへ変換
+  cat "${_configs[@]}" | grep -v "^#" |
+  while IFS= read -r _line; do
+    eval "echo \"${_line}\""
+  done >"${_tmp_yml_file}"
+
+  # プロセスの場合、プラグイン分を合成
+  if [[ ${_type} = "process" ]]; then
+    (
+      # サブシェルとして動かして、カレントディレクトリの移動を意識しなくて良くしています。
+      cd "${stfw_process_dir:?}"
+      local _plugin_dir=$(stfw.get_plugin_path "${_relpath_plugin}")
+      "${_plugin_dir}/bin/webhook/get_${_event}_content" | grep -v "^#" >>"${_tmp_yml_file}"
+      local _retcode=${PIPESTATUS[0]}
+
+      if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
+        log.error "get_${_event}_content is failed. process_relpath_plugin=${_relpath_plugin}"
+      fi
+    )
+  fi
+
+  # 結果表示
+  cat "${_tmp_yml_file}"
+
+  # 非同期実行
+  private.stfw.webhook.execute "${_tmp_yml_file}" &
+}
+
+function private.stfw.webhook.execute() {
+  local _tmp_yml_file="$1"
+  local _tmp_json_file="${_tmp_yml_file}.json"
+  log.clear_indent
+
+  # yml -> json変換
+  "${DIR_BIN_LIB}/yaml2json" "${_tmp_yml_file}" >"${_tmp_json_file}"
+  rm "${_tmp_yml_file}"
+
+  printenv | grep "stfw_webhooks_urls_" | cut -d "=" -f 2 |
+  while read -r _webhooks_url; do
+    log.sect_start_debug "${_webhooks_url}"
+
+    local _curl_cmd=(
+      curl
+        --silent
+        --show-error
+        --request POST
+        --data-binary "@${_tmp_json_file}"
+        --header "Content-type: application/json"
+        "${_webhooks_url}"
+    )
+
+    log.debug "[webhook] ${_curl_cmd[*]}"
+    local _response=$( "${_curl_cmd[@]}" 2>&1 )
+
+    if [[ "${_response}" = "ok" ]]; then
+      log.info "[webhook] ${STATUS_SUCCESS} target=${_webhooks_url}"
+    else
+      log.warn "[webhook] ${STATUS_ERROR} target=${_webhooks_url}, response=${_response}"
+    fi
+    log.sect_end_debug "${_webhooks_url}"
+  done
+
+  rm "${_tmp_json_file}"
+}
+
+function private.stfw.get_webhook_parent_id() {
+  local _base_id="$1"
+  # digdag task_name を path に変換
+  local _tmp_webhook_id=$(
+    echo "${_base_id}"                                                                             |
+    sed -e 's|\+|/|g'                                                                              | # 区切り文字を/に置換
+    sed -e 's|\^|/|g'
+  )
+  local _webhook_id=$(dirname "${_tmp_webhook_id}" | sed -e 's|/|+|g')
+  echo "${_webhook_id}"
 }

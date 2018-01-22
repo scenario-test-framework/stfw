@@ -37,8 +37,8 @@ options:
   -l, --list                              : list process plugin
   -I, --install <process-name>            : install process plugin dependencies
   -i, --init <seq> <group> <process-name> : generate scaffold to current directory
-  -d, --dry-run <exec-dir>                : run setup, pre_process, teardown
-  -r, --run <exec-dir>                    : run setup, pre_process, process, post_process, teardown
+  -d, --dry-run <exec-dir>                : run setup, pre_execute, teardown
+  -r, --run <exec-dir>                    : run setup, pre_execute, execute, post_execute, teardown
 
 __EOT__
   exit ${EXITCODE_ERROR}
@@ -199,10 +199,10 @@ function private.dry_run() {
     return ${stfw_process_retcode}
   fi
 
-  # pre_process
-  local _sect_name="pre_process"
+  # pre_execute
+  local _sect_name="pre_execute"
   log.sect_start_debug "${_sect_name}"
-  "${_plugin_path}/bin/run/pre_process" "${_trg_process_dir}"
+  "${_plugin_path}/bin/run/pre_execute" "${_trg_process_dir}"
   stfw_process_retcode=$?
   log.sect_end_debug "${_sect_name}" "${_retcode}"
 
@@ -244,10 +244,10 @@ function private.run() {
     return ${stfw_process_retcode}
   fi
 
-  # pre_process
-  local _sect_name="pre_process"
+  # pre_execute
+  local _sect_name="pre_execute"
   log.sect_start_debug "${_sect_name}"
-  "${_plugin_path}/bin/run/pre_process" "${_trg_process_dir}"
+  "${_plugin_path}/bin/run/pre_execute" "${_trg_process_dir}"
   stfw_process_retcode=$?
   log.sect_end_debug "${_sect_name}" "${_retcode}"
   if [[ ${stfw_process_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
@@ -255,10 +255,10 @@ function private.run() {
     return ${stfw_process_retcode}
   fi
 
-  # process
-  _sect_name="process"
+  # execute
+  _sect_name="execute"
   log.sect_start_debug "${_sect_name}"
-  "${_plugin_path}/bin/run/process" "${_trg_process_dir}"
+  "${_plugin_path}/bin/run/execute" "${_trg_process_dir}"
   stfw_process_retcode=$?
   log.sect_end_debug "${_sect_name}" "${_retcode}"
   if [[ ${stfw_process_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
@@ -266,10 +266,10 @@ function private.run() {
     return ${stfw_process_retcode}
   fi
 
-  # post_process
-  _sect_name="post_process"
+  # post_execute
+  _sect_name="post_execute"
   log.sect_start_debug "${_sect_name}"
-  "${_plugin_path}/bin/run/post_process" "${_trg_process_dir}"
+  "${_plugin_path}/bin/run/post_execute" "${_trg_process_dir}"
   stfw_process_retcode=$?
   log.sect_end_debug "${_sect_name}" "${_retcode}"
   if [[ ${stfw_process_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
