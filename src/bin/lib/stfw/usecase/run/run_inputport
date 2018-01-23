@@ -1,0 +1,45 @@
+#!/bin/bash
+#===================================================================================================
+#
+# run inputport
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/run_service"
+
+
+function stfw.usecase.inputport.run.run_on_server_requested() {
+  stfw.log.func_start_debug "$@"
+  local _run_opt="${1:?}"
+#  local _is_follow="${2:?}"
+  shift 2
+  local _target_scenarios=( "$@" )
+
+  # run
+  stfw.domain.service.run.run_on_server_requested "${_run_opt}" "${_target_scenarios[@]}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.usecase.inputport.run.setup_requested() {
+  stfw.log.func_start_debug
+
+  stfw.domain.service.run.setup
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.usecase.inputport.run.teardown_requested() {
+  stfw.log.func_start_debug
+
+  stfw.domain.service.run.teardown
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}

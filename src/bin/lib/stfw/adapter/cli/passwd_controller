@@ -1,0 +1,60 @@
+#!/bin/bash
+#===================================================================================================
+#
+# passwd controller
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/usecase/passwd/passwd_inputport"
+. "${DIR_BIN_LIB}/stfw/usecase/passwd/passwd_outputport"
+
+
+function stfw.adapter.cli.passwd_controller.generate_key() {
+  stfw.log.func_start_debug "$@"
+  local _is_force="${1:?}"
+
+  # usecase input
+  stfw.usecase.inputport.passwd.generate_key_requested "${_is_force}"
+  local _retcode=$?
+
+  # usecase output
+  stfw.usecase.outputport.passwd.generate_key_finished "${_retcode}" "${_is_force}"
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.adapter.cli.passwd_controller.generate() {
+  stfw.log.func_start_debug "$1" "$2" "$3" "PASSWORD"
+  local _is_force="${1:?}"
+  local _host="${2:?}"
+  local _user="${3:?}"
+  local _password="${4:?}"
+
+  # usecase input
+  stfw.usecase.inputport.passwd.save_requested "${_is_force}" "${_host}" "${_user}" "${_password}"
+  local _retcode=$?
+
+  # usecase output
+  stfw.usecase.outputport.passwd.save_finished "${_retcode}" "${_is_force}" "${_host}" "${_user}" "${_password}"
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.adapter.cli.passwd_controller.show() {
+  stfw.log.func_start_debug "$@"
+  local _host="${1:?}"
+  local _user="${2:?}"
+
+  # usecase input
+  stfw.usecase.inputport.passwd.show_requested "${_host}" "${_user}"
+  local _retcode=$?
+
+  # usecase output
+  stfw.usecase.outputport.passwd.show_finished "${_retcode}" "${_host}" "${_user}"
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}

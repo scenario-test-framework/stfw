@@ -1,0 +1,18 @@
+#!/bin/bash
+#===================================================================================================
+#
+# project inputport
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/project_service"
+
+
+function stfw.usecase.inputport.project.initialize_requested() {
+  stfw.log.func_start_debug
+
+  stfw.domain.service.project.initialize_requested
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}

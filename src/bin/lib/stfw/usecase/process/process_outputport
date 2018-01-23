@@ -1,0 +1,118 @@
+#!/bin/bash
+#===================================================================================================
+#
+# process outputport
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/process_service"
+
+
+function stfw.usecase.outputport.process.list_finished() {
+  stfw.log.func_start_debug "$@"
+#  local _inputport_exitcode="${1:?}"
+
+  # 表示なし
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+#--------------------------------------------------------------------------------------------------
+# インストール結果表示
+#
+# 概要
+#   インストール結果を表示します。
+#
+# 引数
+#   1: プロセスタイプ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#--------------------------------------------------------------------------------------------------
+function stfw.usecase.outputport.process.install_finished() {
+  stfw.log.func_start_debug "$@"
+  local _inputport_exitcode="${1:?}"
+#  local _is_global="${2:?}"
+  local _process_type="${3:?}"
+
+  if [[ ${_inputport_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
+    log.info "result:"
+    log.add_indent
+    stfw.domain.service.process.get_install_result "${_process_type}" | log.info
+    log.remove_indent
+  fi
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+#--------------------------------------------------------------------------------------------------
+# processディレクトリのコンテンツ表示 初期化時
+#
+# 概要
+#   bizdateディレクトリ配下に展開された構成から、コンテンツを表示します。
+#
+# 引数
+#   1: 業務日付ディレクトリ
+#   2: プロセスタイプ
+#   3: 連番
+#   4: グループ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#--------------------------------------------------------------------------------------------------
+function stfw.usecase.outputport.process.initialize_finished() {
+  stfw.log.func_start_debug "$@"
+  local _inputport_exitcode="${1:?}"
+  local _bizdate_dir="${2:?}"
+  local _process_type="${3:?}"
+  local _seq="${4:?}"
+  local _group="${5:?}"
+
+  if [[ ${_inputport_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
+    log.info "result:"
+    log.add_indent
+    stfw.domain.service.process.get_initialize_result                                              \
+      "${_bizdate_dir}" "${_process_type}" "${_seq}" "${_group}" | log.info
+    log.remove_indent
+  fi
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.usecase.outputport.process.dry_run_finished() {
+  stfw.log.func_start_debug "$@"
+#  local _trg_process_dir="${1:?}"
+
+  # 表示なし
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.usecase.outputport.process.run_finished() {
+  stfw.log.func_start_debug "$@"
+#  local _trg_process_dir="${1:?}"
+
+  # 表示なし
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}

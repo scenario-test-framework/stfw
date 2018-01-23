@@ -1,0 +1,218 @@
+#!/bin/bash
+#===================================================================================================
+#
+# process specification
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/spec/bizdate_spec"
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# feature
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.spec.process.is_installed() {
+  local _plugin_path="${1:?}"
+
+  if [[ ! -d "${_plugin_path}" ]]; then
+    log.error "process: ${_plugin_path} is not exist."
+    return ${EXITCODE_ERROR}
+  fi
+
+  "${_plugin_path}/bin/install/is_installed"
+  _retcode=$?
+
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.spec.process.plugin_installed_dir() {
+  local _process_type="${1:?}"
+
+  local _process_plugin_path="$(stfw.get_installed_plugin_path process/${_process_type})"
+  if [[ "${_process_plugin_path}x" = "x" ]]; then return ${EXITCODE_ERROR}; fi
+
+  echo "${_process_plugin_path}"
+}
+
+
+function stfw.domain.service.spec.process.plugin_template_dir() {
+  local _process_type="${1:?}"
+
+  local _process_plugin_path="$(stfw.domain.service.spec.process.plugin_installed_dir ${_process_type})"
+  if [[ "${_process_plugin_path}x" = "x" ]]; then return ${EXITCODE_ERROR}; fi
+
+  echo "${_process_plugin_path}/template"
+}
+
+
+function stfw.domain.service.spec.process.dirname() {
+  local _process_type="${1:?}"
+  local _seq="${2:?}"
+  local _group="${3:?}"
+
+  echo "_${_seq}_${_group}_${_process_type}"
+}
+
+
+function stfw.domain.service.spec.process.dir() {
+  local _exec_dir="${1:?}"
+  local _process_type="${2:?}"
+  local _seq="${3:?}"
+  local _group="${4:?}"
+
+  local _dirname="$(stfw.domain.service.spec.process.dirname ${_process_type} ${_seq} ${_group})"
+  echo "${_exec_dir}/${_dirname}"
+}
+
+
+function stfw.domain.service.spec.get_process_type() {
+  local _trg_process_dir="${1:?}"
+
+  basename "${_trg_process_dir}" | cut -d '_' -f 4
+}
+
+
+function stfw.domain.service.spec.process.is_process-dir() {
+  local _trg_dir="${1:?}"
+
+  (
+    cd "${_trg_dir}"
+    if [[ "$(basename "$(cd ../../..; pwd)")" != "scenario" ]]; then
+      echo "false"
+      return
+    fi
+
+    checks.must_exist_file "../../../../${FILENAME_SYSTEM_CONFIG}"
+    if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+      echo "false"
+      return
+    fi
+
+    echo "true"
+  )
+}
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# validation
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.spec.process.can_initialize() {
+  local _exec_dir="${1:?}"
+  local _process_type="${2:?}"
+  local _seq="${3:?}"
+  local _group="${4:?}"
+
+  # 業務日付ディレクトリ
+  checks.must_exist_dir "${_exec_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  local _is_bizdate_dir="$(stfw.domain.service.spec.bizdate.is_bizdate-dir ${_exec_dir})"
+  if [[ "${_is_bizdate_dir}" != "true" ]]; then
+    log.error "${_exec_dir} is not bizdate-dir."
+    return ${EXITCODE_ERROR}
+  fi
+
+  # プロセスタイプ
+  local _process_plugin_path="$(stfw.domain.service.spec.process.plugin_installed_dir ${_process_type})"
+  if [[ "${_process_plugin_path}x" = "x" ]]; then
+    log.error "process-plugin: ${_process_type} is not installed."
+    return ${EXITCODE_ERROR}
+  fi
+  # テンプレートの存在チェック
+  local _process_plugin_template_dir=$(stfw.domain.service.spec.process.plugin_template_dir "${_process_type}")
+  checks.must_exist_dir "${_process_plugin_template_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # 連番
+  checks.must_be_number "${_seq}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # グループ
+  checks.must_not_contains "${_group}" "_"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.domain.service.spec.process.can_dry_run() {
+  local _exec_dir="${1:?}"
+  local _process_type="${2:?}"
+
+  stfw.domain.service.spec.process.can_run "${_exec_dir}" "${_process_type}"
+  local _retcode=$?
+
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.spec.process.can_run() {
+  local _exec_dir="${1:?}"
+  local _process_type="${2:?}"
+
+  # プロセスディレクトリ
+  checks.must_exist_dir "${_exec_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  local _is_process_dir="$(stfw.domain.service.spec.process.is_process-dir ${_exec_dir})"
+  if [[ "${_is_process_dir}" != "true" ]]; then
+    log.error "${_exec_dir} is not process-dir."
+    return ${EXITCODE_ERROR}
+  fi
+
+  # プロセスタイプ
+  local _process_plugin_path="$(stfw.domain.service.spec.process.plugin_installed_dir ${_process_type})"
+  if [[ "${_process_plugin_path}x" = "x" ]]; then
+    log.error "process-plugin: ${_process_type} is not installed."
+    return ${EXITCODE_ERROR}
+  fi
+  # インストール済み
+  local _is_installed=$(stfw.domain.service.spec.process.is_installed "${_process_plugin_path}")
+  if [[ "${_is_installed}" != "true" ]]; then
+    log.info "${_process_plugin_path} is not installed."
+    return ${EXITCODE_ERROR}
+  fi
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.domain.service.spec.process.can_setup() {
+  local _trg_process_dir="${1:?}"
+
+  private.must_exist_process_dir "${_trg_process_dir}"
+  local _retcode=$?
+
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.spec.process.can_teardown() {
+  local _trg_process_dir="${1:?}"
+
+  private.must_exist_process_dir "${_trg_process_dir}"
+  local _retcode=$?
+
+  return ${_retcode}
+}
+
+
+function private.must_exist_process_dir() {
+  local _process_dir="${1:?}"
+
+  # プロセスディレクトリ
+  checks.must_exist_dir "${_process_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  local _is_process_dir="$(stfw.domain.service.spec.process.is_process-dir ${_process_dir})"
+  if [[ "${_is_process_dir}" != "true" ]]; then
+    log.error "${_process_dir} is not process-dir."
+    return ${EXITCODE_ERROR}
+  fi
+
+  return ${EXITCODE_SUCCESS}
+}

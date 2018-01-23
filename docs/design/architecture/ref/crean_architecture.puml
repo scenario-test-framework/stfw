@@ -1,0 +1,66 @@
+@startuml
+
+
+actor user
+node web
+node system
+database database
+
+entity files
+
+package domain {
+  control entity
+  control spec
+  interface repository
+}
+package usecase {
+  control repository_impl
+  interface gateway
+  interface inputport
+  interface outputport
+  control interactor
+}
+package interface_adapter {
+  control controller
+  control presenter
+  control gateway_impl
+}
+package external_interface {
+  boundary cli
+  boundary webapi
+}
+
+
+/' domain '/
+spec <-right- entity
+entity -right-> repository
+
+/' usecase '/
+outputport <-down- interactor
+interactor -down-> entity
+gateway <-down- repository_impl
+files <-down- repository_impl
+
+inputport <.down. interactor
+repository_impl .down.> repository
+
+/' interface_adapter '/
+controller -down-> inputport
+
+presenter .down.> outputport
+gateway_impl .down.> gateway
+
+/' external_interface '/
+webapi -down-> controller
+cli -down-> controller
+
+/' boundary '/
+cli <-up- user
+webapi <-up- web
+web <-up- user
+system -down-> webapi
+system <-down- gateway_impl
+database <-down- gateway_impl
+
+
+@enduml

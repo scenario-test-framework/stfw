@@ -1,0 +1,66 @@
+#!/bin/bash
+#===================================================================================================
+#
+# process.execute service
+#
+#===================================================================================================
+
+
+function stfw.domain.service.process.execute.pre_execute() {
+  stfw.log.func_start_trace "$@"
+  local _plugin_path="${1:?}"
+  local _trg_process_dir="${2:?}"
+
+  log.trace "cd \"${_trg_process_dir}\""
+  cd "${_trg_process_dir}"
+
+  log.trace "\"${_plugin_path}/bin/run/pre_execute\" \"${_trg_process_dir}\""
+  "${_plugin_path}/bin/run/pre_execute" "${_trg_process_dir}"
+  local _retcode=$?
+
+  log.trace "cd -"
+  cd - >/dev/null 2>&1
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.process.execute.execute() {
+  stfw.log.func_start_trace "$@"
+  local _plugin_path="${1:?}"
+  local _trg_process_dir="${2:?}"
+
+  log.trace "cd \"${_trg_process_dir}\""
+  cd "${_trg_process_dir}"
+
+  log.trace "\"${_plugin_path}/bin/run/execute\" \"${_trg_process_dir}\""
+  "${_plugin_path}/bin/run/execute" "${_trg_process_dir}"
+  local _retcode=$?
+
+  log.trace "cd -"
+  cd - >/dev/null 2>&1
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.process.execute.post_execute() {
+  stfw.log.func_start_trace "$@"
+  local _plugin_path="${1:?}"
+  local _trg_process_dir="${2:?}"
+
+  log.trace "cd \"${_trg_process_dir}\""
+  cd "${_trg_process_dir}"
+
+  log.trace "\"${_plugin_path}/bin/run/post_execute\" \"${_trg_process_dir}\""
+  "${_plugin_path}/bin/run/post_execute" "${_trg_process_dir}"
+  local _retcode=$?
+
+  log.trace "cd -"
+  cd - >/dev/null 2>&1
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}

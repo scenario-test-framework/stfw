@@ -1,0 +1,106 @@
+#!/bin/bash
+#===================================================================================================
+#
+# passwd inputport
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/passwd_service"
+
+
+#--------------------------------------------------------------------------------------------------
+# 暗号化・復号化キーファイル生成
+#
+# 概要
+#   暗号化・復号化キーファイルを生成します。
+#
+# 引数
+#   1: 強制出力フラグ true:ファイルが既に存在する場合、上書き
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     暗号化キーファイル
+#     復号化キーファイル
+#
+#--------------------------------------------------------------------------------------------------
+function stfw.usecase.inputport.passwd.generate_key_requested() {
+  stfw.log.func_start_debug "$@"
+  local _is_force="${1:?}"
+
+  stfw.domain.service.passwd.generate_key "${_is_force}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+#--------------------------------------------------------------------------------------------------
+# passwdファイル生成
+#
+# 概要
+#   文字列を暗号化して、passwdファイルに保存します。
+#
+# 引数
+#   1: 強制出力フラグ true:ファイルが既に存在する場合、上書き
+#   2: ホスト
+#   3: ユーザ
+#   4: 暗号化する文字列（password, tokenなど）
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     passwdファイル
+#
+#--------------------------------------------------------------------------------------------------
+function stfw.usecase.inputport.passwd.save_requested() {
+  stfw.log.func_start_debug "${1:?}" "${2:?}" "${3:?}" "PASSWORD"
+  local _is_force="${1:?}"
+  local _host="${2:?}"
+  local _user="${3:?}"
+  local _password="${4:?}"
+
+  stfw.domain.service.passwd.save "${_is_force}" "${_host}" "${_user}" "${_password}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+#--------------------------------------------------------------------------------------------------
+# passwd表示
+#
+# 概要
+#   passwdファイルを復号化して表示します。
+#
+# 引数
+#   1: ホスト
+#   2: ユーザ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     復号化した文字列
+#   ファイル
+#     なし
+#
+#--------------------------------------------------------------------------------------------------
+function stfw.usecase.inputport.passwd.show_requested() {
+  stfw.log.func_start_debug "$@"
+  local _host="${1:?}"
+  local _user="${2:?}"
+
+  stfw.domain.service.passwd.show "${_host}" "${_user}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}

@@ -1,0 +1,298 @@
+#!/bin/bash
+#===================================================================================================
+#
+# process service
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/spec/process_spec"
+. "${DIR_BIN_LIB}/stfw/domain/service/sub/process/embedded_plugin_service"
+. "${DIR_BIN_LIB}/stfw/domain/service/sub/process/project_plugin_service"
+. "${DIR_BIN_LIB}/stfw/domain/service/sub/process/execute_service"
+. "${DIR_BIN_LIB}/stfw/domain/repository/metadata_repository"
+. "${DIR_BIN_LIB}/stfw/domain/repository/process_repository"
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# command
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.process.install_requested() {
+  stfw.log.func_start_trace "$@"
+  local _is_global="${1:?}"
+  local _process_type="${2:?}"
+
+  local _plugin_path="$(stfw.get_proj_plugin_dir process/${_process_type})"
+  if [[ "${_is_global}" = "true" ]]; then
+    _plugin_path="$(stfw.get_global_plugin_dir process/${_process_type})"
+  fi
+
+  stfw.domain.repository.process.install "${_plugin_path}"
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.process.initialize_requested() {
+  stfw.log.func_start_trace "$@"
+  local _bizdate_dir="${1:?}"
+  local _process_type="${2:?}"
+  local _seq="${3:?}"
+  local _group="${4:?}"
+
+  # validate
+  stfw.domain.service.spec.process.can_initialize \
+    "${_bizdate_dir}" "${_process_type}" "${_seq}" "${_group}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  # テンプレートをコピー
+  local _template_dir=$(stfw.domain.service.spec.process.plugin_template_dir "${_process_type}")
+  local _dir_process=$(stfw.domain.service.spec.process.dir \
+    "${_bizdate_dir}" "${_process_type}" "${_seq}" "${_group}")
+
+  if [[ -d "${_dir_process}" ]]; then
+    log.trace "rm -fr \"${_dir_process}\""
+    rm -fr "${_dir_process}"
+  fi
+  log.trace "mkdir \"${_dir_process}\""
+  mkdir "${_dir_process}"
+
+  log.trace "cp -pr \"${_template_dir}/\"* ${_dir_process}/"
+  cp -pr "${_template_dir}/"* ${_dir_process}/
+  local _retcode=$?
+
+  # メタ情報ファイルを作成
+  stfw.domain.repository.metadata.generate "${_dir_process}"
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.process.dry_run_requested() {
+  stfw.log.func_start_trace "$@"
+  local _trg_process_dir="${1:?}"
+
+  # export
+  export stfw_process_retcode=${EXITCODE_SUCCESS}
+
+  # validate
+  local _process_type=$(stfw.domain.service.spec.get_process_type "${_trg_process_dir}")
+  stfw.domain.service.spec.process.can_dry_run "${_trg_process_dir}" "${_process_type}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw_process_retcode=${EXITCODE_ERROR}
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  # pluginインストールディレクトリ
+  local _process_plugin_dir="$(stfw.domain.service.spec.process.plugin_installed_dir ${_process_type})"
+
+  # plugin設定読み込み
+  private.export_config "${_process_plugin_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw_process_retcode=${EXITCODE_ERROR}
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  # setup
+  private.stfw.domain.service.process.setup "${_trg_process_dir}"
+  stfw_process_retcode=$?
+  if [[ ${stfw_process_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${stfw_process_retcode}
+    return ${stfw_process_retcode}
+  fi
+
+  # pre_execute
+  stfw.domain.service.process.execute.pre_execute "${_process_plugin_dir}" "${_trg_process_dir}"
+  stfw_process_retcode=$?
+
+  # teardown
+  private.stfw.domain.service.process.teardown "${_trg_process_dir}"
+
+  stfw.log.func_end_trace ${stfw_process_retcode}
+  return ${stfw_process_retcode}
+}
+
+
+function stfw.domain.service.process.run_requested() {
+  stfw.log.func_start_trace "$@"
+  local _trg_process_dir="${1:?}"
+
+  # export
+  export stfw_process_retcode=${EXITCODE_SUCCESS}
+
+  # validate
+  local _process_type=$(stfw.domain.service.spec.get_process_type "${_trg_process_dir}")
+  stfw.domain.service.spec.process.can_run "${_trg_process_dir}" "${_process_type}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw_process_retcode=${EXITCODE_ERROR}
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  # pluginインストールディレクトリ
+  local _process_plugin_dir="$(stfw.domain.service.spec.process.plugin_installed_dir ${_process_type})"
+
+  # plugin設定読み込み
+  private.export_config "${_process_plugin_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw_process_retcode=${EXITCODE_ERROR}
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  # setup
+  private.stfw.domain.service.process.setup "${_trg_process_dir}"
+  stfw_process_retcode=$?
+  if [[ ${stfw_process_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${stfw_process_retcode}
+    return ${stfw_process_retcode}
+  fi
+
+  # pre_execute
+  stfw.domain.service.process.execute.pre_execute "${_process_plugin_dir}" "${_trg_process_dir}"
+  stfw_process_retcode=$?
+  if [[ ${stfw_process_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
+    private.stfw.domain.service.process.teardown "${_trg_process_dir}"
+    stfw.log.func_end_trace ${stfw_process_retcode}
+    return ${stfw_process_retcode}
+  fi
+
+  # execute
+  stfw.domain.service.process.execute.execute "${_process_plugin_dir}" "${_trg_process_dir}"
+  stfw_process_retcode=$?
+  if [[ ${stfw_process_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
+    private.stfw.domain.service.process.teardown "${_trg_process_dir}"
+    stfw.log.func_end_trace ${stfw_process_retcode}
+    return ${stfw_process_retcode}
+  fi
+
+  # post_execute
+  stfw.domain.service.process.execute.post_execute "${_process_plugin_dir}" "${_trg_process_dir}"
+  stfw_process_retcode=$?
+
+  # teardown
+  private.stfw.domain.service.process.teardown "${_trg_process_dir}"
+
+  stfw.log.func_end_trace ${stfw_process_retcode}
+  return ${stfw_process_retcode}
+}
+
+
+function private.stfw.domain.service.process.setup() {
+  local _trg_process_dir="${1:?}"
+
+  # validate
+  stfw.domain.service.spec.process.can_setup "${_trg_process_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # embedded plugin
+  stfw.domain.service.process.embedded.setup "${_trg_process_dir}"
+  local _retcode=$?
+
+  # project plugin
+  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.domain.service.process.project.setup "${_trg_process_dir}"
+    _retcode=$?
+  fi
+
+  return ${_retcode}
+}
+
+
+function private.stfw.domain.service.process.teardown() {
+  local _trg_process_dir="${1:?}"
+
+  # validate
+  stfw.domain.service.spec.process.can_teardown "${_trg_process_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # project plugin
+  stfw.domain.service.process.project.teardown "${_trg_process_dir}"
+  local _retcode=$?
+
+  # embedded plugin
+  stfw.domain.service.process.embedded.teardown "${_trg_process_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    _retcode=${EXITCODE_ERROR}
+  fi
+
+  return ${_retcode}
+}
+
+
+function private.export_config() {
+  local _plugin_path="${1:?}"
+
+  # プラグイン設定の読み込み
+  export_yaml "${_plugin_path}/config.yml"
+  local _retcode=$?
+  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # プロジェクト設定の読み込み
+  local _process_type=$(basename "${_plugin_path}")
+  path_project_config="${STFW_PROJ_DIR_CONFIG}/plugins/process/${_process_type}/config.yml"
+  if [[ -f "${path_project_config}" ]]; then
+    export_yaml "${path_project_config}"
+    _retcode=$?
+  fi
+
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# query
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.process.list() {
+  stfw.log.func_start_trace
+
+  stfw.domain.repository.process.list
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.process.get_install_result() {
+  stfw.log.func_start_trace "$@"
+  local _process_type="${1:?}"
+
+  local _process_plugin_dir="$(stfw.domain.service.spec.process.plugin_installed_dir ${_process_type})"
+  local _dirname="$(basename ${_process_plugin_dir})"
+  (
+    cd "${_process_plugin_dir}/.."
+    find "${_dirname}" -type f
+  )
+
+  stfw.log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.domain.service.process.get_initialize_result() {
+  stfw.log.func_start_trace "$@"
+  local _bizdate_dir="${1:?}"
+  local _process_type="${2:?}"
+  local _seq="${3:?}"
+  local _group="${4:?}"
+
+  local _dirname_process=$(stfw.domain.service.spec.process.dirname "${_process_type}" "${_seq}" "${_group}")
+  (
+    cd "${_bizdate_dir}"
+    find "${_dirname_process}" -type f
+  )
+
+  stfw.log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}

@@ -1,0 +1,136 @@
+#!/bin/bash
+#===================================================================================================
+#
+# webhook outputport
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/webhook_service"
+
+
+function stfw.usecase.outputport.webhook.run_start_finished() {
+  stfw.log.func_start_debug "$@"
+  local _inputport_exitcode="${1:?}"
+#  local _run_id="${2:?}"
+
+  if [[ ${_inputport_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
+    stfw.domain.service.webhook.get_start_payload                                                  |
+    private.stfw.usecase.outputport.webhook.logging_result
+  fi
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.usecase.outputport.webhook.run_end_finished() {
+  stfw.log.func_start_debug "$@"
+  local _inputport_exitcode="${1:?}"
+#  local _run_id="${2:?}"
+
+  if [[ ${_inputport_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
+    stfw.domain.service.webhook.get_end_payload                                                    |
+    private.stfw.usecase.outputport.webhook.logging_result
+  fi
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.usecase.outputport.webhook.scenario_start_finished() {
+  stfw.log.func_start_debug "$@"
+  local _inputport_exitcode="${1:?}"
+#  local _scenario_dir="${2:?}"
+
+  if [[ ${_inputport_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
+    stfw.domain.service.webhook.get_start_payload                                                  |
+    private.stfw.usecase.outputport.webhook.logging_result
+  fi
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.usecase.outputport.webhook.scenario_end_finished() {
+  stfw.log.func_start_debug "$@"
+  local _inputport_exitcode="${1:?}"
+#  local _scenario_dir="${2:?}"
+
+  if [[ ${_inputport_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
+    stfw.domain.service.webhook.get_end_payload                                                    |
+    private.stfw.usecase.outputport.webhook.logging_result
+  fi
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.usecase.outputport.webhook.bizdate_start_finished() {
+  stfw.log.func_start_debug "$@"
+  local _inputport_exitcode="${1:?}"
+#  local _bizdate_dir="${2:?}"
+
+  if [[ ${_inputport_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
+    stfw.domain.service.webhook.get_start_payload                                                  |
+    private.stfw.usecase.outputport.webhook.logging_result
+  fi
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.usecase.outputport.webhook.bizdate_end_finished() {
+  stfw.log.func_start_debug "$@"
+  local _inputport_exitcode="${1:?}"
+#  local _bizdate_dir="${2:?}"
+
+  if [[ ${_inputport_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
+    stfw.domain.service.webhook.get_end_payload                                                    |
+    private.stfw.usecase.outputport.webhook.logging_result
+  fi
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.usecase.outputport.webhook.process_start_finished() {
+  stfw.log.func_start_debug "$@"
+  local _inputport_exitcode="${1:?}"
+#  local _process_dir="${2:?}"
+#  local _process_type="${3:?}"
+
+  if [[ ${_inputport_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
+    stfw.domain.service.webhook.get_start_payload                                                  |
+    private.stfw.usecase.outputport.webhook.logging_result
+  fi
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.usecase.outputport.webhook.process_end_finished() {
+  stfw.log.func_start_debug "$@"
+  local _inputport_exitcode="${1:?}"
+#  local _process_dir="${2:?}"
+#  local _process_type="${3:?}"
+
+  if [[ ${_inputport_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
+    stfw.domain.service.webhook.get_end_payload                                                    |
+    private.stfw.usecase.outputport.webhook.logging_result
+  fi
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function private.stfw.usecase.outputport.webhook.logging_result() {
+  cat -                                                                                            |
+  sed -e 's|^payload:|result:|'                                                                    |
+  log.info
+}

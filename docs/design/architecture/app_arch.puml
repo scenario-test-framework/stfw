@@ -1,0 +1,89 @@
+@startuml
+/'-------------------------------------------------------
+    定義
+  -------------------------------------------------------'/
+actor user
+agent sub_proc
+component digdag
+component other_system
+
+package cmd {
+  boundary stfw
+  boundary sub_cmd
+
+  boundary plugin_script
+}
+package adapter {
+  control controller
+}
+package usecase {
+  control inputport
+  control outputport
+}
+package domain {
+  control service
+  control spec
+  control repository
+  control gateway
+}
+
+entity stfw.yml
+entity output_files
+entity config_files
+
+
+/'-------------------------------------------------------
+    呼び出し
+  -------------------------------------------------------'/
+user -> stfw
+digdag -up-> stfw
+stfw -> sub_cmd
+note left : \
+■方針\n\
+  役割の明確化が目的なので、 \n\
+  CleanArchitectureの役割だけ採用します。 \n\
+  interface / DIなしで直接参照させます。 \n
+sub_proc -> plugin_script
+
+
+sub_cmd -down-> controller
+plugin_script -down-> controller
+note right : \
+presenterは利用しません。\n\
+outputportに出力ロジックを持たます。\n
+
+
+controller -down-> inputport
+note right : \
+interactorは利用しません。\n\
+controllerがin/outputportを直接呼び出します。\n
+controller -down-> outputport
+
+
+inputport -down-> service
+outputport -down-> service
+
+
+service -down-> spec
+service -right-> repository
+repository -down-> gateway
+repository -down-> spec
+note right : \
+ロジックが複雑になってしまうので、entityは一旦使用しません。\n\
+repository/gatewayの実装はdomainレイヤで持ちます。\n\
+  service : トランザクションスクリプト\n\
+  spec : チェック仕様、ID/パス/定数などの定義\n\
+  repository : データアクセス\n\
+  gateway : 外部連携\n
+
+
+gateway --> digdag
+gateway --> other_system
+
+
+stfw <.. stfw.yml
+repository <.. config_files
+repository ..> output_files
+
+
+@enduml

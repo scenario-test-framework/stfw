@@ -1,0 +1,40 @@
+#!/bin/bash
+#===================================================================================================
+#
+# server specification
+#
+#===================================================================================================
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# feature
+#
+#---------------------------------------------------------------------------------------------------
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# validation
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.spec.server.can_start() {
+  # 多重起動チェック
+  if [ -f ${PATH_PROJ_PID:?} ]; then
+    log.error_oneline "stfw server process has already running. (PID-file:${PATH_PROJ_PID} is exist.)"
+    return ${EXITCODE_ERROR}
+  fi
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.domain.service.spec.server.can_stop() {
+  # 停止中チェック
+  if [ ! -f ${PATH_PROJ_PID:?} ]; then
+    log.error_oneline "stfw server process is NOT running."
+    return ${EXITCODE_ERROR}
+  fi
+
+  return ${EXITCODE_SUCCESS}
+}

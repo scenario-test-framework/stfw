@@ -2,7 +2,7 @@
 #set -ex
 #===================================================================================================
 #
-# scenario test framework cli - process command
+# process command
 #
 #===================================================================================================
 #---------------------------------------------------------------------------------------------------
@@ -11,12 +11,9 @@
 dir_script="$(dirname $0)"
 cd "$(cd ${dir_script}; pwd)"
 
-# 共通設定
 readonly STFW_HOME="$(cd ../..; pwd)"
 . "${STFW_HOME}/bin/lib/setenv"
-
-# stfw generate共通ユーティリティ
-. "${DIR_BIN_LIB}/stfw_generate_utils"
+. "${DIR_BIN_LIB}/stfw/adapter/cli/process_controller"
 
 readonly PROGNAME="stfw $(basename $0)"
 
@@ -35,8 +32,8 @@ usage: ${PROGNAME} [options...]
 
 options:
   -l, --list                              : list process plugin
-  -I, --install <process-name>            : install process plugin dependencies
-  -i, --init <seq> <group> <process-name> : generate scaffold to current directory
+  -I, --install <process-type>            : install process plugin dependencies
+  -i, --init <seq> <group> <process-type> : generate scaffold to current directory
   -d, --dry-run <exec-dir>                : run setup, pre_execute, teardown
   -r, --run <exec-dir>                    : run setup, pre_execute, execute, post_execute, teardown
 
@@ -45,259 +42,13 @@ __EOT__
 }
 
 
-function private.export_config() {
-  local _plugin_path="$1"
-
-  local _retcode=${EXITCODE_SUCCESS}
-
-  # プラグイン設定の読み込み
-  export_yaml "${_plugin_path}/config.yml"
-  _retcode=$?
-
-  # プロジェクト設定の読み込み
-  local _plugin_name=$(basename "${_plugin_path}")
-  path_project_config="${STFW_PROJ_DIR_CONFIG}/plugins/process/${_plugin_name}/config.yml"
-  if [[ -f "${path_project_config}" ]]; then export_yaml "${path_project_config}"; fi
-
-  return ${_retcode}
-}
-
-
-function private.init() {
-  log.func_start_trace "$@"
-
-  local _plugin_path="$1"
-  local _seq="$2"
-  local _group="$3"
-
-  log.trace "cd \"${STFW_EXEC_DIR}\""
-  cd "${STFW_EXEC_DIR}"
-
-  # カレントディレクトリが scenario-bizdate-dir 以外の場合、エラー
-  if [[ "$(stfw.is_in_scenario-bizdate-dir)" != "true" ]]; then
-    log.error "current dir: $(pwd) is not scenario-bizdate-dir."
-    return ${EXITCODE_ERROR}
-  fi
-
-  # テンプレートが存在しない場合、エラー
-  if [[ ! -d "${_plugin_path}/template" ]]; then
-    log.error "${_plugin_path}/template is not exist."
-    return ${EXITCODE_ERROR}
-  fi
-
-  # テンプレートをコピー
-  local _name_process=$(basename "${_plugin_path}")
-  local _dirname_process="_${_seq}_${_group}_${_name_process}"
-  if [[ -d "${_dirname_process}" ]]; then rm -fr "${_dirname_process}"; fi
-  mkdir "${_dirname_process}"
-  cp -pr "${_plugin_path}/template/"* ./${_dirname_process}/
-
-  # メタ情報ファイルを作成
-  stfw.generate.meta "$(pwd)/${_dirname_process}"
-
-  # 結果を表示
-  log.info "result:"
-  log.add_indent
-  find "${_dirname_process}" -type f | log.info
-  log.remove_indent
-
-  log.trace "cd -"
-  cd - >/dev/null 2>&1
-
-  log.func_end_trace ${EXITCODE_SUCCESS}
-  return ${EXITCODE_SUCCESS}
-}
-
-
-function private.process_setup() {
-  log.func_start_trace
-  local _retcode=${EXITCODE_SUCCESS}
-
-  # 組み込みplugin.setup
-  local _sect_name="process-embedded-setup"
-  log.sect_start_debug "${_sect_name}"
-  local _dir_embed_setup="${DIR_PLUGIN}/process/__common/setup"
-  stfw.bulk_exec_scripts "${_dir_embed_setup}"
-  _retcode=$?
-  log.sect_end_debug "${_sect_name}" "${_retcode}"
-  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then return ${_retcode}; fi
-
-  # プロジェクトplugin.setup
-  _sect_name="process-project-setup"
-  log.sect_start_debug "${_sect_name}"
-  local _dir_proj_setup="$(stfw.get_plugin_path process/_common/setup)"
-  if [[ "${_dir_proj_setup}x" != "x" ]]; then
-    stfw.bulk_exec_scripts "${_dir_proj_setup}"
-    _retcode=$?
-  fi
-  log.sect_end_debug "${_sect_name}" "${_retcode}"
-
-  log.func_end_trace ${_retcode}
-  return ${_retcode}
-}
-
-
-function private.process_teardown() {
-  log.func_start_trace
-  local _retcode=${EXITCODE_SUCCESS}
-
-  # プロジェクトplugin.teardown
-  local _sect_name="process-project-teardown"
-  log.sect_start_debug "${_sect_name}"
-  local _dir_proj_teardown="$(stfw.get_plugin_path process/_common/teardown)"
-  if [[ "${_dir_proj_teardown}x" != "x" ]]; then
-    stfw.bulk_exec_scripts "${_dir_proj_teardown}"
-    _retcode=$?
-  fi
-  log.sect_end_debug "${_sect_name}" "${_retcode}"
-  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
-    # エラー時は、stfw_process_retcodeを上書き
-    stfw_process_retcode=${_retcode}
-    return ${_retcode}
-  fi
-
-  # 組み込みplugin.teardown
-  _sect_name="process-embedded-teardown"
-  log.sect_start_debug "${_sect_name}"
-  local _dir_embed_teardown="${DIR_PLUGIN}/process/__common/teardown"
-  stfw.bulk_exec_scripts "${_dir_embed_teardown}"
-  _retcode=$?
-  log.sect_end_debug "${_sect_name}" "${_retcode}"
-  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
-    # エラー時は、stfw_process_retcodeを上書き
-    stfw_process_retcode=${_retcode}
-  fi
-
-  log.func_end_trace ${_retcode}
-  return ${_retcode}
-}
-
-function private.dry_run() {
-  log.func_start_trace "$@"
-  export stfw_process_retcode=${EXITCODE_SUCCESS}
-
-  local _plugin_path="$1"
-  local _trg_process_dir="$2"
-
-  # インストール済み確認
-  local _is_installed=$(stfw.process.is_installed "${_plugin_path}")
-  if [[ "${_is_installed}" != "true" ]]; then
-    log.info "${_plugin_path} is not installed."
-    return ${EXITCODE_ERROR}
-  fi
-
-  log.trace "cd \"${trg_process_dir}\""
-  cd "${trg_process_dir}"
-
-  local _retcode=${EXITCODE_SUCCESS}
-
-  # setup
-  private.process_setup
-  stfw_process_retcode=$?
-  if [[ ${stfw_process_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
-    cd - >/dev/null 2>&1
-    return ${stfw_process_retcode}
-  fi
-
-  # pre_execute
-  local _sect_name="pre_execute"
-  log.sect_start_debug "${_sect_name}"
-  "${_plugin_path}/bin/run/pre_execute" "${_trg_process_dir}"
-  stfw_process_retcode=$?
-  log.sect_end_debug "${_sect_name}" "${_retcode}"
-
-  # teardown
-  private.process_teardown
-
-  log.trace "cd -"
-  cd - >/dev/null 2>&1
-
-  log.func_end_trace ${stfw_process_retcode}
-  return ${stfw_process_retcode}
-}
-
-
-function private.run() {
-  log.func_start_trace "$@"
-  export stfw_process_retcode=${EXITCODE_SUCCESS}
-
-  local _plugin_path="$1"
-  local _trg_process_dir="$2"
-
-  # インストール済み確認
-  local _is_installed=$(stfw.process.is_installed "${_plugin_path}")
-  if [[ "${_is_installed}" != "true" ]]; then
-    log.info "${_plugin_path} is not installed."
-    return ${EXITCODE_ERROR}
-  fi
-
-  log.trace "cd \"${trg_process_dir}\""
-  cd "${trg_process_dir}"
-
-  local _retcode=${EXITCODE_SUCCESS}
-
-  # setup
-  private.process_setup
-  stfw_process_retcode=$?
-  if [[ ${stfw_process_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
-    cd - >/dev/null 2>&1
-    return ${stfw_process_retcode}
-  fi
-
-  # pre_execute
-  local _sect_name="pre_execute"
-  log.sect_start_debug "${_sect_name}"
-  "${_plugin_path}/bin/run/pre_execute" "${_trg_process_dir}"
-  stfw_process_retcode=$?
-  log.sect_end_debug "${_sect_name}" "${_retcode}"
-  if [[ ${stfw_process_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
-    private.process_teardown
-    return ${stfw_process_retcode}
-  fi
-
-  # execute
-  _sect_name="execute"
-  log.sect_start_debug "${_sect_name}"
-  "${_plugin_path}/bin/run/execute" "${_trg_process_dir}"
-  stfw_process_retcode=$?
-  log.sect_end_debug "${_sect_name}" "${_retcode}"
-  if [[ ${stfw_process_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
-    private.process_teardown
-    return ${stfw_process_retcode}
-  fi
-
-  # post_execute
-  _sect_name="post_execute"
-  log.sect_start_debug "${_sect_name}"
-  "${_plugin_path}/bin/run/post_execute" "${_trg_process_dir}"
-  stfw_process_retcode=$?
-  log.sect_end_debug "${_sect_name}" "${_retcode}"
-  if [[ ${stfw_process_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
-    private.process_teardown
-    return ${stfw_process_retcode}
-  fi
-
-  # teardown
-  private.process_teardown
-
-  log.trace "cd -"
-  cd - >/dev/null 2>&1
-
-  log.func_end_trace ${stfw_process_retcode}
-  return ${stfw_process_retcode}
-}
-
-
 #---------------------------------------------------------------------------------------------------
-# 事前処理
-#---------------------------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------
 # オプション解析
-#-------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------
 # 実行コマンド
-cmd=""
-# プロセス名
-process_name=""
+cmd="list"
+# プロセスタイプ
+process_type=""
 # プロセス実行ディレクトリ
 trg_process_dir=""
 
@@ -310,75 +61,59 @@ while :; do
 
     -h|--help)
       private.usage
-      exit ${EXITCODE_ERROR}
       ;;
 
     -l|--list)
-      stfw.process.list
-      exit $?
+      cmd="list"
+      shift
+      break
       ;;
 
     -I|--install)
-      if [[ "${cmd}x" != "x" ]]; then private.usage; fi
       cmd="install"
 
       # プロセス名
-      process_name="$2"
+      process_type="$2"
       shift 2
+      break
       ;;
 
     -i|--init)
-      if [[ "${cmd}x" != "x" ]]; then private.usage; fi
       if [[ $# -lt 4 ]]; then private.usage; fi
       cmd="init"
 
       # 連番
       seq="$2"
-      if [[ "${seq//[0-9]/}x" != "x" ]]; then
-        log.error "seq must be number."
-        exit ${EXITCODE_ERROR}
-      fi
+      checks.must_be_number "${seq}"
 
       # グループ名
       group="$3"
 
       # プロセス名
-      process_name="$4"
+      process_type="$4"
       shift 4
+      break
       ;;
 
     -r|--run)
-      if [[ "${cmd}x" != "x" ]]; then private.usage; fi
       if [[ $# -lt 2 ]]; then private.usage; fi
       cmd="run"
 
       # プロセスディレクトリ
       trg_process_dir="$2"
-      if [[ ! -d "${trg_process_dir}" ]]; then
-        log.error "${trg_process_dir} is not exist."
-        exit ${EXITCODE_ERROR}
-      fi
-
-      # プロセス名
-      process_name="$(basename ${trg_process_dir} | cut -d '_' -f 4)"
+      checks.must_exist_dir "${trg_process_dir}"
       shift 2
+      break
       ;;
 
     -d|--dry-run)
-      if [[ "${cmd}x" != "x" ]]; then private.usage; fi
       if [[ $# -lt 2 ]]; then private.usage; fi
       cmd="dry-run"
 
       # プロセスディレクトリ
       trg_process_dir="$2"
-      if [[ ! -d "${trg_process_dir}" ]]; then
-        log.error "${trg_process_dir} is not exist."
-        exit ${EXITCODE_ERROR}
-      fi
-
-      # プロセス名
-      process_name="$(basename ${trg_process_dir} | cut -d '_' -f 4)"
-      shift 2
+      checks.must_exist_dir "${trg_process_dir}"
+      break
       ;;
 
     --)
@@ -392,56 +127,37 @@ while :; do
   esac
 done
 
-# コマンド確認
-if [[ "${cmd}x" = "x" ]]; then private.usage; fi
-
-
-#-------------------------------------------------------------------------------
-# 引数解析
-#-------------------------------------------------------------------------------
-# プロセス名が、プロジェクト/組込みpluginどちらにも存在しない場合、エラー
-plugin_path="$(stfw.process.get_path ${process_name})"
-if [[ "${process_name}x" != "x" ]] && [[ "${plugin_path}x" = "x" ]]; then
-  log.error "process-plugin: ${process_name} is not exist."
-  exit ${EXITCODE_ERROR}
-fi
-
 
 #---------------------------------------------------------------------------------------------------
-# 本処理
-#---------------------------------------------------------------------------------------------------
-log.script_start "${PROGNAME} ${cmd}"
-
-#-------------------------------------------------------------------------------
-# plugin設定読み込み
-#-------------------------------------------------------------------------------
-private.export_config "${plugin_path}"
-
-#-------------------------------------------------------------------------------
 # コマンド実行
-#-------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------
+stfw.log.script_start "${PROGNAME} ${cmd}"
+
 case ${cmd} in
   install)
-    stfw.process.install "${plugin_path}"
+    stfw.adapter.cli.process_controller.install "${process_type}" 2>&1 | log.tee
+    exitcode=${PIPESTATUS[0]}
     ;;
-
+  list)
+    stfw.adapter.cli.process_controller.list
+    exitcode=$?
+    ;;
   init)
-    private.init "${plugin_path}" "${seq}" "${group}"
+    stfw.adapter.cli.process_controller.init "${process_type}" "${seq}" "${group}" 2>&1 | log.tee
+    exitcode=${PIPESTATUS[0]}
     ;;
-
   run)
-    private.run "${plugin_path}" "${trg_process_dir}"
+    stfw.adapter.cli.process_controller.run "${trg_process_dir}" 2>&1 | log.tee
+    exitcode=${PIPESTATUS[0]}
     ;;
-
   dry-run)
-    private.dry_run "${plugin_path}" "${trg_process_dir}"
+    stfw.adapter.cli.process_controller.dry_run "${trg_process_dir}" 2>&1 | log.tee
+    exitcode=${PIPESTATUS[0]}
     ;;
-
   *)
     private.usage
     ;;
 esac
-exitcode=$?
 
-log.script_end "${PROGNAME} ${cmd}" "${exitcode}"
+stfw.log.script_end "${PROGNAME} ${cmd}" "${exitcode}"
 exit ${exitcode}

@@ -1,0 +1,30 @@
+#!/bin/bash
+#===================================================================================================
+#
+# run.embedded_plugin service
+#
+#===================================================================================================
+
+
+function stfw.domain.service.run.embedded.setup() {
+  stfw.log.func_start_trace
+
+  local _dir_embed_setup="${DIR_PLUGIN}/run/__common/setup"
+  stfw.bulk_exec_scripts "${_dir_embed_setup}"
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.run.embedded.teardown() {
+  stfw.log.func_start_trace
+
+  local _dir_embed_teardown="${DIR_PLUGIN}/run/__common/teardown"
+  stfw.bulk_exec_scripts "${_dir_embed_teardown}"
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}

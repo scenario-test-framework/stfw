@@ -3,18 +3,18 @@ payload:
   parent_id: ${webhook_parent_id}
   type: "${webhook_type}"
   status: "${webhook_status}"
-  create_time: "$(timestamp_to_iso $(date '+%Y%m%d%H%M%S'))"
+  create_time: "${webhook_create_time}"
   start_time: "${webhook_start_time}"
   end_time: "${webhook_end_time}"
   processing_time: "${webhook_processing_time}"
   stfw:
-    host: "$(get_ip)"
-    user: "$(whoami)"
+    host: "${webhook_stfw_host}"
+    user: "${webhook_stfw_user}"
     home: "${STFW_HOME}"
     version: "${STFW_VERSION}"
     digdag:
-      url: "http://$(get_ip):${stfw_server_port}/"
-      version: "$(stfw.get_digdag_version)"
+      url: "${webhook_digdag_url}"
+      version: "${webhook_digdag_version}"
     project:
-      home: "$(stfw.project_home)"
+      home: "${webhook_stfw_proj_home}"
       version: "${stfw_project_version}"

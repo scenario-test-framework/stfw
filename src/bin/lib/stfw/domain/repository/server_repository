@@ -1,0 +1,19 @@
+#!/bin/bash
+#===================================================================================================
+#
+# server repository
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/gateway/digdag_gateway"
+
+
+function stfw.domain.repository.server.start() {
+  stfw.domain.gateway.digdag.server.start
+  return $?
+}
+
+
+function stfw.domain.repository.server.stop() {
+  stfw.domain.gateway.digdag.server.stop
+  return $?
+}

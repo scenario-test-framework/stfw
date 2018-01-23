@@ -2,7 +2,7 @@
 #set -ex
 #===================================================================================================
 #
-# scenario test framework cli - init command
+# init command
 #
 #===================================================================================================
 #---------------------------------------------------------------------------------------------------
@@ -11,12 +11,9 @@
 dir_script="$(dirname $0)"
 cd "$(cd ${dir_script}; pwd)"
 
-# 共通設定
 readonly STFW_HOME="$(cd ../..; pwd)"
 . "${STFW_HOME}/bin/lib/setenv"
-
-# stfw generate共通ユーティリティ
-. "${DIR_BIN_LIB}/stfw_generate_utils"
+. "${DIR_BIN_LIB}/stfw/adapter/cli/project_controller"
 
 readonly PROGNAME="stfw $(basename $0)"
 
@@ -37,39 +34,10 @@ __EOT__
   exit ${EXITCODE_ERROR}
 }
 
-function private.init() {
-  log.func_start_trace
-  # 初期化済みの場合、エラー
-  if [[ -f "${STFW_PROJ_DIR}/${FILENAME_SYSTEM_CONFIG}" ]]; then
-    log.error "${STFW_PROJ_DIR} is already initialized."
-    return ${EXITCODE_ERROR}
-  fi
-
-  # コピー
-  log.trace "cp -pr \"${DIR_TEMPLATE}/\"* \"${STFW_PROJ_DIR}/\""
-  cp -pr "${DIR_TEMPLATE}/"* "${STFW_PROJ_DIR}/"
-
-  # 結果を表示
-  log.info "result:"
-  log.add_indent
-  find "${STFW_PROJ_DIR}" -type f                                                                  | # ファイルパスリストから
-  sed -e "s|${STFW_PROJ_DIR}/||"                                                                   | # 相対パスに変換
-  grep -v ".stfw/"                                                                                 | # stfwデータディレクトリを除外
-  grep -v ".digdag/"                                                                               | # digdagデータディレクトリを除外
-  log.info
-  log.remove_indent
-
-  log.func_end_trace ${EXITCODE_SUCCESS}
-  return ${EXITCODE_SUCCESS}
-}
-
 
 #---------------------------------------------------------------------------------------------------
-# 事前処理
-#---------------------------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------
 # オプション解析
-#-------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------
 while :; do
   case $1 in
     --description)
@@ -79,7 +47,6 @@ while :; do
 
     -h|--help)
       private.usage
-      exit ${EXITCODE_ERROR}
       ;;
 
     --)
@@ -95,13 +62,13 @@ done
 
 
 #---------------------------------------------------------------------------------------------------
-# 本処理
+# コマンド実行
 #---------------------------------------------------------------------------------------------------
-log.script_start "${PROGNAME}"
+stfw.log.script_start "${PROGNAME}"
 
 # 初期化
-private.init
-exitcode=$?
+stfw.adapter.cli.project_controller.init 2>&1 | log.tee
+exitcode=${PIPESTATUS[0]}
 
-log.script_end "${PROGNAME}" "${exitcode}"
+stfw.log.script_end "${PROGNAME}" "${exitcode}"
 exit ${exitcode}

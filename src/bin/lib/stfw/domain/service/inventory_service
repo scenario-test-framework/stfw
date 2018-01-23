@@ -1,0 +1,60 @@
+#!/bin/bash
+#===================================================================================================
+#
+# inventory service
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/spec/inventory_spec"
+. "${DIR_BIN_LIB}/stfw/domain/repository/inventory_repository"
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# command
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.inventory.list_requested() {
+  stfw.log.func_start_trace "$@"
+  local _group="${1:?}"
+
+  # validate
+  stfw.domain.service.spec.inventory.can_list "${_group}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  local _path_config=$(stfw.domain.service.spec.inventory.config)
+  stfw.domain.repository.inventory.list_group_hosts "${_path_config}" "${_group}"
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.inventory.is_exist_group_requested() {
+  stfw.log.func_start_trace "$@"
+  local _group="${1:?}"
+
+  # validate
+  stfw.domain.service.spec.inventory.can_is_exist_group "${_group}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  local _path_config=$(stfw.domain.service.spec.inventory.config)
+  stfw.domain.repository.inventory.is_exist_group "${_path_config}" "${_group}"
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# query
+#
+#---------------------------------------------------------------------------------------------------

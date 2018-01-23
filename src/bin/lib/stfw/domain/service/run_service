@@ -1,0 +1,139 @@
+#!/bin/bash
+#===================================================================================================
+#
+# run service
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/spec/run_spec"
+. "${DIR_BIN_LIB}/stfw/domain/service/sub/run/embedded_plugin_service"
+. "${DIR_BIN_LIB}/stfw/domain/service/sub/run/project_plugin_service"
+. "${DIR_BIN_LIB}/stfw/domain/repository/run_repository"
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# command
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.run.run_on_server_requested() {
+  stfw.log.func_start_trace "$@"
+  local _run_opt="${1:?}"
+  shift
+  local _target_scenarios=( "$@" )
+
+  # validate
+  stfw.domain.service.spec.run.can_run_on_server "${_run_opt}" "${_target_scenarios[@]}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  # run id 発行
+  local _run_id=$(stfw.domain.service.spec.run.run_id)
+
+  # digdagでの実行がscenarioのsymlinkで動くようにpush
+  stfw.domain.repository.run.push_digdag_proj "${_run_id}" "${_run_opt}" "${_target_scenarios[@]}"
+  local _retcode=$?
+  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${_retcode}
+  fi
+
+  # digdag start
+  stfw.domain.repository.run.start "${_run_id}"
+  _retcode=$?
+  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${_retcode}
+  fi
+
+  # attempt id を context に保存
+  local _attempt_id=$(stfw.domain.repository.run.get_attempt_id "${_run_id}")
+  if [[ "${_attempt_id}x" = "x" ]]; then
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${_retcode}
+  fi
+  stfw.context.put "$(stfw.domain.service.spec.run.key_attempt_id)" "${_attempt_id}"
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.run.follow_log_requested() {
+  stfw.log.func_start_trace
+
+  # validate
+  local _run_id="$(stfw.domain.service.spec.run.run_id)"
+  local _attempt_id="$(stfw.domain.service.spec.run.attempt_id)"
+  stfw.domain.service.spec.run.can_follow_log "${_run_id}" "${_attempt_id}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  # log follow
+  stfw.domain.repository.run.log_follow "${_run_id}" "${_attempt_id}"
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.run.setup() {
+  stfw.log.func_start_trace
+
+  # validate
+
+  # embedded plugin
+  stfw.domain.service.run.embedded.setup
+  local _retcode=$?
+
+  # project plugin
+  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.domain.service.run.project.setup
+    _retcode=$?
+  fi
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.run.teardown() {
+  stfw.log.func_start_trace
+
+  # validate
+
+  # project plugin
+  stfw.domain.service.run.project.teardown
+  local _retcode=$?
+
+  # embedded plugin
+  stfw.domain.service.run.embedded.teardown
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    _retcode=${EXITCODE_ERROR}
+  fi
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# query
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.run.get_start_info() {
+  local _run_id="$(stfw.domain.service.spec.run.run_id)"
+  stfw.domain.repository.run.show_start_info "${_run_id}"
+}
+
+
+function stfw.domain.service.run.get_attempt_url() {
+  local _attempt_id=$(stfw.domain.service.spec.run.attempt_id)
+  local _ip="$(get_ip)"
+  echo "http://${_ip}:${stfw_server_port:?}/attempts/${_attempt_id}"
+}

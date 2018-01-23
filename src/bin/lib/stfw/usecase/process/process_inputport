@@ -1,0 +1,169 @@
+#!/bin/bash
+#===================================================================================================
+#
+# process inputport
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/process_service"
+
+
+#---------------------------------------------------------------------------------------------------
+# インストール済みprocess plugin表示
+#
+# 概要
+#   インストール済みのprocess pluginを一覧表示します。
+#
+# 引数
+#   なし
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     process plugin type
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.usecase.inputport.process.list_requested() {
+  stfw.log.func_start_debug
+
+  # インストール済みprocess plugin一覧
+  stfw.domain.service.process.list
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# インストール
+#
+# 概要
+#   プロセスプラグインをインストールします。
+#
+# 引数
+#   1: global installフラグ
+#   2: プロセスタイプ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     global : ${STFW_HOME}/plugins/${プロセスタイプ}
+#     project: ${STFW_PROJ_DIR}/plugins/${プロセスタイプ}
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.usecase.inputport.process.install_requested() {
+  stfw.log.func_start_debug "$@"
+  local _is_global="${1:?}"
+  local _process_type="${2:?}"
+
+  stfw.domain.service.process.install_requested "${_is_global}" "${_process_type}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# 初期化
+#
+# 概要
+#   ディレクトリを初期化します。
+#
+# 引数
+#   1: 業務日付ディレクトリ
+#   2: プロセスタイプ
+#   3: 連番
+#   4: グループ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     _{連番}_{グループ}_${プロセスタイプ}/
+#       metadata.yml
+#       ${プロセスタイプ毎のテンプレート構成}/
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.usecase.inputport.process.initialize_requested() {
+  stfw.log.func_start_debug "$@"
+  local _bizdate_dir="${1:?}"
+  local _process_type="${2:?}"
+  local _seq="${3:?}"
+  local _group="${4:?}"
+
+  stfw.domain.service.process.initialize_requested                                                 \
+    "${_bizdate_dir}" "${_process_type}" "${_seq}" "${_group}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# リハーサル実行
+#
+# 概要
+#   対象プロセスをリハーサル実行します。
+#
+# 引数
+#   1: プロセスディレクトリ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.usecase.inputport.process.dry_run_requested() {
+  stfw.log.func_start_debug "$@"
+  local _trg_process_dir="${1:?}"
+
+  stfw.domain.service.process.dry_run_requested "${_trg_process_dir}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# 実行
+#
+# 概要
+#   対象プロセスを実行します。
+#
+# 引数
+#   1: プロセスディレクトリ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.usecase.inputport.process.run_requested() {
+  stfw.log.func_start_debug "$@"
+  local _trg_process_dir="${1:?}"
+
+  stfw.domain.service.process.run_requested "${_trg_process_dir}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}

@@ -1,0 +1,95 @@
+#!/bin/bash
+# 依存
+#   logging
+
+function checks.must_not_null() {
+  local _name="$1"
+  local _value="$2"
+  if [[ "${_value}x" = "x" ]]; then
+    log.error "${_name} must not null."
+    return 1
+  fi
+}
+
+
+function checks.must_be_number() {
+  if [[ "${1//[0-9]/}x" != "x" ]]; then
+    log.error "$1 must be number."
+    return 1
+  fi
+}
+
+
+function checks.must_be_boolean() {
+  if [[ "${1//[true|false]/}x" != "x" ]]; then
+    log.error "$1 must be boolean."
+    return 1
+  fi
+}
+
+
+function checks.must_be_date_format() {
+  if [[ ${#1} -ne 8 ]] || [[ "${1//[0-9]/}x" != "x" ]]; then
+    log.error "$1 must be YYYYMMDD format."
+    return 1
+  fi
+}
+
+
+function checks.must_not_contains() {
+  local _target="$1"
+  local _phrase="$2"
+  local _replaced_target="${_target//${_phrase}/}"
+  if [[ "${_target}" != "${_replaced_target}" ]]; then
+    log.error "\"${_target}\" can not contains \"_phrase\"."
+    return 1
+  fi
+}
+
+function checks.mkdirs() {
+  if [[ -d "$1" ]]; then return 0; fi
+
+  mkdir -p "$1"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    log.error "dir: $1 could not create."
+    return 1
+  fi
+}
+
+
+function checks.must_exist_dir() {
+  if [[ ! -d "$1" ]]; then
+    log.error "dir: $1 is not exist."
+    return 1
+  fi
+}
+function checks.should_exist_dir() {
+  if [[ ! -d "$1" ]]; then
+    log.warn "dir: $1 is not exist."
+    return 1
+  fi
+}
+
+
+function checks.must_not_exist_dir() {
+  if [[ -d "$1" ]]; then
+    log.error "dir: $1 is already exist."
+    return 1
+  fi
+}
+
+
+function checks.must_exist_file() {
+  if [[ ! -f "$1" ]]; then
+    log.error "file: $1 is not exist."
+    return 1
+  fi
+}
+
+
+function checks.must_not_exist_file() {
+  if [[ -f "$1" ]]; then
+    log.error "file: $1 is already exist."
+    return 1
+  fi
+}

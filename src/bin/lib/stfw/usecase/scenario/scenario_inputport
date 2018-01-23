@@ -1,0 +1,168 @@
+#!/bin/bash
+#===================================================================================================
+#
+# scenario inputport
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/scenario_service"
+
+
+#--------------------------------------------------------------------------------------------------
+# 初期化
+#
+# 概要
+#   ディレクトリを初期化します。
+#
+# 引数
+#   1: シナリオルートディレクトリ
+#   2: シナリオ名
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     _{シナリオ名}/
+#       metadata.yml
+#       scenario.dig
+#
+#--------------------------------------------------------------------------------------------------
+function stfw.usecase.inputport.scenario.initialize_requested() {
+  stfw.log.func_start_debug "$@"
+  local _scenario_root_dir="${1:?}"
+  local _scenario_name="$2"
+
+  stfw.domain.service.scenario.initialize_requested "${_scenario_root_dir}" "${_scenario_name}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+#--------------------------------------------------------------------------------------------------
+# digファイル生成
+#
+# 概要
+#   ディレクトリ構成に合わせてdigファイルを生成します。
+#
+# 引数
+#   1: scenarioディレクトリ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     {シナリオ名}/
+#       metadata.yml
+#       scenario.dig
+#
+#--------------------------------------------------------------------------------------------------
+function stfw.usecase.inputport.scenario.generate_requested() {
+  stfw.log.func_start_debug "$@"
+  local _trg_scenario_dir="${1:?}"
+
+  stfw.domain.service.scenario.generate_requested "${_trg_scenario_dir}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+#--------------------------------------------------------------------------------------------------
+# digファイル生成(カスケード)
+#
+# 概要
+#   ディレクトリ構成に合わせて、scenario, bizdateのdigファイルを生成します。
+#
+# 引数
+#   1: scenarioディレクトリ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     {シナリオ名}/
+#       metadata.yml
+#       scenario.dig
+#       _{連番}_{業務日付}/
+#         metadata.yml
+#         bizdate.dig
+#
+#--------------------------------------------------------------------------------------------------
+function stfw.usecase.inputport.scenario.cascade_generate_requested() {
+  stfw.log.func_start_debug "$@"
+  local _trg_scenario_dir="${1:?}"
+
+  stfw.domain.service.scenario.cascade_generate_requested "${_trg_scenario_dir}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+#--------------------------------------------------------------------------------------------------
+# setup
+#
+# 概要
+#   setup処理を実行します。
+#
+# 引数
+#   1: scenarioディレクトリ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#--------------------------------------------------------------------------------------------------
+function stfw.usecase.inputport.scenario.setup_requested() {
+  stfw.log.func_start_debug "$@"
+  local _trg_scenario_dir="${1:?}"
+
+  stfw.domain.service.scenario.setup "${_trg_scenario_dir}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+#--------------------------------------------------------------------------------------------------
+# teardown
+#
+# 概要
+#   teardown処理を実行します。
+#
+# 引数
+#   1: scenarioディレクトリ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#--------------------------------------------------------------------------------------------------
+function stfw.usecase.inputport.scenario.teardown_requested() {
+  stfw.log.func_start_debug "$@"
+  local _trg_scenario_dir="${1:?}"
+
+  stfw.domain.service.scenario.teardown "${_trg_scenario_dir}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}

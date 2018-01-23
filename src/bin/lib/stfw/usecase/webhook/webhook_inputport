@@ -1,0 +1,105 @@
+#!/bin/bash
+#===================================================================================================
+#
+# webhook inputport
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/webhook_service"
+
+
+function stfw.usecase.inputport.webhook.run_start_requested() {
+  stfw.log.func_start_debug "$@"
+  local _run_id="${1:?}"
+
+  stfw.domain.service.webhook.run_start_requested "${_run_id}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.usecase.inputport.webhook.run_end_requested() {
+  stfw.log.func_start_debug "$@"
+  local _run_id="${1:?}"
+
+  stfw.domain.service.webhook.run_end_requested "${_run_id}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.usecase.inputport.webhook.scenario_start_requested() {
+  stfw.log.func_start_debug "$@"
+  local _scenario_dir="${1:?}"
+
+  stfw.domain.service.webhook.scenario_start_requested "${_scenario_dir}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.usecase.inputport.webhook.scenario_end_requested() {
+  stfw.log.func_start_debug "$@"
+  local _scenario_dir="${1:?}"
+
+  stfw.domain.service.webhook.scenario_end_requested "${_scenario_dir}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.usecase.inputport.webhook.bizdate_start_requested() {
+  stfw.log.func_start_debug "$@"
+  local _bizdate_dir="${1:?}"
+
+  stfw.domain.service.webhook.bizdate_start_requested "${_bizdate_dir}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.usecase.inputport.webhook.bizdate_end_requested() {
+  stfw.log.func_start_debug "$@"
+  local _bizdate_dir="${1:?}"
+
+  stfw.domain.service.webhook.bizdate_end_requested "${_bizdate_dir}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.usecase.inputport.webhook.process_start_requested() {
+  stfw.log.func_start_debug "$@"
+  local _process_dir="${1:?}"
+  local _process_type="${2:?}"
+
+  stfw.domain.service.webhook.process_start_requested "${_process_dir}" "${_process_type}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.usecase.inputport.webhook.process_end_requested() {
+  stfw.log.func_start_debug "$@"
+  local _process_dir="${1:?}"
+  local _process_type="${2:?}"
+
+  stfw.domain.service.webhook.process_end_requested "${_process_dir}" "${_process_type}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}

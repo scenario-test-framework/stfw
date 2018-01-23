@@ -99,9 +99,13 @@ rm -fr "${DIR_DIST}/${archive_name:?}/"
 #---------------------------------------------------------------------------------------------------
 # test
 #---------------------------------------------------------------------------------------------------
-build/product/integration_test.sh "${DIR_DIST}/${archive_name_with_dpends}.tar.gz" 2>/tmp/stfw_integration_test.log
+path_test_log="/tmp/stfw_integration_test.log"
+build/product/integration_test.sh "${DIR_DIST}/${archive_name_with_dpends}.tar.gz" 2>"${path_test_log}"
 retcode=$?
-if [[ ${retcode} -ne 0 ]]; then exit ${retcode}; fi
+if [[ ${retcode} -ne 0 ]]; then
+  echo "    error occured in integration_test.sh. log=${path_test_log}"
+  exit ${retcode}
+fi
 
 
 #---------------------------------------------------------------------------------------------------

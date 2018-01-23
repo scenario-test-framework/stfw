@@ -1,0 +1,57 @@
+#!/bin/bash
+#===================================================================================================
+#
+# passwd outputport
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/passwd_service"
+
+
+function stfw.usecase.outputport.passwd.generate_key_finished() {
+  stfw.log.func_start_debug "$@"
+  local _inputport_exitcode="${1:?}"
+#  local _is_force="${2:?}"
+
+  if [[ ${_inputport_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
+    log.info "result:"
+    log.add_indent
+    stfw.domain.service.passwd.get_key_result | log.info
+    log.remove_indent
+  fi
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.usecase.outputport.passwd.save_finished() {
+  stfw.log.func_start_debug "$@"
+  local _inputport_exitcode="${1:?}"
+#  local _is_force="${2:?}"
+  local _host="${3:?}"
+  local _user="${4:?}"
+#  local _password="${5:?}"
+
+  if [[ ${_inputport_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
+    log.info "result:"
+    log.add_indent
+    stfw.domain.service.passwd.get_result "${_host}" "${_user}" | log.info
+    log.remove_indent
+  fi
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.usecase.outputport.passwd.show_finished() {
+  stfw.log.func_start_debug "$@"
+#  local _inputport_exitcode="${1:?}"
+#  local _host="${2:?}"
+#  local _user="${3:?}"
+
+  # 表示なし
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}

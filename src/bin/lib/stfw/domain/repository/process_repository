@@ -1,0 +1,104 @@
+#!/bin/bash
+#===================================================================================================
+#
+# process repository
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/spec/process_spec"
+
+
+#---------------------------------------------------------------------------------------------------
+# process一覧
+#
+# 概要
+#   プロジェクト、STFW_HOMEに配置されたprocess名を一覧表示します。
+#
+# 引数
+#   なし
+#
+# リターンコード
+#   ${EXITCODE_SUCCESS}: 正常終了した場合
+#   ${EXITCODE_ERROR}  : エラー発生時
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     process名
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.repository.process.list() {
+
+  # 一時ファイル
+  local _tmp_embed_list="/tmp/${FUNCNAME[0]}_$$_embed"
+  local _tmp_proj_list="/tmp/${FUNCNAME[0]}_$$_proj"
+
+  # 組込みpluginリスト作成
+  local _target_dir="${DIR_PLUGIN}/process"
+  log.trace "find \"${_target_dir}\" -mindepth 1 -maxdepth 1 -type d"
+  find "${_target_dir}" -mindepth 1 -maxdepth 1 -type d                                            | # 直下のディレクトリパスから
+  sed -e "s|${_target_dir}/||"                                                                     | # ディレクトリ名に変換
+  tee > "${_tmp_embed_list}"
+
+  # プロジェクトpluginリスト作成
+  local _target_dir="${STFW_PROJ_DIR_PLUGIN}/process"
+  touch "${_tmp_proj_list}"
+  if [[ -d "${_target_dir}" ]]; then
+    log.trace "find \"${_target_dir}\" -mindepth 1 -maxdepth 1 -type d"
+    find "${_target_dir}" -mindepth 1 -maxdepth 1 -type d                                          | # 直下のディレクトリパスから
+    sed -e "s|${_target_dir}/||"                                                                   | # ディレクトリ名に変換
+    tee > "${_tmp_proj_list}"
+  fi
+
+  # 結果リスト表示
+  cat "${_tmp_embed_list}" "${_tmp_proj_list}"                                                     | # 組込み + プロジェクト のリストから
+  grep -v "^_"                                                                                     | # 共通処理を除外
+  sort                                                                                             | # 一意に絞る
+  uniq
+
+  # 一時ファイルを削除
+  rm -f "${_tmp_embed_list}"
+  rm -f "${_tmp_proj_list}"
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# process pluginインストール
+#
+# 概要
+#   プロジェクト、STFW_HOMEいづれかに配置されたprocess pluginのinstallスクリプトを実行します。
+#
+# 引数
+#   1: process plugin path
+#
+# リターンコード
+#   ${EXITCODE_SUCCESS}: 正常終了した場合
+#   ${EXITCODE_ERROR}  : エラー発生時
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.repository.process.install() {
+  local _plugin_path="${1:?}"
+
+  local _is_installed=$(stfw.domain.service.spec.process.is_installed "${_plugin_path}")
+  if [[ "${_is_installed}" = "true" ]]; then
+    log.info "${_plugin_path} is already installed."
+    return ${EXITCODE_WARN}
+  fi
+
+  log.trace "${_plugin_path}/bin/install/install"
+  "${_plugin_path}/bin/install/install"
+
+  return $?
+}

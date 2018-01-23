@@ -1,0 +1,6 @@
+#!/bin/bash
+. "${STFW_HOME:?}/bin/lib/setenv"
+. "${DIR_BIN_LIB}/stfw/adapter/cli/webhook_controller"
+
+stfw.adapter.cli.webhook.scenario_end "${stfw_scenario_dir:?}"
+exit $?

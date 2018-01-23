@@ -1,0 +1,245 @@
+#!/bin/bash
+#===================================================================================================
+#
+# run repository
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/spec/run_spec"
+
+. "${DIR_BIN_LIB}/stfw/domain/repository/dig_repository"
+. "${DIR_BIN_LIB}/stfw/domain/gateway/digdag_gateway"
+
+
+function stfw.domain.repository.run.push_digdag_proj() {
+  local _run_id="${1:?}"
+  local _run_opt="${2:?}"
+  shift 2
+  local _target_scenarios=( "$@" )
+
+  # digdag projectディレクトリに必要なファイルをmove
+  local _digdag_proj_dir="$(stfw.domain.service.spec.run.digdag_proj_dir ${_run_id})"
+  mkdir -p "${_digdag_proj_dir}"
+  private.stfw.domain.repository.run.move_to_digdag_proj "${_digdag_proj_dir}" "${_target_scenarios[@]}"
+
+  # run.dig作成
+  stfw.domain.repository.dig.generate_run "${_run_opt}" "${_run_id}" "${_digdag_proj_dir}" "${_target_scenarios[@]}"
+
+  # digdag push
+  stfw.domain.gateway.digdag.push "${_digdag_proj_dir}" "${_run_id}" "${_target_scenarios[@]}"
+  local _retcode=$?
+
+  # digdag projectディレクトリからファイル群を戻す
+  private.stfw.domain.repository.run.restore_moved_digdag_proj "${_digdag_proj_dir}"
+  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # push内容がsymlinkで動くようにdigdag projetディレクトリを生成
+  private.stfw.domain.repository.run.gen_symlink_digdag_proj "${_digdag_proj_dir}" "${_target_scenarios[@]}"
+
+  # stfw起動パラメータを保存
+  stfw.set_raw_params "${_digdag_proj_dir}"
+
+  return ${_retcode}
+}
+
+
+function stfw.domain.repository.run.start() {
+  local _run_id="${1:?}"
+
+  # digdag start
+  local _digdag_proj_dir="$(stfw.domain.service.spec.run.digdag_proj_dir ${_run_id})"
+  stfw.domain.gateway.digdag.start "${_digdag_proj_dir}" "${_run_id}" "$(basename ${FILENAME_DIG_RUN} .dig)"
+  local _retcode=$?
+
+  return ${_retcode}
+}
+
+
+function stfw.domain.repository.run.show_start_info() {
+  local _run_id="${1:?}"
+
+  # digdag start
+  local _digdag_proj_dir="$(stfw.domain.service.spec.run.digdag_proj_dir ${_run_id})"
+  stfw.domain.gateway.digdag.show_start_info "${_digdag_proj_dir}"
+}
+
+
+function stfw.domain.repository.run.get_attempt_id() {
+  local _run_id="${1:?}"
+
+  local _digdag_proj_dir="$(stfw.domain.service.spec.run.digdag_proj_dir ${_run_id})"
+  local _attempt_id=$(stfw.domain.gateway.digdag.get_attempt_id "${_digdag_proj_dir}")
+  if [[ "${_attempt_id}x" = "x" ]]; then return ${EXITCODE_ERROR}; fi
+
+  echo "${_attempt_id}"
+}
+
+
+function stfw.domain.repository.run.log_follow() {
+  local _run_id="${1:?}"
+  local _attempt_id="${2:?}"
+
+  # follow
+  local _digdag_proj_dir="$(stfw.domain.service.spec.run.digdag_proj_dir ${_run_id})"
+  stfw.domain.gateway.digdag.log_follow "${_digdag_proj_dir}" "${_attempt_id}"
+
+  # state
+  local _retcode=${EXITCODE_SUCCESS}
+  local _state=$(stfw.domain.gateway.digdag.get_state "${_attempt_id}")
+  if [[ "${_state}" != "success" ]]; then
+    log.error "attempt state: ${_state}"
+    _retcode=${EXITCODE_ERROR}
+  fi
+
+  return ${_retcode}
+}
+
+
+function private.stfw.domain.repository.run.gen_symlink_digdag_proj() {
+  local _digdag_proj_dir="${1:?}"
+  shift
+  local _target_scenarios=( "$@" )
+
+  # 起動設定
+  ln -sf "${PATH_PROJ_CONFIG}" "${_digdag_proj_dir}/$(basename ${PATH_PROJ_CONFIG})"
+  # config
+  private.stfw.domain.repository.run.gen_symlinks "${STFW_PROJ_DIR}/config" "${_digdag_proj_dir}/config"
+  # plugins
+  private.stfw.domain.repository.run.gen_symlinks "${STFW_PROJ_DIR}/plugins" "${_digdag_proj_dir}/plugins"
+  # modules
+  private.stfw.domain.repository.run.gen_symlinks "${STFW_PROJ_DIR}/modules" "${_digdag_proj_dir}/modules"
+  # scenario
+  for _cur_scenario in ${_target_scenarios[*]}; do
+    private.stfw.domain.repository.run.gen_symlinks "${STFW_PROJ_DIR}/scenario/${_cur_scenario}" "${_digdag_proj_dir}/scenario/${_cur_scenario}"
+  done
+}
+
+
+function private.stfw.domain.repository.run.move_to_digdag_proj() {
+  local _digdag_proj_dir="${1:?}"
+  shift
+  local _target_scenarios=( "$@" )
+
+  # scenario配下のdigファイルを移動
+  mkdir "${_digdag_proj_dir}/scenario"
+  for _cur_scenario in ${_target_scenarios[*]}; do
+    private.stfw.domain.repository.run.move_dig_files                                              \
+      "${STFW_PROJ_DIR}/scenario/${_cur_scenario}"                                                 \
+      "${_digdag_proj_dir}/scenario/${_cur_scenario}"
+  done
+}
+
+
+function private.stfw.domain.repository.run.restore_moved_digdag_proj() {
+  local _digdag_proj_dir="${1:?}"
+
+  # scenario配下のdigファイルを移動
+  private.stfw.domain.repository.run.move_dig_files                                                \
+    "${_digdag_proj_dir}/scenario"                                                                 \
+    "${STFW_PROJ_DIR}/scenario"
+}
+
+
+function private.stfw.domain.repository.run.gen_symlinks() {
+  local _input_dir="${1:?}"
+  local _output_dir="${2:?}"
+
+  checks.should_exist_dir "${_input_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_SUCCESS}; fi
+
+  local _uniq_id=$(stfw.domain.service.spec.run.uniq_id)
+  local _tmp_dir_list="${STFW_PROJ_DIR_DATA}/${FUNCNAME[0]}_dir_${_uniq_id}"
+  local _tmp_file_list="${STFW_PROJ_DIR_DATA}/${FUNCNAME[0]}_file_${_uniq_id}"
+
+  # dir相対パスリスト作成
+  find "${_input_dir}" -follow -type d                                                             | # ディレクトリリストから
+  grep -v "/\.digdag"                                                                              | # digdagデータディレクトリを除外
+  grep -v "^${_input_dir}$"                                                                        | # 自ディレクトリを除外
+  sed -e "s|${_input_dir}/||"                                                                      | # 相対パス化
+  sort > ${_tmp_dir_list}
+
+  # file相対パスリスト作成
+  find "${_input_dir}" -follow -type f                                                             | # ファイルリストから
+  grep -v "/\.digdag"                                                                              | # digdagデータディレクトリを除外
+  sed -e "s|${_input_dir}/||"                                                                      | # 相対パス化
+  sort > ${_tmp_file_list}
+
+  # dirリストループ
+  grep -v '^ *#' <"${_tmp_dir_list}"                                                               |
+  while IFS= read -r _cur_reldir; do
+    # dir作成
+    local _cur_output_dir="${_output_dir}/${_cur_reldir}"
+    if [[ ! -d "${_cur_output_dir}" ]]; then
+      log.trace "mkdir -p \"${_cur_output_dir}\""
+      mkdir -p "${_cur_output_dir}"
+    fi
+  done
+
+  # ファイルリストループ
+  grep -v '^ *#' <"${_tmp_file_list}"                                                              |
+  while IFS= read -r _cur_relfile; do
+    # sym link作成
+    local _cur_from_file="${_input_dir}/${_cur_relfile}"
+    local _cur_to_file="${_output_dir}/${_cur_relfile}"
+    log.trace "ln -s \"${_cur_from_file}\" \"${_cur_to_file}\""
+    ln -s "${_cur_from_file}" "${_cur_to_file}"
+  done
+
+  # 一時ファイルの削除
+  rm -f "${_tmp_dir_list}"
+  rm -f "${_tmp_file_list}"
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function private.stfw.domain.repository.run.move_dig_files() {
+  local _input_dir="${1:?}"
+  local _output_dir="${2:?}"
+
+  checks.should_exist_dir "${_input_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_SUCCESS}; fi
+
+  local _uniq_id=$(stfw.domain.service.spec.run.uniq_id)
+  local _tmp_dir_list="${STFW_PROJ_DIR_DATA}/${FUNCNAME[0]}_dir_${_uniq_id}"
+  local _tmp_file_list="${STFW_PROJ_DIR_DATA}/${FUNCNAME[0]}_file_${_uniq_id}"
+
+  # dir相対パスリスト作成
+  find "${_input_dir}" -follow -type d                                                             | # ディレクトリリストから
+  grep -v "/\.digdag"                                                                              | # digdagデータディレクトリを除外
+  grep -v "^${_input_dir}$"                                                                        | # 自ディレクトリを除外
+  sed -e "s|${_input_dir}/||"                                                                      | # 相対パス化
+  sort > ${_tmp_dir_list}
+
+  # file相対パスリスト作成
+  find "${_input_dir}" -follow -type f -name "*.dig"                                               | # digファイルリストから
+  grep -v "/\.digdag"                                                                              | # digdagデータディレクトリを除外
+  sed -e "s|${_input_dir}/||"                                                                      | # 相対パス化
+  sort > ${_tmp_file_list}
+
+  # dirリストループ
+  grep -v '^ *#' < "${_tmp_dir_list}"                                                              |
+  while IFS= read -r _cur_reldir; do
+    # dir作成
+    local _cur_output_dir="${_output_dir}/${_cur_reldir}"
+    if [[ ! -d "${_cur_output_dir}" ]]; then
+      log.trace "mkdir -p \"${_cur_output_dir}\""
+      mkdir -p "${_cur_output_dir}"
+    fi
+  done
+
+  # ファイルリストループ
+  grep -v '^ *#' < "${_tmp_file_list}"                                                             |
+  while IFS= read -r _cur_relfile; do
+    # sym link作成
+    local _cur_from_file="${_input_dir}/${_cur_relfile}"
+    local _cur_to_file="${_output_dir}/${_cur_relfile}"
+    log.trace "mv \"${_cur_from_file}\" \"${_cur_to_file}\""
+    mv "${_cur_from_file}" "${_cur_to_file}"
+  done
+
+  # 一時ファイルの削除
+  rm -f "${_tmp_dir_list}"
+  rm -f "${_tmp_file_list}"
+
+  return ${EXITCODE_SUCCESS}
+}

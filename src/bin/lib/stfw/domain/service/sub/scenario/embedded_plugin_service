@@ -1,0 +1,44 @@
+#!/bin/bash
+#===================================================================================================
+#
+# scenario.embedded_plugin service
+#
+#===================================================================================================
+
+
+function stfw.domain.service.scenario.embedded.setup() {
+  stfw.log.func_start_trace "$@"
+  local _trg_scenario_dir="${1:?}"
+
+  log.trace "cd \"${_trg_scenario_dir}\""
+  cd "${_trg_scenario_dir}"
+
+  local _dir_embed_setup="${DIR_PLUGIN}/scenario/__common/setup"
+  stfw.bulk_exec_scripts "${_dir_embed_setup}"
+  local _retcode=$?
+
+  log.trace "cd -"
+  cd - >/dev/null 2>&1
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.scenario.embedded.teardown() {
+  stfw.log.func_start_trace "$@"
+  local _trg_scenario_dir="${1:?}"
+
+  log.trace "cd \"${_trg_scenario_dir}\""
+  cd "${_trg_scenario_dir}"
+
+  local _dir_embed_teardown="${DIR_PLUGIN}/scenario/__common/teardown"
+  stfw.bulk_exec_scripts "${_dir_embed_teardown}"
+  local _retcode=$?
+
+  log.trace "cd -"
+  cd - >/dev/null 2>&1
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}

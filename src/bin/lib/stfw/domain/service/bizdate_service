@@ -1,0 +1,190 @@
+#!/bin/bash
+#===================================================================================================
+#
+# bizdate service
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/spec/bizdate_spec"
+. "${DIR_BIN_LIB}/stfw/domain/service/sub/bizdate/embedded_plugin_service"
+. "${DIR_BIN_LIB}/stfw/domain/service/sub/bizdate/project_plugin_service"
+. "${DIR_BIN_LIB}/stfw/domain/repository/dig_repository"
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# command
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.bizdate.initialize_requested() {
+  stfw.log.func_start_trace "$@"
+  local _scenario_dir="${1:?}"
+  local _seq="${2:?}"
+  local _bizdate="${3:?}"
+
+  # validate
+  stfw.domain.service.spec.bizdate.can_initialize "${_scenario_dir}" "${_seq}" "${_bizdate}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  # ディレクトリ作成
+  local _bizdate_dir="$(stfw.domain.service.spec.bizdate.dir ${_scenario_dir} ${_seq} ${_bizdate})"
+  if [[ ! -d "${_bizdate_dir}" ]]; then
+    mkdir "${_bizdate_dir}"
+  fi
+
+  # dig生成
+  stfw.domain.repository.dig.generate_bizdate "${_bizdate_dir}"
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.bizdate.generate_requested() {
+  stfw.log.func_start_trace "$@"
+  local _bizdate_dir="${1:?}"
+
+  # validate
+  stfw.domain.service.spec.bizdate.can_generate "${_bizdate_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  # dig生成
+  stfw.domain.repository.dig.generate_bizdate "${_bizdate_dir}"
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.bizdate.setup() {
+  stfw.log.func_start_trace "$@"
+  local _trg_bizdate_dir="${1:?}"
+
+  # validate
+  stfw.domain.service.spec.bizdate.can_setup "${_trg_bizdate_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  # embedded plugin
+  stfw.domain.service.bizdate.embedded.setup "${_trg_bizdate_dir}"
+  local _retcode=$?
+
+  # project plugin
+  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.domain.service.bizdate.project.setup "${_trg_bizdate_dir}"
+    _retcode=$?
+  fi
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.bizdate.teardown() {
+  stfw.log.func_start_trace "$@"
+  local _trg_bizdate_dir="${1:?}"
+
+  # validate
+  stfw.domain.service.spec.bizdate.can_teardown "${_trg_bizdate_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  # project plugin
+  stfw.domain.service.bizdate.project.teardown "${_trg_bizdate_dir}"
+  local _retcode=$?
+
+  # embedded plugin
+  stfw.domain.service.bizdate.embedded.teardown "${_trg_bizdate_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    _retcode=${EXITCODE_ERROR}
+  fi
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# query
+#
+#---------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------
+# 業務日付ディレクトリのコンテンツ表示 初期化時
+#
+# 概要
+#   業務日付ディレクトリ配下に展開された構成から、コンテンツを表示します。
+#
+# 引数
+#   1: シナリオディレクトリ
+#   2: 連番
+#   2: 業務日付
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     業務日付ディレクトリ配下のファイルリスト
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.bizdate.get_initialize_result() {
+  stfw.log.func_start_trace "$@"
+  local _scenario_dir="${1:?}"
+  local _seq="${2:?}"
+  local _bizdate="${3:?}"
+
+  local _dirname_bizdate=$(stfw.domain.service.spec.bizdate.dirname "${_seq}" "${_bizdate}")
+  (
+    cd "${_scenario_dir}"
+    find "${_dirname_bizdate}" -type f
+  )
+
+  stfw.log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# 業務日付ディレクトリのコンテンツ表示 dig生成時
+#
+# 概要
+#   業務日付ディレクトリ配下に展開された構成から、コンテンツを表示します。
+#
+# 引数
+#   1: 業務日付ディレクトリ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     業務日付ディレクトリ直下のファイルリスト
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.bizdate.get_generate_result() {
+  stfw.log.func_start_trace "$@"
+  local _bizdate_dir="${1:?}"
+
+  local _dirname_bizdate=$(basename ${_bizdate_dir})
+  (
+    cd "${_bizdate_dir}/.."
+    find "${_dirname_bizdate}" -mindepth 1 -maxdepth 1 -type f
+  )
+
+  stfw.log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}

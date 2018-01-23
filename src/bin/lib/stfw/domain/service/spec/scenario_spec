@@ -1,0 +1,146 @@
+#!/bin/bash
+#===================================================================================================
+#
+# scenario specification
+#
+#===================================================================================================
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# feature
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.spec.scenario.dirname() {
+  local _scenario_name="${1:?}"
+
+  echo "${_scenario_name}"
+}
+
+
+function stfw.domain.service.spec.scenario.dir() {
+  local _scenario_root_dir="${1:?}"
+  local _scenario_name="${2:?}"
+
+  local _dirname="$(stfw.domain.service.spec.scenario.dirname ${_scenario_name})"
+  echo "${_scenario_root_dir}/${_dirname}"
+}
+
+
+function stfw.domain.service.spec.scenario.is_scenario-dir() {
+  local _trg_dir="${1:?}"
+
+  (
+    cd "${_trg_dir}"
+    if [[ "$(basename "$(cd ..; pwd)")" != "scenario" ]]; then
+      echo "false"
+      return
+    fi
+
+    checks.must_exist_file "../../${FILENAME_SYSTEM_CONFIG}"
+    if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+      echo "false"
+      return
+    fi
+
+    echo "true"
+  )
+}
+
+
+function stfw.domain.service.spec.scenario.is_scenario-root-dir() {
+  local _trg_dir="${1:?}"
+
+  (
+    cd "${_trg_dir}"
+    if [[ "$(basename "$(pwd)")" != "scenario" ]]; then
+      echo "false"
+      return
+    fi
+
+    checks.must_exist_file "../${FILENAME_SYSTEM_CONFIG}"
+    if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+      echo "false"
+      return
+    fi
+
+    echo "true"
+  )
+}
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# validation
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.spec.scenario.can_initialize() {
+  local _scenario_root_dir="${1:?}"
+  local _scenario_name="${2:?}"
+
+  # シナリオルートディレクトリ
+  checks.must_not_null "scenario_root_dir" "${_scenario_root_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  checks.must_exist_dir "${_scenario_root_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  local _is_sceanrio_dir="$(stfw.domain.service.spec.scenario.is_scenario-root-dir ${_scenario_root_dir})"
+  if [[ "${_is_sceanrio_dir}" != "true" ]]; then
+    log.error "${_scenario_root_dir} is not scenario-root-dir."
+    return ${EXITCODE_ERROR}
+  fi
+
+  # シナリオ名
+  checks.must_not_null "scenario_name" "${_scenario_name}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.domain.service.spec.scenario.can_generate() {
+  local _scenario_dir="${1:?}"
+
+  private.must_exist_scenario_dir "${_scenario_dir}"
+  local _retcode=$?
+
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.spec.scenario.can_setup() {
+  local _scenario_dir="${1:?}"
+
+  private.must_exist_scenario_dir "${_scenario_dir}"
+  local _retcode=$?
+
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.spec.scenario.can_teardown() {
+  local _scenario_dir="${1:?}"
+
+  private.must_exist_scenario_dir "${_scenario_dir}"
+  local _retcode=$?
+
+  return ${_retcode}
+}
+
+
+function private.must_exist_scenario_dir() {
+  local _scenario_dir="${1:?}"
+
+  # シナリオディレクトリ
+  checks.must_exist_dir "${_scenario_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  local _is_scenario_dir="$(stfw.domain.service.spec.scenario.is_scenario-dir ${_scenario_dir})"
+  if [[ "${_is_scenario_dir}" != "true" ]]; then
+    log.error "${_scenario_dir} is not scenario-dir."
+    return ${EXITCODE_ERROR}
+  fi
+
+  return ${EXITCODE_SUCCESS}
+}

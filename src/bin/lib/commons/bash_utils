@@ -1,0 +1,508 @@
+#!/bin/bash
+#==================================================================================================
+#
+# bash共通関数定義
+# ※_で始まるfunctionは、パイプでの呼出しだけを想定しています。
+#
+# 依存
+#   open usp tukubai
+#   Parsrs
+#
+# 定義リスト
+#   is_mac
+#   is_linux
+#   is_cygwin
+#   _trim
+#   _ltrim
+#   _rtrim
+#   _sp_multi2single
+#   _unquote
+#   _except_comment_row
+#   _except_empty_row
+#   gen_ssh_server_key
+#   get_ip
+#   _urlencode
+#   _urldecode
+#   get_ext
+#   gen_encrypt_key
+#   _encrypt
+#   _decrypt
+#   is_errorexit_on
+#   is_nounset_on
+#   is_xtrace_on
+#   is_setoption_on
+#   yaml2properties
+#   export_yaml
+#   apply_dynamic_env
+#   timestamp_to_iso
+#
+#==================================================================================================
+#--------------------------------------------------------------------------------------------------
+# 実行OS判定
+#--------------------------------------------------------------------------------------------------
+function is_mac() {
+  if [[ "$(uname)" = 'Darwin' ]]; then
+    echo "true"
+    return 0
+  fi
+
+  echo "false"
+  return 0
+}
+
+function is_linux() {
+  local _uname=$(awk -v "uname=$(uname -s)" 'BEGIN { print substr(uname, 1, 5) }')
+  if [[ "${_uname}" = 'Linux' ]]; then
+    echo "true"
+    return 0
+  fi
+
+  echo "false"
+  return 0
+}
+
+function is_cygwin() {
+  local _uname=$(awk -v "uname=$(uname -s)" 'BEGIN { print substr(uname, 1, 10) }')
+  if [[ "${_uname}" = 'MINGW32_NT' ]]; then
+    echo "true"
+    return 0
+  fi
+
+  echo "false"
+  return 0
+}
+
+
+#--------------------------------------------------------------------------------------------------
+# 文字列操作
+#--------------------------------------------------------------------------------------------------
+function _trim() {
+  cat -                                                                                            | # 標準入力から
+  sed -e "s|^  *||g"                                                                               | # leftトリム
+  sed -e "s|  *$||g"                                                                                 # rightトリム
+  return 0
+}
+
+function _ltrim() {
+  cat -                                                                                            | # 標準入力から
+  sed -e "s|^  *||g"                                                                                 # leftトリム
+  return 0
+}
+
+function _rtrim() {
+  cat -                                                                                            | # 標準入力から
+  sed -e "s|  *$||g"                                                                                 # rightトリム
+  return 0
+}
+
+function _sp_multi2single() {
+  cat -                                                                                            | # 標準入力から
+  sed -E "s| +| |g"                                                                                  # 複数スペースを単一に置換
+  return 0
+}
+
+function _unquote() {
+  cat -                                                                                            | # 標準入力から
+  sed -e "s|^'||" -e "s|'$||"                                                                      | # シングルクォートを除去
+  sed -e 's|^"||' -e 's|"$||'                                                                        # ダブルクォートを除去
+  return 0
+}
+
+
+#--------------------------------------------------------------------------------------------------
+# 行操作
+#--------------------------------------------------------------------------------------------------
+function _except_comment_row() {
+  cat -                                                                                            | # 標準入力から
+  grep -v '^\s*#'                                                                                    # コメント行を除外
+  return 0
+}
+
+function _except_empty_row() {
+  cat -                                                                                            | # 標準入力から
+  grep -v '^\s*$'                                                                                    # 空行を除外
+  return 0
+}
+
+
+#--------------------------------------------------------------------------------------------------
+# SSH
+#--------------------------------------------------------------------------------------------------
+function gen_ssh_server_key() {
+  local _USAGE="usage: ${FUNCNAME[0]} IP"
+  local _PATH_KNOWN_HOSTS=~/.ssh/known_hosts
+
+  # 引数チェック
+  if [[ $# -ne 1 ]]; then
+    echo "${_USAGE}" >&2
+    return 1
+  fi
+
+  local _ip="$1"
+  local _retcode=0
+
+  # キーの存在チェック
+  grep "${_ip}" "${_PATH_KNOWN_HOSTS}" >/dev/null 2>&1
+  _retcode=$?
+  if [[ ${_retcode} -eq 0 ]]; then
+    echo "SSH server key for ${_ip} is already exists." >&2
+    return 0
+  fi
+
+  # サーバキー削除
+  ssh-keygen -R ${_ip} >/dev/null 2>&1
+  _retcode=$?
+  if [[ ${_retcode} -ne 0 ]]; then
+    echo "failed to delete SSH server key for ${_ip} . cmd: ssh-keygen -R ${_ip}, retcode: ${_retcode}" >&2
+    return 1
+  fi
+
+  # サーバキー追加
+  ssh-keyscan ${_ip} >>"${_PATH_KNOWN_HOSTS}" 2>/dev/null
+  _retcode=$?
+  if [[ ${_retcode} -ne 0 ]]; then
+    echo "failed to add SSH server key for ${_ip}. cmd: ssh-keyscan ${_ip} >>${_PATH_KNOWN_HOSTS}, retcode: ${_retcode}" >&2
+    return 1
+  fi
+
+  echo "SSH server key for ${_ip} was added." >&2
+  return 0
+}
+
+
+#--------------------------------------------------------------------------------------------------
+# 自ホストIPアドレス取得
+#--------------------------------------------------------------------------------------------------
+function get_ip() {
+  # TODO eth0,en0 に絞ったほうが良さそう
+  # 自IPを標準出力
+  LANG=C /sbin/ifconfig                                                                            |
+  grep 'inet '                                                                                     |
+  grep -v 127.0.0.1                                                                                |
+  head -n 1                                                                                        |
+  awk '{print $2}'                                                                                 |
+  cut -d ':' -f 2
+  return 0
+}
+
+
+#--------------------------------------------------------------------------------------------------
+# URLエンコード・デコード
+#--------------------------------------------------------------------------------------------------
+function _urlencode() {
+  local _lf='\%0A'
+
+  cat -                                                                                            | # 標準出力から
+  python -c 'import sys, urllib ; print urllib.quote(sys.stdin.read());'                           | # URLエンコード
+  sed "s|${_lf}$||g"                                                                                 # 末尾に改行コードが付与されるので除外
+
+  return 0
+}
+
+function _urldecode() {
+  cat -                                                                                            | # 標準出力から
+  python -c 'import sys, urllib ; print urllib.unquote(sys.stdin.read());'
+
+  return 0
+}
+
+
+#------------------------------------------------------------------------------
+# 拡張子取得
+#
+# 引数
+#   $1: 対象ファイルパス
+#------------------------------------------------------------------------------
+function get_ext() {
+  local _path="${1:?}"
+  local _ext="${_path##*.}"
+
+  # 変数展開結果を確認
+  if [[ "${_ext}" = "gz" ]]; then
+    # gzの場合、2重拡張子を確認 ※tar.gzのみ対応
+    if [[ "$(basename ${_path} .tar.gz)" != "$(basename ${_path})" ]]; then
+      _ext="tar.gz"
+    fi
+
+  elif [[ "${_ext}" = "${_path}" ]]; then
+    # pathそのままの場合、拡張子なし
+    _ext=""
+  fi
+
+  echo "${_ext}"
+  return 0
+}
+
+
+#--------------------------------------------------------------------------------------------------
+# 暗号化・復号化
+#--------------------------------------------------------------------------------------------------
+function gen_encrypt_key() {
+  # 引数チェック
+  if [[ $# -ne 2 ]]; then
+    echo "usage: ${FUNCNAME[0]} PATH_ENCRYPT_KEY PATH_DECRYPT_KEY" >&2
+    return 1
+  fi
+
+  local _path_encrypt_key="$1"
+  local _path_decrypt_key="$2"
+
+  # 鍵作成
+  echo "openssl req -x509 -nodes -newkey rsa:2048 -keyout \"${_path_decrypt_key}\" -out \"${_path_encrypt_key}\" -subj '/'"
+  openssl req -x509 -nodes -newkey rsa:2048 -keyout "${_path_decrypt_key}" -out "${_path_encrypt_key}" -subj '/'
+  return $?
+}
+
+function _encrypt() {
+  # 引数チェック
+  if [[ $# -ne 1 ]]; then
+    echo "usage: ${FUNCNAME[0]} PATH_ENCRYPT_KEY" >&2
+    return 1
+  fi
+
+  local _path_encrypt_key="$1"
+  if [[ ! -f "${_path_encrypt_key}" ]]; then
+    echo "${_path_encrypt_key} is not exist." >&2
+    return 1
+  fi
+
+  # 暗号化
+  cat -                                                                                            | # 標準入力（平文）を
+  openssl smime -encrypt -aes256 -binary -outform PEM "${_path_encrypt_key}"                         # 暗号化キーで暗号化
+  return 0
+}
+
+function _decrypt() {
+  # 引数チェック
+  if [[ $# -ne 1 ]]; then
+    echo "usage: ${FUNCNAME[0]} PATH_DECRYPT_KEY" >&2
+    return 1
+  fi
+
+  local _path_decrypt_key="$1"
+  if [[ ! -f "${_path_decrypt_key}" ]]; then
+    echo "${_path_decrypt_key} is not exist." >&2
+    return 1
+  fi
+
+  # 復号化
+  cat -                                                                                            | # 標準入力（暗号化文字列）を
+  openssl smime -decrypt -binary -inform PEM -inkey "${_path_decrypt_key}"                           # 復号化キーで復号化
+  return 0
+}
+
+
+#--------------------------------------------------------------------------------------------------
+# setオプション判定
+#--------------------------------------------------------------------------------------------------
+function is_errorexit_on() {
+  is_setoption_on "errexit"
+}
+function is_nounset_on() {
+  is_setoption_on "nounset"
+}
+function is_xtrace_on() {
+  is_setoption_on "xtrace"
+}
+function is_setoption_on() {
+  local _target="$1"
+  set -o                                                                                           |
+  grep "${_target}"                                                                                |
+  tr '\t' ' '                                                                                      |
+  _sp_multi2single                                                                                 |
+  cut -d ' ' -f 2                                                                                  |
+  sed -e 's|on|true|'                                                                              |
+  sed -e 's|off|false|'
+}
+#
+# SAMPLE
+#
+# local _before_set_errorexit=$(is_errorexit_on)
+# local _before_set_nounset=$(is_nounset_on)
+# local _before_set_xtrace=$(is_xtrace_on)
+# set +eux
+#
+# 任意の処理...
+#
+# if [[ "${_before_set_errorexit}" = "true" ]]; then set -e; fi
+# if [[ "${_before_set_nounset}"   = "true" ]]; then set -u; fi
+# if [[ "${_before_set_xtrace}"    = "true" ]]; then set -x; fi
+
+
+
+#--------------------------------------------------------------------------------------------------
+# yamlファイル -> properties変換
+#
+# 概要
+#   yamlファイルの定義内容を、properties形式で標準出力します。
+#
+# 引数
+#   yamlファイルパス
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     サンプルを参照してください。
+#   ファイル
+#     なし
+#
+# サンプル
+#   yaml
+#     map:
+#       key: value1
+#       list:
+#       - list_value1
+#       - list_value2
+#
+#   properties
+#     map_key="value1"
+#     map_list_0="list_value1"
+#     map_list_1="list_value2"
+#
+#--------------------------------------------------------------------------------------------------
+function yaml2properties() {
+  local _path_input_yaml="${1:?}"
+  if [[ ! -f "${_path_input_yaml}" ]]; then
+    echo "${_path_input_yaml} is not exist." >&2
+    return 1
+  fi
+
+  local _path_tmp_fields="/tmp/$$_$(basename ${_path_input_yaml}).fields"
+  local _path_tmp_values="/tmp/$$_$(basename ${_path_input_yaml}).values"
+
+  # 変数名ファイルを生成
+  # サンプル
+  #   map_key
+  #   map_list_0
+  #   map_list_1
+  yaml2json <"${_path_input_yaml}"                                                                 | # jsonに変換
+  parsrj.sh -rt -kd_                                                                               | # json -> フィールド形式
+  self 1                                                                                           | # 項目名 をselect
+  sed -e 's|^_||'                                                                                  | # 行頭の_を除去
+  sed -e 's|\[|_|g'                                                                                | # 配列のインデックスを除去
+  sed -e 's|\]||g'                                                                                 |
+  tee >"${_path_tmp_fields}"
+
+  # 値ファイルを生成
+  # サンプル
+  #   "value1"
+  #   "list_value1"
+  #   "list_value2"
+  yaml2json <"${_path_input_yaml}"                                                                 | # jsonに変換
+  parsrj.sh -rt -kd_                                                                               | # json -> フィールド形式
+  self 2/NF                                                                                        | # 値 をselect
+  xargs -I{} /bin/bash -c "eval 'echo {}'"                                                         | # 環境変数を展開
+  sed -e 's|^|"|'                                                                                  | # ダブルクォートで括る
+  sed -e 's|$|"|'                                                                                  |
+  tee >"${_path_tmp_values}"
+
+  # "="区切りで横方向に連結
+  paste -d '=' "${_path_tmp_fields}" "${_path_tmp_values}"
+
+  # 一時ファイルを削除
+  rm -f "${_path_tmp_fields}"
+  rm -f "${_path_tmp_values}"
+
+  return 0
+}
+
+
+
+#--------------------------------------------------------------------------------------------------
+# yamlファイルの環境変数展開
+#
+# 概要
+#   yamlファイルの定義内容を、exportした環境変数に設定します。
+#
+# 引数
+#   yamlファイルパス
+#
+# 出力
+#   環境変数
+#     サンプルを参照してください。
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+# サンプル
+#   yaml
+#     map:
+#       key: value1
+#       list:
+#       - list_value1
+#       - list_value2
+#
+#   環境変数
+#     map_key="value1"
+#     map_list_0="list_value1"
+#     map_list_1="list_value2"
+#
+#--------------------------------------------------------------------------------------------------
+function export_yaml() {
+  local _path_input_yaml="${1:?}"
+
+  local _tmp_path_props="/tmp/export_yaml_$$.properties"
+
+  yaml2properties "${_path_input_yaml}"                                                            | # yamlからpropsに変換
+  sed -e 's|^|export |' >"${_tmp_path_props}"                                                        # 行頭にexport を付与
+  source "${_tmp_path_props}"
+
+  rm -f "${_tmp_path_props}"
+
+  return 0
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# 動的な環境変数の反映
+#
+# 概要
+#   KEY=VALUE の文字列から、環境変数 KEY (設定値 VALUE) を設定します。
+#
+# 引数
+#   1: 変数定義 KEY=VALUE
+#
+# 出力
+#   環境変数
+#     KEY
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function apply_dynamic_env() {
+  local _tmp_def="${1:?}"
+  local _tmp_var="$(echo ${_tmp_def} | cut -d '=' -f 1)"
+  local _tmp_value="$(echo ${_tmp_def} | cut -d '=' -f 2)"
+  eval ${_tmp_var}=\'${_tmp_value}\'
+  # shellcheck disable=SC2163
+  export "${_tmp_var}"
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# yyyymmddhhmmss -> yyyy-mm-ddThh:mm:ssZ
+#
+# 概要
+#   yyyymmddhhmmss の文字列から、ISO形式のタイムスタンプに変換します。
+#
+# 引数
+#   1: yyyymmddhhmmss
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     yyyy-mm-ddThh:mm:ssZ
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function timestamp_to_iso() {
+  local _date="${1:?}"
+  local _zone="$(date '+%z')"
+  echo "${_date:0:4}-${_date:4:2}-${_date:6:2}T${_date:8:2}:${_date:10:2}:${_date:12:2}${_zone}"
+}

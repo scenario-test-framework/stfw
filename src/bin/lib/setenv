@@ -3,10 +3,14 @@
 #
 # 共通設定
 #
-# 前提:
-#   - STFW_HOME が定義されていること
-#
 #===================================================================================================
+#---------------------------------------------------------------------------------------------------
+# 前提チェック
+#---------------------------------------------------------------------------------------------------
+echo ${STFW_HOME:?} >/dev/null
+echo ${STFW_PROJ_DIR:?} >/dev/null
+
+
 #---------------------------------------------------------------------------------------------------
 # 定数
 #---------------------------------------------------------------------------------------------------
@@ -26,20 +30,23 @@ readonly STATUS_SUCCESS="Success"
 readonly STATUS_ERROR="Error"
 readonly STATUS_BLOCKED="Blocked"
 
+#-------------------------------------------------------------------------------
+# 内部定数
+#-------------------------------------------------------------------------------
+# 生成モード: 自分のみ
+# shellcheck disable=SC2034
+STFW__GEN_MODE_SELF="self"
+# 生成モード: カスケード
+# shellcheck disable=SC2034
+STFW__GEN_MODE_CASCADE="cascade"
 
-#---------------------------------------------------------------------------------------------------
-# 前提チェック
-#---------------------------------------------------------------------------------------------------
-# 環境変数
-if [[ "${STFW_HOME}x" = "x" ]]; then
-  echo "STFW_HOME is not defined" >&2
-  exit ${EXITCODE_ERROR}
-fi
+# ホストグループ: 全件
+# shellcheck disable=SC2034
+STFW__INVENTRY_GROUP_ALL="all"
 
-if [[ "${STFW_PROJ_DIR}x" = "x" ]]; then
-  echo "STFW_PROJ_DIR is not defiend." >&2
-  exit ${EXITCODE_ERROR}
-fi
+# digdag起動情報
+# shellcheck disable=SC2034
+STFW__FILENAME_START_INFO="digdag_start.info"
 
 
 
@@ -61,9 +68,6 @@ readonly DIR_CONFIG="${STFW_HOME}/config"
 # プラグイン
 readonly DIR_PLUGIN="${STFW_HOME}/plugins"
 
-# プロジェクトテンプレート
-readonly DIR_TEMPLATE="${STFW_HOME}/template"
-
 # ダウンロードアーカイブ
 readonly DIR_ARCHIVE="${STFW_HOME}/archives"
 # 外部ライブラリ
@@ -76,11 +80,10 @@ readonly DIR_MODULE_BIN="${DIR_MODULE}/bin"
 # 起動設定ファイル
 readonly FILENAME_SYSTEM_CONFIG="stfw.yml"
 readonly PATH_DEFAULT_CONFIG="${DIR_CONFIG}/${FILENAME_SYSTEM_CONFIG}"
-
-# 暗号化・復号化
-readonly DIR_CONFIG_ENCRYPT="${DIR_CONFIG}/encrypt"
-readonly PATH_ENCRYPT_KEY="${DIR_CONFIG_ENCRYPT}/encrypt_key"
-readonly PATH_DECRYPT_KEY="${DIR_CONFIG_ENCRYPT}/decrypt_key"
+if [[ ! -f "${PATH_DEFAULT_CONFIG}" ]]; then
+  echo "ERROR ${PATH_DEFAULT_CONFIG} is not exist." >&2
+  exit ${EXITCODE_ERROR}
+fi
 
 # digファイル
 readonly FILENAME_DIG_RUN="run.dig"
@@ -88,7 +91,7 @@ readonly FILENAME_DIG_SCENARIO="scenario.dig"
 readonly FILENAME_DIG_DATE="bizdate.dig"
 
 # メタ情報ファイル
-readonly FILENAME_META="meta.yml"
+readonly FILENAME_META="metadata.yml"
 
 #-------------------------------------------------------------------------------
 # 依存モジュール
@@ -99,16 +102,6 @@ readonly DL_TIMEOUT=1800
 # digdag
 readonly URL_DIGDAG="https://dl.bintray.com/digdag/maven/digdag-0.9.23.jar"
 readonly PATH_DIGDAG="${DIR_MODULE}/digdag"
-
-
-
-#--------------------------------------------------------------------------------------------------
-# デフォルト設定ファイル存在チェック
-#--------------------------------------------------------------------------------------------------
-if [[ ! -f "${PATH_DEFAULT_CONFIG}" ]]; then
-  echo "ERROR ${PATH_DEFAULT_CONFIG} is not exist." >&2
-  exit ${EXITCODE_ERROR}
-fi
 
 
 
@@ -123,7 +116,8 @@ export STFW_PROJ_DIR_CONFIG="${STFW_PROJ_DIR}/config"
 # プラグイン
 export STFW_PROJ_DIR_PLUGIN="${STFW_PROJ_DIR}/plugins"
 # 内部データ
-export STFW_PROJ_DIR_DATA="${STFW_PROJ_DIR}/.stfw"
+readonly STFW_PROJ_DIRNAME_DATA=".stfw"
+export STFW_PROJ_DIR_DATA="${STFW_PROJ_DIR}/${STFW_PROJ_DIRNAME_DATA}"
 
 #-------------------------------------------------------------------------------
 # ファイル
@@ -145,29 +139,9 @@ PATH="${DIR_MODULE_BIN}:${PATH}"
 #--------------------------------------------------------------------------------------------------
 # 共通関数読込み
 #--------------------------------------------------------------------------------------------------
-# 共通ユーティリティ
-. "${DIR_BIN_LIB}/common_utils"
-
-# loggingユーティリティ
+# loggingユーティリティ向け設定
 #   logファイル
 export PATH_LOG="${STFW_PROJ_DIR_DATA}/stfw.log"
-#   log level
-readonly LOGLEVEL_TRACE="TRACE"
-readonly LOGLEVEL_DEBUG="DEBUG"
-readonly LOGLEVEL_INFO=" INFO"
-readonly LOGLEVEL_WARN=" WARN"
-readonly LOGLEVEL_ERROR="ERROR"
-#   prefix
-LOG__PREFIX_SCRIPT_START="<START> "
-LOG__PREFIX_SCRIPT_END="< END > "
-# shellcheck disable=SC2034
-LOG__PREFIX_FUNC_START="${LOG__PREFIX_SCRIPT_START}"
-# shellcheck disable=SC2034
-LOG__PREFIX_FUNC_END="${LOG__PREFIX_SCRIPT_END}"
-# shellcheck disable=SC2034
-LOG__PREFIX_SECT_START="${LOG__PREFIX_SCRIPT_START}"
-# shellcheck disable=SC2034
-LOG__PREFIX_SECT_END="${LOG__PREFIX_SCRIPT_END}"
 #   mask
 function log.mask() {
     cat -                                                                                          |
@@ -175,10 +149,14 @@ function log.mask() {
     sed -e "s|${TOKEN:-TOKEN}|[secret]|g"                                                          | # token
     tee
 }
-. "${DIR_BIN_LIB}/logging_utils"
 
-# stfwユーティリティ
-. "${DIR_BIN_LIB}/stfw_utils"
+# stfw共通ユーティリティ
+#   log.prefix
+#     shellcheck disable=SC2034
+LOG__PREFIX_START="<START> "
+#     shellcheck disable=SC2034
+LOG__PREFIX_END="< END > "
+. "${DIR_BIN_LIB}/stfw/stfw_utils"
 
 
 #--------------------------------------------------------------------------------------------------

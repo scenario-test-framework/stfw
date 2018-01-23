@@ -1,0 +1,108 @@
+@startuml
+/' TODO パターンごとに整理  '/
+boundary stfw
+boundary sub_cmd
+
+control controller
+control inputport
+control outputport
+control service
+control repository
+control spec
+control gateway
+
+
+stfw -> sub_cmd : sub_cmd --init
+note right : \
+オプション、引数解析 \n\
+stdout/stderrの切り替え
+activate stfw
+activate sub_cmd
+
+sub_cmd -> controller : init
+note right : \
+CLI共通で設定できるものを補完してusecaseを実行 \n\
+
+activate controller
+
+controller -> inputport : initialize_requested
+note right : \
+UC単位 \n\
+「UCの開始イベントが発生した」な名前 \n\
+検索系もinputportにまとめています。
+activate inputport
+
+inputport -> service : initialize_xxx_requested
+note right : \
+ドメインイベント単位 \n\
+「ドメインイベントが開始した」な名前
+activate service
+
+service -> spec : can_init_xxx
+note right : \
+ドメインイベントが実行できる前提が揃っているか？
+activate spec
+service <-- spec
+deactivate spec
+
+service -> repository : add_xxx
+note right : \
+データアクセス
+activate repository
+
+repository -> spec : get_xxx_path
+note right : \
+パスなどの定義はspec持ち
+activate spec
+repository <-- spec
+deactivate spec
+
+repository -> gateway : add_xxx
+note right : \
+外部システム呼び出し
+activate gateway
+repository <-- gateway
+deactivate gateway
+
+service <-- repository
+deactivate repository
+inputport <-- service
+deactivate service
+controller <-- inputport
+deactivate inputport
+
+
+controller -> outputport : initialize_finished
+note right : \
+UC単位 \n\
+「UCの終了イベントが発生した」な名前 \n\
+結果のログ表示
+activate outputport
+
+outputport -> service : get_xxx_contents
+note right : \
+クエリ単位 \n\
+結果の一覧出力など
+activate service
+service -> repository : find_xxx
+activate repository
+repository -> spec : get_xxx_path
+activate spec
+repository <-- spec
+deactivate spec
+
+service <-- repository
+deactivate repository
+outputport <-- service
+deactivate service
+controller <-- outputport
+deactivate outputport
+
+sub_cmd <-- controller
+deactivate controller
+stfw <-- sub_cmd
+deactivate sub_cmd
+deactivate stfw
+
+
+@enduml

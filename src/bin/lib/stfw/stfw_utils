@@ -1,0 +1,610 @@
+#!/bin/bash
+#set -eux
+#===================================================================================================
+# stfw共通ユーティリティ
+#
+# 前提
+#   ・システム設定を事前に読み込んでいること
+#
+# 定義リスト
+#   stfw.not_implemented
+#   stfw.apply_log_level
+#   stfw.parse_log_level
+#   stfw.get_installed_plugin_path
+#   stfw.list_files
+#   stfw.bulk_exec_scripts
+#   stfw.must_run_on_server
+#   stfw.is_run_on_server
+#   stfw.project_home
+#   stfw.set_raw_params
+#   stfw.get_raw_params
+#   stfw.webhook.async_execute
+#
+#===================================================================================================
+#---------------------------------------------------------------------------------------------------
+# 依存ライブラリ読み込み
+#---------------------------------------------------------------------------------------------------
+# bash共通ユーティリティ
+. "${DIR_BIN_LIB}/commons/bash_utils"
+# ロギングユーティリティ
+. "${DIR_BIN_LIB}/commons/logging"
+# チェックユーティリティ
+. "${DIR_BIN_LIB}/commons/checks"
+# 処理時間ユーティリティ
+. "${DIR_BIN_LIB}/commons/processing_time"
+
+
+#---------------------------------------------------------------------------------------------------
+# interface未実装時の処理
+#
+# 概要
+#   実行中プロセスをエラー終了します。
+#
+# 引数
+#   *: interfaceに渡された引数
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.not_implemented() {
+  log.error "${FUNCNAME[1]} $* is not implemented."
+  exit ${EXITCODE_ERROR}
+}
+
+#---------------------------------------------------------------------------------------------------
+# ログレベル反映
+#
+# 概要
+#   ログレベル名(error | warn | info | debug | tarace) に合わせて
+#   loggingの定数を環境変数に設定します。
+#
+# 引数
+#   1: ログレベル名
+#
+# 出力
+#   環境変数
+#     LOGLEVEL
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.apply_log_level() {
+  case $1 in
+    error)
+      export LOGLEVEL="${LOGLEVEL_ERROR}"
+      ;;
+    warn)
+      export LOGLEVEL="${LOGLEVEL_WARN}"
+      ;;
+    info)
+      export LOGLEVEL="${LOGLEVEL_INFO}"
+      ;;
+    debug)
+      export LOGLEVEL="${LOGLEVEL_DEBUG}"
+      ;;
+    trace)
+      export LOGLEVEL="${LOGLEVEL_TRACE}"
+      ;;
+  esac
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# ログレベル定数 -> ログレベル名 の変換
+#
+# 概要
+#   loggingの定数から
+#   ログレベル名(error | warn | info | debug | tarace) を返します。
+#
+# 引数
+#   1: ログレベル定数
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     ログレベル名
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.parse_log_level() {
+  case $1 in
+    "${LOGLEVEL_ERROR}")
+      echo "error"
+      ;;
+    "${LOGLEVEL_WARN}")
+      echo "warn"
+      ;;
+    "${LOGLEVEL_INFO}")
+      echo "info"
+      ;;
+    "${LOGLEVEL_DEBUG}")
+      echo "debug"
+      ;;
+    "${LOGLEVEL_TRACE}")
+      echo "trace"
+      ;;
+  esac
+}
+
+
+function stfw.get_proj_dir() {
+  if [[ "$(stfw.is_run_on_server)" != "true" ]]; then
+    echo "${STFW_PROJ_DIR}"
+    return ${EXITCODE_SUCCESS}
+  fi
+
+  # digdagでワークフロー実行中の場合、workspaceディレクトリになるので、実ディレクトリを明示
+  echo "${STFW_PROJ_DIR//\/\.stfw.*$/}/plugins/${_plugin_name}"
+  return ${EXITCODE_SUCCESS}
+}
+function stfw.get_global_plugin_dir() {
+  local _plugin_name="$1"
+  echo "${DIR_PLUGIN}/${_plugin_name}"
+}
+function stfw.get_proj_plugin_dir() {
+  local _plugin_name="$1"
+  echo "$(stfw.get_proj_dir)/plugins/${_plugin_name}"
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# pluginディレクトリ取得
+#
+# 概要
+#   プロジェクトpluginが存在する場合、そのパス
+#   組み込みpluginが存在する場合、そのパス
+#   pluginが存在しない場合、空文字 を返します。
+#
+# 引数
+#   1: plugin名
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     pluginディレクトリ
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.get_installed_plugin_path() {
+  stfw.log.func_start_trace "$@"
+  local _plugin_name="$1"
+
+  # プロジェクトplugin
+  local _proj_plugin_dir="$(stfw.get_proj_plugin_dir ${_plugin_name})"
+  if [[ -d "${_proj_plugin_dir}" ]]; then
+    echo "${_proj_plugin_dir}"
+    log.trace "result: ${_proj_plugin_dir}"
+    stfw.log.func_end_trace ${EXITCODE_SUCCESS}
+    return ${EXITCODE_SUCCESS}
+  fi
+
+  # 組み込みplugin
+  local _global_plugin_dir="$(stfw.get_global_plugin_dir ${_plugin_name})"
+  if [[ -d "${_global_plugin_dir}" ]]; then
+    echo "${_global_plugin_dir}"
+    log.trace "result: ${_global_plugin_dir}"
+    stfw.log.func_end_trace ${EXITCODE_SUCCESS}
+    return ${EXITCODE_SUCCESS}
+  fi
+
+  log.warn "${_plugin_name} is not exist."
+  stfw.log.func_end_trace ${EXITCODE_ERROR}
+  return ${EXITCODE_ERROR}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# 指定ディレクトリ直下のファイル名リスト
+#
+# 概要
+#   指定ディレクトリ直下の全ファイル名を、文字列の昇順でソートしたリストを返します。
+#
+# 引数
+#   1: スクリプト配置ディレクトリ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     ファイル名リスト
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.list_files() {
+  stfw.log.func_start_trace "$@"
+
+  local _dir="$1"
+
+  find "${_dir}" -mindepth 1 -maxdepth 1 -follow -type f                                           |
+  sed -e "s|${_dir}/||"                                                                            |
+  sort
+
+  stfw.log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# スクリプトの一括実行
+#
+# 概要
+#   指定ディレクトリ直下の全てのファイルを、スクリプトとみなして一括実行します。
+#   スクリプトから0以外のリターンコードが返された場合、後続は実行せずエラー終了します。
+#
+# 引数
+#   1: スクリプト配置ディレクトリ
+#
+# リターンコード
+#   ${EXITCODE_SUCCESS}: 正常終了した場合
+#   ${EXITCODE_ERROR}  : エラー発生時
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     スクリプトの標準出力&標準エラー
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.bulk_exec_scripts() {
+  stfw.log.func_start_trace "$@"
+
+  local _dir="$1"
+  local _before_dir="$(pwd)"
+
+  log.trace "cd \"${_dir}\""
+  cd "${_dir}"
+
+  local _before_IFS="$IFS"
+  IFS=$'\n'
+  for _cur_file in $(stfw.list_files .); do
+    local _exitcode=${EXITCODE_SUCCESS}
+    local _cur_retcode=${EXITCODE_SUCCESS}
+
+    local _sect_name="${_dir}/${_cur_file}"
+    stfw.log.sect_start_info "${_sect_name}"
+    ./${_cur_file}
+    _cur_retcode=$?
+    if [[ ${_cur_retcode} -eq ${EXITCODE_SUCCESS} ]]; then
+      stfw.log.sect_end_info "${_sect_name}" "${EXITCODE_SUCCESS}"
+
+    else
+      stfw.log.sect_end_info "${_sect_name}" "${EXITCODE_ERROR}"
+      _exitcode=${EXITCODE_ERROR}
+      break
+    fi
+
+  done
+  IFS="${_before_IFS}"
+
+  log.trace "cd \"${_before_dir}\""
+  cd "${_before_dir}"
+
+  stfw.log.func_end_trace ${_exitcode}
+  return ${_exitcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# シナリオ実行中チェック
+#
+# 概要
+#   シナリオ実行中ではない場合、エラー終了します。
+#
+# 引数
+#   なし
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.must_run_on_server() {
+  if [[ "$(stfw.is_run_on_server)" = "true" ]]; then return ${EXITCODE_SUCCESS}; fi
+
+  log.error "must run on server."
+  exit ${EXITCODE_ERROR}
+}
+
+function stfw.is_run_on_server() {
+  if [[ "${STFW_PROJ_DIR}" = "$(stfw.project_home)" ]]; then
+    echo "false"
+    return ${EXITCODE_SUCCESS}
+  fi
+
+  echo "true"
+  return ${EXITCODE_SUCCESS}
+}
+
+function stfw.project_home() {
+  # shellcheck disable=SC2001
+  echo "${STFW_PROJ_DIR}" | sed -e 's|/.stfw/.*||'
+  return ${EXITCODE_SUCCESS}
+}
+
+#---------------------------------------------------------------------------------------------------
+# stfw起動パラメータ保存
+#
+# 概要
+#   stfwコマンドの実行時パラメータを保存します。
+#
+# 引数
+#   1: digdag project dir
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     {digdag_project_dir}/params
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.set_raw_params() {
+  local _path_params="${1:?}/params"
+  echo "${stfw_raw_params:?}" >"${_path_params}"
+}
+
+#---------------------------------------------------------------------------------------------------
+# stfw起動パラメータ取得
+#
+# 概要
+#   stfwコマンドの実行時パラメータを取得します。
+#
+# 引数
+#   なし
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     stfwコマンドのパラメータ
+#   ファイル
+#     ${STFW_PROJ_DIR_DATA}/params
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.get_raw_params() {
+  stfw.must_run_on_server
+
+  local _path_params="${STFW_PROJ_DIR}/params"
+  checks.must_exist_file "${_path_params}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  cat "${_path_params}"
+}
+
+
+
+
+#===================================================================================================
+# logging
+#
+#   開始終了ログ
+#===================================================================================================
+function stfw.log.script_start() {
+  local _script_path="${1:?}"
+  shift
+  local _args="$*"
+
+  local _script_name=$(basename "${_script_path}")
+  private.stfw.log.start "${LOGLEVEL_INFO}" "${_script_name}" "${_args}"
+  return $?
+}
+function stfw.log.script_end() {
+  local _script_path="${1:?}"
+  local _exit_code="${2:?}"
+
+  local _script_name=$(basename "${_script_path}")
+  private.stfw.log.end "${LOGLEVEL_INFO}" "${_script_name}" "${_exit_code}"
+  return $?
+}
+
+
+function stfw.log.func_start_info() {
+  private.stfw.log.func_start "${LOGLEVEL_INFO}" "$@"
+  return $?
+}
+function stfw.log.func_end_info() {
+  private.stfw.log.func_end "${LOGLEVEL_INFO}" "$@"
+  return $?
+}
+
+function stfw.log.func_start_debug() {
+  private.stfw.log.func_start "${LOGLEVEL_DEBUG}" "$@"
+  return $?
+}
+function stfw.log.func_end_debug() {
+  private.stfw.log.func_end "${LOGLEVEL_DEBUG}" "$@"
+  return $?
+}
+
+function stfw.log.func_start_trace() {
+  private.stfw.log.func_start "${LOGLEVEL_TRACE}" "$@"
+  return $?
+}
+function stfw.log.func_end_trace() {
+  private.stfw.log.func_end "${LOGLEVEL_TRACE}" "$@"
+  return $?
+}
+
+
+function stfw.log.sect_start_info() {
+  private.stfw.log.start "${LOGLEVEL_INFO}" "$@"
+  return $?
+}
+function stfw.log.sect_end_info() {
+  private.stfw.log.end "${LOGLEVEL_INFO}" "$@"
+  return $?
+}
+
+function stfw.log.sect_start_debug() {
+  private.stfw.log.start "${LOGLEVEL_DEBUG}" "$@"
+  return $?
+}
+function stfw.log.sect_end_debug() {
+  private.stfw.log.end "${LOGLEVEL_DEBUG}" "$@"
+  return $?
+}
+
+function stfw.log.sect_start_trace() {
+  private.stfw.log.start "${LOGLEVEL_TRACE}" "$@"
+  return $?
+}
+function stfw.log.sect_end_trace() {
+  private.stfw.log.end "${LOGLEVEL_TRACE}" "$@"
+  return $?
+}
+
+
+function private.stfw.log.func_start() {
+  local _log_level="${1:?}"
+  shift
+  local _args="$*"
+
+  local _invoker_name="${FUNCNAME[2]}"
+  private.stfw.log.start "${_log_level}" "${_invoker_name}" "${_args}"
+  return $?
+}
+
+function private.stfw.log.func_end() {
+  local _log_level="${1:?}"
+  local _exit_code="${2:?}"
+
+  local _invoker_name="${FUNCNAME[2]}"
+  private.stfw.log.end "${_log_level}" "${_invoker_name}" "${_exit_code}"
+  return $?
+}
+
+
+function private.stfw.log.start() {
+  local _log_level="${1:?}"
+  local _section_name="${2:?}"
+  shift 2
+  local _msg_args="$*"
+
+  # 実行判定
+  if [[ "${_log_level}" = "${LOGLEVEL_TRACE}" ]] && [[ "$(log.is_trace_enabled)" != "true" ]]; then return ${EXITCODE_SUCCESS}; fi
+  if [[ "${_log_level}" = "${LOGLEVEL_DEBUG}" ]] && [[ "$(log.is_debug_enabled)" != "true" ]]; then return ${EXITCODE_SUCCESS}; fi
+
+  # メッセージ出力
+  local _msg="${LOG__PREFIX_START}${_section_name} ${_msg_args}"
+  if [[ "${_log_level}" = "${LOGLEVEL_TRACE}" ]]; then log.trace "${_msg}"; fi
+  if [[ "${_log_level}" = "${LOGLEVEL_DEBUG}" ]]; then log.debug "${_msg}"; fi
+  if [[ "${_log_level}" = "${LOGLEVEL_INFO}" ]]; then  log.info  "${_msg}"; fi
+  log.save_indent
+  log.add_indent
+
+  # 処理時間計測start
+  processing_time.start "${_section_name}_$$"
+
+  return ${EXITCODE_SUCCESS}
+}
+
+function private.stfw.log.end() {
+  local _log_level="${1:?}"
+  local _section_name="${2:?}"
+  local _exit_code="${3:?}"
+
+  # 実行判定
+  if [[ "${_log_level}" = "${LOGLEVEL_TRACE}" ]] && [[ "$(log.is_trace_enabled)" != "true" ]]; then return ${EXITCODE_SUCCESS}; fi
+  if [[ "${_log_level}" = "${LOGLEVEL_DEBUG}" ]] && [[ "$(log.is_debug_enabled)" != "true" ]]; then return ${EXITCODE_SUCCESS}; fi
+
+  # 処理時間計算
+  local _processing_time=$(processing_time.end "${_section_name}_$$")
+  local _msg_processing_time="[processing_time=${_processing_time}]"
+  local _msg="${LOG__PREFIX_END}${_section_name} ${_msg_processing_time}"
+
+  # メッセージ出力
+  log.restore_indent
+  if [ ${_exit_code} -eq ${EXITCODE_SUCCESS} ]; then
+    if [[ "${_log_level}" = "${LOGLEVEL_TRACE}" ]]; then log.trace "${_msg}"; fi
+    if [[ "${_log_level}" = "${LOGLEVEL_DEBUG}" ]]; then log.debug "${_msg}"; fi
+    if [[ "${_log_level}" = "${LOGLEVEL_INFO}" ]]; then  log.info  "${_msg}"; fi
+  elif [ ${_exit_code} -le ${EXITCODE_WARN} ]; then
+    log.warn "${_msg}"
+  else
+    log.error_oneline "${_msg}"
+  fi
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+
+
+#===================================================================================================
+# context
+#
+#   同一PID内で共有するkey:valueを管理します。
+#===================================================================================================
+function stfw.context.init() {
+  stfw.log.func_start_trace
+
+  local _dir_context="$(private.stfw.context.dir)"
+  if [[ ! -d "${_dir_context}" ]]; then mkdir -p ${_dir_context}; fi
+  touch "$(private.stfw.context.path)"
+
+  stfw.log.func_end_trace ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.context.put() {
+  stfw.log.func_start_trace "$@"
+  local _key="${1:?}"
+  local _value="${2:?}"
+
+  local _path_context="$(private.stfw.context.path)"
+  touch "${_path_context}"
+  mv "${_path_context}" "${_path_context}.tmp"
+  grep -v "^${_key}=" <"${_path_context}.tmp" >"${_path_context}"
+  echo "${_key}=${_value}" >>"${_path_context}"
+  rm -f "${_path_context}.tmp"
+
+  stfw.log.func_end_trace ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.context.get() {
+  stfw.log.func_start_trace "$@"
+  local _key="${1:?}"
+
+  grep "^${_key}=" "$(private.stfw.context.path)" 2>/dev/null | cut -d '=' -f 2
+
+  stfw.log.func_end_trace ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.context.destroy() {
+  stfw.log.func_start_trace
+
+  local _dir_context="$(private.stfw.context.dir)"
+  if [[ -d "${_dir_context}" ]]; then rm -fr ${_dir_context}; fi
+
+  stfw.log.func_end_trace ${EXITCODE_SUCCESS}
+}
+
+
+function private.stfw.context.dir() {
+  echo "$(stfw.get_proj_dir)/${STFW_PROJ_DIRNAME_DATA}/context"
+}
+function private.stfw.context.path() {
+  echo "$(private.stfw.context.dir)/$$"
+}

@@ -1,0 +1,138 @@
+#!/bin/bash
+#===================================================================================================
+#
+# webhook controller
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/usecase/webhook/webhook_inputport"
+. "${DIR_BIN_LIB}/stfw/usecase/webhook/webhook_outputport"
+
+
+function stfw.adapter.cli.webhook.run_start() {
+  stfw.log.func_start_debug "$@"
+  local _run_id="${1:?}"
+
+  # usecase input
+  stfw.usecase.inputport.webhook.run_start_requested "${_run_id}"
+  local _retcode=$?
+
+  # usecase output
+  stfw.usecase.outputport.webhook.run_start_finished "${_retcode}" "${_run_id}"
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.adapter.cli.webhook.run_end() {
+  stfw.log.func_start_debug "$@"
+  local _run_id="${1:?}"
+
+  # usecase input
+  stfw.usecase.inputport.webhook.run_end_requested "${_run_id}"
+  local _retcode=$?
+
+  # usecase output
+  stfw.usecase.outputport.webhook.run_end_finished "${_retcode}" "${_run_id}"
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.adapter.cli.webhook.scenario_start() {
+  stfw.log.func_start_debug "$@"
+  local _scenario_dir="${1:?}"
+
+  # usecase input
+  stfw.usecase.inputport.webhook.scenario_start_requested "${_scenario_dir}"
+  local _retcode=$?
+
+  # usecase output
+  stfw.usecase.outputport.webhook.scenario_start_finished "${_retcode}" "${_scenario_dir}"
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.adapter.cli.webhook.scenario_end() {
+  stfw.log.func_start_debug "$@"
+  local _scenario_dir="${1:?}"
+
+  # usecase input
+  stfw.usecase.inputport.webhook.scenario_end_requested "${_scenario_dir}"
+  local _retcode=$?
+
+  # usecase output
+  stfw.usecase.outputport.webhook.scenario_end_finished "${_retcode}" "${_scenario_dir}"
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.adapter.cli.webhook.bizdate_start() {
+  stfw.log.func_start_debug "$@"
+  local _bizdate_dir="${1:?}"
+
+  # usecase input
+  stfw.usecase.inputport.webhook.bizdate_start_requested "${_bizdate_dir}"
+  local _retcode=$?
+
+  # usecase output
+  stfw.usecase.outputport.webhook.bizdate_start_finished "${_retcode}" "${_bizdate_dir}"
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.adapter.cli.webhook.bizdate_end() {
+  stfw.log.func_start_debug "$@"
+  local _bizdate_dir="${1:?}"
+
+  # usecase input
+  stfw.usecase.inputport.webhook.bizdate_end_requested "${_bizdate_dir}"
+  local _retcode=$?
+
+  # usecase output
+  stfw.usecase.outputport.webhook.bizdate_end_finished "${_retcode}" "${_bizdate_dir}"
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.adapter.cli.webhook.process_start() {
+  stfw.log.func_start_debug "$@"
+  local _process_dir="${1:?}"
+  local _process_type="${2:?}"
+
+  # usecase input
+  stfw.usecase.inputport.webhook.process_start_requested "${_process_dir}" "${_process_type}"
+  local _retcode=$?
+
+  # usecase output
+  stfw.usecase.outputport.webhook.process_start_finished "${_retcode}" "${_process_dir}" "${_process_type}"
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.adapter.cli.webhook.process_end() {
+  stfw.log.func_start_debug "$@"
+  local _process_dir="${1:?}"
+  local _process_type="${2:?}"
+
+  # usecase input
+  stfw.usecase.inputport.webhook.process_end_requested "${_process_dir}" "${_process_type}"
+  local _retcode=$?
+
+  # usecase output
+  stfw.usecase.outputport.webhook.process_end_finished "${_retcode}" "${_process_dir}" "${_process_type}"
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}

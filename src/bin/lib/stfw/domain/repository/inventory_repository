@@ -1,0 +1,118 @@
+#!/bin/bash
+#===================================================================================================
+#
+# inventory respository
+#
+#
+# インベントリ定義ファイル
+#   ファイル情報
+#     フェーマット: yaml
+#     文字コード  : utf8
+#     改行コード  : LF
+#
+#   レイアウト
+#     stfw_inventory:
+#       - <group-name>:
+#         - <ip | hostname>
+#
+#   サンプル
+#     stfw_inventory:
+#       - web:
+#         - 127.0.0.1
+#         - localhost
+#       - ap:
+#         - 127.0.0.1
+#       - db:
+#         - 12.0.0.1
+#
+#===================================================================================================
+#---------------------------------------------------------------------------------------------------
+# 依存定数
+#---------------------------------------------------------------------------------------------------
+# 全件ホストグループ
+STFW__INVENTRY_GROUP_ALL="${STFW__INVENTRY_GROUP_ALL:?}"
+
+
+#---------------------------------------------------------------------------------------------------
+# グルーピングされたホスト一覧
+#
+# 概要
+#   指定のインベントリ定義ファイルから、グルーピングされたホストを改行区切りで表示します。
+#
+# 引数
+#   1: インベントリ定義ファイルパス
+#   2: グループ名 ※全件取得する場合 "all"
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     ホスト名リスト ※改行区切り
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.repository.inventory.list_group_hosts() {
+  local _path_config="${1:?}"
+  local _arg_group="${2:?}"
+
+  checks.must_exist_file "${_path_config}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # allの場合、絞り込み条件を、任意の文字列に変更
+  local _group="${_arg_group}"
+  if [[ "${_group}" = "${STFW__INVENTRY_GROUP_ALL}" ]]; then _group=".*"; fi
+
+  # 定義からグループ名で絞り込み
+  local _criteria="^stfw_inventory_[0-9]*_${_group}_[0-9]*\="
+
+  log.trace "inventory file: \"${_path_config}\""
+  log.trace "criteria      : \"${_criteria}\""
+
+  yaml2properties "${_path_config}"                                                                | # yamlをpropertiesに変換
+  grep "${_criteria}"                                                                              | # グループ名で絞る
+  cut -d '=' -f 2                                                                                  | # 設定値（ホスト）を射影
+  _unquote                                                                                         | # クォートを除去
+  sort                                                                                             | # 一意に絞る
+  uniq
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# ホストグループの存在チェック
+#
+# 概要
+#   指定のインベントリ定義ファイルに、グループが存在するか確認します。
+#
+# 引数
+#   1: インベントリ定義ファイルパス
+#   2: グループ名
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     存在する場合  : true
+#     存在しない場合: false
+#   ファイル
+#     なし
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.repository.inventory.is_exist_group() {
+  local _path_config="${1:?}"
+  local _group="${2:?}"
+
+  checks.must_exist_file "${_path_config}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # ホスト一覧の取得結果で判断
+  local _hosts="$(stfw.domain.repository.inventory.list_group_hosts ${_path_config} ${_group})"
+  if [[ "${_hosts}x" = "x" ]]; then
+    echo "false"
+    return
+  fi
+
+  echo "true"
+}

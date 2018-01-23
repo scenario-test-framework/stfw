@@ -1,0 +1,130 @@
+#!/bin/bash
+#===================================================================================================
+#
+# bizdate specification
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/spec/scenario_spec"
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# feature
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.spec.bizdate.dirname() {
+  local _seq="${1:?}"
+  local _bizdate="${2:?}"
+
+  echo "_${_seq}_${_bizdate}"
+}
+
+
+function stfw.domain.service.spec.bizdate.dir() {
+  local _scenario_dir="${1:?}"
+  local _seq="${2:?}"
+  local _bizdate="${3:?}"
+
+  local _dirname="$(stfw.domain.service.spec.bizdate.dirname ${_seq} ${_bizdate})"
+  echo "${_scenario_dir}/${_dirname}"
+}
+
+
+function stfw.domain.service.spec.bizdate.is_bizdate-dir() {
+  local _trg_dir="${1:?}"
+
+  (
+    cd "${_trg_dir}"
+    if [[ "$(basename "$(cd ../..; pwd)")" != "scenario" ]]; then
+      echo "false"
+      return
+    fi
+
+    checks.must_exist_file "../../../${FILENAME_SYSTEM_CONFIG}"
+    if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+      echo "false"
+      return
+    fi
+
+    echo "true"
+  )
+}
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# validation
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.spec.bizdate.can_initialize() {
+  local _scenario_dir="${1:?}"
+  local _seq="${2:?}"
+  local _bizdate="${3:?}"
+
+  # シナリオディレクトリ
+  checks.must_exist_dir "${_scenario_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  local _is_sceanrio_dir="$(stfw.domain.service.spec.scenario.is_scenario-dir ${_scenario_dir})"
+  if [[ "${_is_sceanrio_dir}" != "true" ]]; then
+    log.error "${_scenario_dir} is not scenario-dir."
+    return ${EXITCODE_ERROR}
+  fi
+
+  # 連番
+  checks.must_be_number "${_seq}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # 業務日付
+  checks.must_be_date_format "${_bizdate}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.domain.service.spec.bizdate.can_generate() {
+  local _bizdate_dir="${1:?}"
+
+  private.must_exist_bizdate_dir "${_bizdate_dir}"
+  local _retcode=$?
+
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.spec.bizdate.can_setup() {
+  local _bizdate_dir="${1:?}"
+
+  private.must_exist_bizdate_dir "${_bizdate_dir}"
+  local _retcode=$?
+
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.spec.bizdate.can_teardown() {
+  local _bizdate_dir="${1:?}"
+
+  private.must_exist_bizdate_dir "${_bizdate_dir}"
+  local _retcode=$?
+
+  return ${_retcode}
+}
+
+
+function private.must_exist_bizdate_dir() {
+  local _bizdate_dir="${1:?}"
+
+  # 業務日付ディレクトリ
+  checks.must_exist_dir "${_bizdate_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  local _is_bizdate_dir="$(stfw.domain.service.spec.bizdate.is_bizdate-dir ${_bizdate_dir})"
+  if [[ "${_is_bizdate_dir}" != "true" ]]; then
+    log.error "${_bizdate_dir} is not bizdate-dir."
+    return ${EXITCODE_ERROR}
+  fi
+
+  return ${EXITCODE_SUCCESS}
+}

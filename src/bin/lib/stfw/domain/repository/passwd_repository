@@ -1,0 +1,93 @@
+#!/bin/bash
+#===================================================================================================
+#
+# passwd repository
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/spec/passwd_spec"
+
+
+function stfw.domain.repository.passwd.generate_key() {
+  local _key_dir="$(stfw.domain.service.spec.passwd.key_dir)"
+  local _path_encrypt_key="$(stfw.domain.service.spec.passwd.path_encrypt_key)"
+  local _path_decrypt_key="$(stfw.domain.service.spec.passwd.path_decrypt_key)"
+
+  log.trace "mkdir \"${_key_dir}\""
+  mkdir "${_key_dir}"
+
+  log.trace "gen_encrypt_key \"${_path_encrypt_key}\" \"${_path_decrypt_key}\""
+  gen_encrypt_key "${_path_encrypt_key}" "${_path_decrypt_key}" | log.trace
+
+  return ${PIPESTATUS[0]}
+}
+
+
+function stfw.domain.repository.passwd.remove_key() {
+  local _key_dir="$(stfw.domain.service.spec.passwd.key_dir)"
+
+  log.trace "rm -fr \"${_key_dir}\""
+  rm -fr "${_key_dir}"
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# 保存
+#
+# 概要
+#   passwdファイルを保存します。
+#
+# 引数
+#   1: ホスト
+#   2: ユーザ
+#   3: 暗号化する文字列（password, tokenなど）
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     passwdファイル
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.repository.passwd.save() {
+  local _host="${1:?}"
+  local _user="${2:?}"
+  local _password="${3:?}"
+
+  local _dir_passwd="$(stfw.domain.service.spec.passwd.dir ${_host} ${_user})"
+  checks.mkdirs "${_dir_passwd}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  local _path_passwd="$(stfw.domain.service.spec.passwd.path ${_host} ${_user})"
+  echo "${_password}" | _encrypt "${PATH_ENCRYPT_KEY}" >"${_path_passwd}"
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.domain.repository.passwd.remove() {
+  local _host="${1:?}"
+  local _user="${2:?}"
+
+  local _path_passwd="$(stfw.domain.service.spec.passwd.path ${_host} ${_user})"
+  rm -f "${_path_passwd}"
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.domain.repository.passwd.show() {
+  local _host="${1:?}"
+  local _user="${2:?}"
+
+  local _path_passwd="$(stfw.domain.service.spec.passwd.path ${_host} ${_user})"
+  checks.must_exist_file "${_path_passwd}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  _decrypt "${PATH_DECRYPT_KEY}" <"${_path_passwd}"
+
+  return ${EXITCODE_SUCCESS}
+}

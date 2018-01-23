@@ -2,7 +2,7 @@
 #set -ex
 #===================================================================================================
 #
-# scenario test framework cli - bizdate command
+# bizdate command
 #
 #===================================================================================================
 #---------------------------------------------------------------------------------------------------
@@ -11,12 +11,9 @@
 dir_script="$(dirname $0)"
 cd "$(cd ${dir_script}; pwd)"
 
-# 共通設定
 readonly STFW_HOME="$(cd ../..; pwd)"
 . "${STFW_HOME}/bin/lib/setenv"
-
-# stfw generate共通ユーティリティ
-. "${DIR_BIN_LIB}/stfw_generate_utils"
+. "${DIR_BIN_LIB}/stfw/adapter/cli/bizdate_controller"
 
 readonly PROGNAME="stfw $(basename $0)"
 
@@ -44,156 +41,10 @@ __EOT__
 }
 
 
-function private.bizdate_dirname() {
-  local _seq="$1"
-  local _bizdate="$2"
-
-  echo "_${_seq}_${_bizdate}"
-}
-
-
-function private.init() {
-  log.func_start_trace "$@"
-  local _seq="$1"
-  local _bizdate="$2"
-
-  log.trace "cd \"${STFW_EXEC_DIR}\""
-  cd "${STFW_EXEC_DIR}"
-
-  local _dirname_bizdate="$(private.bizdate_dirname ${_seq} ${_bizdate})"
-  local _dir_bizdate="$(pwd)/${_dirname_bizdate}"
-
-  # カレントディレクトリが scenario-dir 以外の場合、エラー
-  if [[ "$(stfw.is_in_scenario-dir)" != "true" ]]; then
-    log.error "current dir: $(pwd) is not scenario-dir."
-    return ${EXITCODE_ERROR}
-  fi
-
-  # ディレクトリ作成
-  if [[ ! -d "${_dir_bizdate}" ]]; then
-    log.trace "mkdir \"${_dir_bizdate}\""
-    mkdir "${_dir_bizdate}"
-  fi
-
-  # dig生成
-  stfw.generate.bizdate-dig "${_dir_bizdate}"
-
-  # 結果を表示
-  log.info "result:"
-  log.add_indent
-  find "${_dirname_bizdate}" -type f | log.info
-  log.remove_indent
-
-  log.trace "cd -"
-  cd - >/dev/null 2>&1
-
-  log.func_end_trace ${EXITCODE_SUCCESS}
-  return ${EXITCODE_SUCCESS}
-}
-
-
-function private.generate_dig() {
-  log.func_start_trace
-  local _retcode=${EXITCODE_SUCCESS}
-
-  log.trace "cd \"${STFW_EXEC_DIR}\""
-  cd "${STFW_EXEC_DIR}"
-
-  # カレントディレクトリが scenario-bizdate-dir 以外の場合、エラー
-  if [[ "$(stfw.is_in_scenario-bizdate-dir)" != "true" ]]; then
-    log.error "current dir: $(pwd) is not scenario-bizdate-dir."
-    return ${EXITCODE_ERROR}
-  fi
-
-  # bizdate.dig生成
-  stfw.generate.bizdate-dig "$(pwd)"
-  _retcode=$?
-
-  log.trace "cd -"
-  cd - >/dev/null 2>&1
-
-  log.func_end_trace ${_retcode}
-  return ${_retcode}
-}
-
-
-function private.setup() {
-  log.func_start_trace "$@"
-
-  local _trg_bizdate_dir="$1"
-  local _retcode=${EXITCODE_SUCCESS}
-
-  log.trace "cd \"${_trg_bizdate_dir}\""
-  cd "${_trg_bizdate_dir}"
-
-  # 組み込みplugin.setup
-  local _sect_name="bizdate-embedded-setup"
-  log.sect_start_debug "${_sect_name}"
-  local _dir_embed_setup="${DIR_PLUGIN}/bizdate/__common/setup"
-  stfw.bulk_exec_scripts "${_dir_embed_setup}"
-  _retcode=$?
-  log.sect_end_debug "${_sect_name}" "${_retcode}"
-  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then return ${_retcode}; fi
-
-  # プロジェクトplugin.setup
-  _sect_name="bizdate-project-setup"
-  log.sect_start_debug "${_sect_name}"
-  local _dir_proj_setup="$(stfw.get_plugin_path bizdate/_common/setup)"
-  if [[ "${_dir_proj_setup}x" != "x" ]]; then
-    stfw.bulk_exec_scripts "${_dir_proj_setup}"
-    _retcode=$?
-  fi
-  log.sect_end_debug "${_sect_name}" "${_retcode}"
-
-  log.trace "cd -"
-  cd - >/dev/null 2>&1
-
-  log.func_end_trace ${_retcode}
-  return ${_retcode}
-}
-
-
-function private.teardown() {
-  log.func_start_trace "$@"
-  local _trg_bizdate_dir="$1"
-  local _retcode=${EXITCODE_SUCCESS}
-
-  log.trace "cd \"${_trg_bizdate_dir}\""
-  cd "${_trg_bizdate_dir}"
-
-  # プロジェクトplugin.teardown
-  local _sect_name="bizdate-project-teardown"
-  log.sect_start_debug "${_sect_name}"
-  local _dir_proj_teardown="$(stfw.get_plugin_path bizdate/_common/teardown)"
-  if [[ "${_dir_proj_teardown}x" != "x" ]]; then
-    stfw.bulk_exec_scripts "${_dir_proj_teardown}"
-    _retcode=$?
-  fi
-  log.sect_end_debug "${_sect_name}" "${_retcode}"
-  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then return ${_retcode}; fi
-
-  # 組み込みplugin.teardown
-  _sect_name="bizdate-embedded-teardown"
-  log.sect_start_debug "${_sect_name}"
-  local _dir_embed_teardown="${DIR_PLUGIN}/bizdate/__common/teardown"
-  stfw.bulk_exec_scripts "${_dir_embed_teardown}"
-  _retcode=$?
-  log.sect_end_debug "${_sect_name}" "${_retcode}"
-
-  log.trace "cd -"
-  cd - >/dev/null 2>&1
-
-  log.func_end_trace ${_retcode}
-  return ${_retcode}
-}
-
 
 #---------------------------------------------------------------------------------------------------
-# 事前処理
-#---------------------------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------
 # オプション解析
-#-------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------
 # 実行コマンド
 cmd=""
 # 業務日付実行ディレクトリ
@@ -208,62 +59,45 @@ while :; do
 
     -h|--help)
       private.usage
-      exit ${EXITCODE_ERROR}
       ;;
 
     -i|--init)
-      if [[ "${cmd}x" != "x" ]]; then private.usage; fi
       if [[ $# -lt 3 ]]; then private.usage; fi
       cmd="init"
 
       # 連番
       seq="$2"
-      if [[ "${seq//[0-9]/}x" != "x" ]]; then
-        log.error "seq must be number."
-        exit ${EXITCODE_ERROR}
-      fi
 
       # 業務日付
       bizdate="$3"
-      if [[ ${#bizdate} -ne 8 ]] || [[ "${bizdate//[0-9]/}x" != "x" ]]; then
-        log.error "bizdate must be YYYYMMDD format."
-        exit ${EXITCODE_ERROR}
-      fi
       shift 3
+      break
       ;;
 
     -g|--generate-dig)
-      if [[ "${cmd}x" != "x" ]]; then private.usage; fi
       cmd="generate-dig"
       shift
+      break
       ;;
 
     -s|--setup)
-      if [[ "${cmd}x" != "x" ]]; then private.usage; fi
       if [[ $# -lt 2 ]]; then private.usage; fi
       cmd="setup"
 
       # 業務日付ディレクトリ
       trg_bizdate_dir="$2"
-      if [[ ! -d "${trg_bizdate_dir}" ]]; then
-        log.error "${trg_bizdate_dir} is not exist."
-        exit ${EXITCODE_ERROR}
-      fi
       shift 2
+      break
       ;;
 
     -t|--teardown)
-      if [[ "${cmd}x" != "x" ]]; then private.usage; fi
       if [[ $# -lt 2 ]]; then private.usage; fi
       cmd="teardown"
 
       # 業務日付ディレクトリ
       trg_bizdate_dir="$2"
-      if [[ ! -d "${trg_bizdate_dir}" ]]; then
-        log.error "${trg_bizdate_dir} is not exist."
-        exit ${EXITCODE_ERROR}
-      fi
       shift 2
+      break
       ;;
 
     --)
@@ -279,32 +113,31 @@ done
 
 
 #---------------------------------------------------------------------------------------------------
-# 本処理
-#---------------------------------------------------------------------------------------------------
-log.script_start "${PROGNAME} ${cmd}"
-
-#-------------------------------------------------------------------------------
-# 引数解析
-#-------------------------------------------------------------------------------
 # コマンド実行
+#---------------------------------------------------------------------------------------------------
+stfw.log.script_start "${PROGNAME} ${cmd}"
+
 case ${cmd} in
   init)
-    private.init "${seq}" "${bizdate}"
+    stfw.adapter.cli.bizdate.init "${seq}" "${bizdate}" 2>&1 | log.tee
+    exitcode=${PIPESTATUS[0]}
     ;;
   generate-dig)
-    private.generate_dig
+    stfw.adapter.cli.bizdate.generate_dig 2>&1 | log.tee
+    exitcode=${PIPESTATUS[0]}
     ;;
   setup)
-    private.setup "${trg_bizdate_dir}"
+    stfw.adapter.cli.bizdate.setup "${trg_bizdate_dir}" 2>&1 | log.tee
+    exitcode=${PIPESTATUS[0]}
     ;;
   teardown)
-    private.teardown "${trg_bizdate_dir}"
+    stfw.adapter.cli.bizdate.teardown "${trg_bizdate_dir}" 2>&1 | log.tee
+    exitcode=${PIPESTATUS[0]}
     ;;
   *)
     private.usage
     ;;
 esac
-exitcode=$?
 
-log.script_end "${PROGNAME} ${cmd}" "${exitcode}"
+stfw.log.script_end "${PROGNAME} ${cmd}" "${exitcode}"
 exit ${exitcode}

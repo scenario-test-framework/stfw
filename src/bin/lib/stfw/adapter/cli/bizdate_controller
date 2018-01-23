@@ -1,0 +1,72 @@
+#!/bin/bash
+#===================================================================================================
+#
+# bizdate controller
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/usecase/bizdate/bizdate_inputport"
+. "${DIR_BIN_LIB}/stfw/usecase/bizdate/bizdate_outputport"
+
+
+function stfw.adapter.cli.bizdate.init() {
+  stfw.log.func_start_debug "$@"
+  local _seq="${1:?}"
+  local _bizdate="${2:?}"
+
+  # usecase input
+  stfw.usecase.inputport.bizdate.initialize_requested "${STFW_EXEC_DIR}" "${_seq}" "${_bizdate}"
+  local _retcode=$?
+
+  # usecase output
+  stfw.usecase.outputport.bizdate.initialize_finished "${_retcode}" "${STFW_EXEC_DIR}" "${_seq}" "${_bizdate}"
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.adapter.cli.bizdate.generate_dig() {
+  stfw.log.func_start_debug "$@"
+
+  # usecase input
+  stfw.usecase.inputport.bizdate.generate_requested "${STFW_EXEC_DIR}"
+  local _retcode=$?
+
+  # usecase output
+  stfw.usecase.outputport.bizdate.generate_finished "${_retcode}" "${STFW_EXEC_DIR}"
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.adapter.cli.bizdate.setup() {
+  stfw.log.func_start_debug "$@"
+  local _trg_bizdate_dir="${1:?}"
+
+  # usecase input
+  stfw.usecase.inputport.bizdate.setup_requested "${_trg_bizdate_dir}"
+  local _retcode=$?
+
+  # usecase output
+  stfw.usecase.outputport.bizdate.setup_finished "${_retcode}" "${_trg_bizdate_dir}"
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.adapter.cli.bizdate.teardown() {
+  stfw.log.func_start_debug "$@"
+  local _trg_bizdate_dir="${1:?}"
+
+  # usecase input
+  stfw.usecase.inputport.bizdate.teardown_requested "${_trg_bizdate_dir}"
+  local _retcode=$?
+
+  # usecase output
+  stfw.usecase.outputport.bizdate.teardown_finished "${_retcode}" "${_trg_bizdate_dir}"
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}

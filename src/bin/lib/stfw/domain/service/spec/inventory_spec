@@ -1,0 +1,53 @@
+#!/bin/bash
+#===================================================================================================
+#
+# inventory specification
+#
+#===================================================================================================
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# feature
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.spec.inventory.config() {
+  echo "${STFW_PROJ_DIR_CONFIG:?}/inventory/${stfw_inventory:?}"
+}
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# validate
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.spec.inventory.can_list() {
+  local _group="${1:?}"
+
+  # インベントリファイル
+  local _path_config=$(stfw.domain.service.spec.inventory.config)
+  checks.must_exist_file "${_path_config}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # グループ
+  checks.must_not_null "group" "${_group}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.domain.service.spec.inventory.can_is_exist_group() {
+  local _group="${1:?}"
+
+  # インベントリファイル
+  local _path_config=$(stfw.domain.service.spec.inventory.config)
+  checks.must_exist_file "${_path_config}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # グループ
+  checks.must_not_null "group" "${_group}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  return ${EXITCODE_SUCCESS}
+}

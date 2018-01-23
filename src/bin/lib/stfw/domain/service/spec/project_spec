@@ -1,0 +1,43 @@
+#!/bin/bash
+#===================================================================================================
+#
+# project specification
+#
+#===================================================================================================
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# feature
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.spec.project.template_dir() {
+  echo "${STFW_HOME:?}/template"
+}
+
+function stfw.domain.service.spec.project.project_dir() {
+  echo "${STFW_PROJ_DIR:?}"
+}
+
+
+function stfw.domain.service.spec.project.project_config() {
+  echo "$(stfw.domain.service.spec.project.project_dir)/${FILENAME_SYSTEM_CONFIG:?}"
+}
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# validate
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.spec.project.can_init() {
+  # プロジェクト設定ファイル
+  local _dir_project="$(stfw.domain.service.spec.project.project_dir)"
+  local _path_config="$(stfw.domain.service.spec.project.project_config)"
+  if [[ -f "${_path_config}" ]]; then
+    log.error "${_dir_project} is already initialized."
+    return ${EXITCODE_ERROR}
+  fi
+
+  return ${EXITCODE_SUCCESS}
+}

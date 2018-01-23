@@ -1,0 +1,31 @@
+#!/bin/bash
+#===================================================================================================
+#
+# inventory outputport
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/inventory_service"
+
+
+function stfw.usecase.outputport.inventory.is_exist_group_finished() {
+  stfw.log.func_start_debug "$@"
+#  local _inputport_exitcode="${1:?}"
+#  local _group="${2:?}"
+
+  # 表示なし
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.usecase.outputport.inventory.list_finished() {
+  stfw.log.func_start_debug "$@"
+#  local _inputport_exitcode="${1:?}"
+#  local _group="${2:?}"
+
+  # 表示なし
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}

@@ -1,0 +1,31 @@
+#!/bin/bash
+#===================================================================================================
+#
+# inventory inputport
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/inventory_service"
+
+
+function stfw.usecase.inputport.inventory.is_exist_group_requested() {
+  stfw.log.func_start_debug "$@"
+  local _group="${1:?}"
+
+  stfw.domain.service.inventory.is_exist_group_requested "${_group}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.usecase.inputport.inventory.list_requested() {
+  stfw.log.func_start_debug "$@"
+  local _group="${1:?}"
+
+  stfw.domain.service.inventory.list_requested "${_group}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
