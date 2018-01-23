@@ -804,7 +804,7 @@ function private.stfw.webhook.execute() {
   log.clear_indent
 
   # yml -> json変換
-  "${DIR_BIN_LIB}/yaml2json" "${_tmp_yml_file}" >"${_tmp_json_file}"
+  yaml2json "${_tmp_yml_file}" >"${_tmp_json_file}"
   rm "${_tmp_yml_file}"
 
   printenv | grep "stfw_webhooks_urls_" | cut -d "=" -f 2 |

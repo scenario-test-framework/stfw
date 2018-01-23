@@ -68,6 +68,7 @@ readonly DIR_TEMPLATE="${STFW_HOME}/template"
 readonly DIR_ARCHIVE="${STFW_HOME}/archives"
 # 外部ライブラリ
 readonly DIR_MODULE="${STFW_HOME}/modules"
+readonly DIR_MODULE_BIN="${DIR_MODULE}/bin"
 
 #-------------------------------------------------------------------------------
 # ファイル
@@ -137,7 +138,7 @@ readonly PATH_PROJ_CONFIG="${STFW_PROJ_DIR}/${FILENAME_SYSTEM_CONFIG}"
 #--------------------------------------------------------------------------------------------------
 # PATH追加
 #--------------------------------------------------------------------------------------------------
-PATH="${DIR_BIN_LIB}/Tukubai:${DIR_BIN_LIB}/Parsrs:${PATH}"
+PATH="${DIR_MODULE_BIN}:${PATH}"
 
 
 

@@ -347,16 +347,34 @@ log.remove_indent
 
 
 #--------------------------------------------------------------------------------------------------
+# 依存コマンドのPATH追加
+#--------------------------------------------------------------------------------------------------
+log.info "add PATH"
+if [[ ! -d "${DIR_MODULE_BIN}" ]]; then mkdir -p "${DIR_MODULE_BIN}"; fi
+
+# shellcheck disable=SC2038,SC2016
+find "${DIR_MODULE}/Tukubai" -type f                                                               |
+xargs -I {} bash -c 'cur_file_path={}; ln -sf ${cur_file_path} $(cd $(dirname ${cur_file_path})/..; pwd)/bin/$(basename ${cur_file_path})'
+# shellcheck disable=SC2038,SC2016
+find "${DIR_MODULE}/Parsrs" -type f                                                                |
+xargs -I {} bash -c 'cur_file_path={}; ln -sf ${cur_file_path} $(cd $(dirname ${cur_file_path})/..; pwd)/bin/$(basename ${cur_file_path})'
+# shellcheck disable=SC2038,SC2016
+find "${DIR_MODULE}/yaml2json" -type f                                                             |
+xargs -I {} bash -c 'cur_file_path={}; ln -sf ${cur_file_path} $(cd $(dirname ${cur_file_path})/..; pwd)/bin/$(basename ${cur_file_path})'
+
+
+
+#--------------------------------------------------------------------------------------------------
 # バイナリファイル切り替え
 #--------------------------------------------------------------------------------------------------
 log.info "switch binaries"
 
-__TMP_DIR_BINARY="${DIR_BIN_LIB}/binary/linux"
-if [ "$(is_mac)" = "true" ]; then __TMP_DIR_BINARY="${DIR_BIN_LIB}/binary/mac"; fi
+__TMP_DIR_BINARY="${DIR_MODULE}/binary/linux"
+if [ "$(is_mac)" = "true" ]; then __TMP_DIR_BINARY="${DIR_MODULE}/binary/mac"; fi
 
-# shellcheck disable=SC2038 disable=SC2016
+# shellcheck disable=SC2038,SC2016
 find "${__TMP_DIR_BINARY}" -type f                                                                 |
-xargs -I {} bash -c 'cur_file_path={}; ln -sf ${cur_file_path} $(cd $(dirname ${cur_file_path})/../..; pwd)/$(basename ${cur_file_path})'
+xargs -I {} bash -c 'cur_file_path={}; ln -sf ${cur_file_path} $(cd $(dirname ${cur_file_path})/../..; pwd)/bin/$(basename ${cur_file_path})'
 
 
 

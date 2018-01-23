@@ -57,7 +57,8 @@ cp -pr "${DIR_SRC}/"* "${dir_dist_work}/"
 
 echo "  remove UT work files"
 rm -fr "${dir_dist_work}"/archives
-rm -fr "${dir_dist_work}"/modules
+rm -fr "${dir_dist_work}"/modules/bin
+rm -f "${dir_dist_work}"/modules/digdag
 rm -fr "${dir_dist_work}"/config/encrypt
 
 echo "  remove exclude files"
@@ -72,7 +73,8 @@ retcode=$?
 if [[ ${retcode} -ne 0 ]]; then echo "    error occured in install script." >&2; exit 1; fi
 
 echo "  package with-depends-archive"
-rm -fr "${dir_dist_work:?}/modules/"
+rm -fr "${dir_dist_work:?}/modules/bin"
+rm -f "${dir_dist_work:?}/modules/digdag"
 cd ${DIR_DIST}
 tar czf "./${archive_name_with_dpends}.tar.gz" "./${archive_name_with_dpends}"
 retcode=$?

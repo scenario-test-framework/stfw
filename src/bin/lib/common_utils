@@ -375,7 +375,7 @@ function yaml2properties() {
   #   MAP_LIST_1
   # shellcheck disable=SC2002
   cat "${_path_input_yaml}"                                                                        | # yamlファイルから
-  ${DIR_BIN_LIB}/yaml2json                                                                         | # jsonに変換
+  yaml2json                                                                                        | # jsonに変換
   parsrj.sh -rt -kd_                                                                               | # json -> フィールド形式
   self 1                                                                                           | # 項目名 をselect
   sed -e 's|^_||'                                                                                  | # 行頭の_を除去
@@ -391,7 +391,7 @@ function yaml2properties() {
   #   "list_value2"
   # shellcheck disable=SC2002
   cat "${_path_input_yaml}"                                                                        | # yamlファイルから
-  ${DIR_BIN_LIB}/yaml2json                                                                         | # jsonに変換
+  yaml2json                                                                                        | # jsonに変換
   parsrj.sh -rt -kd_                                                                               | # json -> フィールド形式
   self 2/NF                                                                                        | # 値 をselect
   xargs -I{} /bin/bash -c "eval 'echo {}'"                                                         | # 環境変数を展開
