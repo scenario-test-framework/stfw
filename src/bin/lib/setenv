@@ -100,7 +100,7 @@ readonly FILENAME_META="metadata.yml"
 readonly DL_TIMEOUT=1800
 
 # digdag
-readonly URL_DIGDAG="https://dl.bintray.com/digdag/maven/digdag-0.9.23.jar"
+readonly URL_DIGDAG="https://dl.bintray.com/digdag/maven/digdag-0.9.24.jar"
 readonly PATH_DIGDAG="${DIR_MODULE}/digdag"
 
 
