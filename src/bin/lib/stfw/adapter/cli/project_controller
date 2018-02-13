@@ -1,0 +1,23 @@
+#!/bin/bash
+#===================================================================================================
+#
+# project controller
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/usecase/project/project_inputport"
+. "${DIR_BIN_LIB}/stfw/usecase/project/project_outputport"
+
+
+function stfw.adapter.cli.project_controller.init() {
+  stfw.log.func_start_debug
+
+  # usecase input
+  stfw.usecase.inputport.project.initialize_requested
+  local _retcode=$?
+
+  # usecase output
+  stfw.usecase.outputport.project.initialize_finished "${_retcode}"
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}

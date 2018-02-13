@@ -1,7 +1,7 @@
 #!/bin/bash
 readonly PATH_WEBHOOK_TEMPLATE="${plugin_dir:?}/webhook/template.yml"
 readonly PATH_WEBHOOK_TEMPLATE_DETAIL="${plugin_dir:?}/webhook/template_detail.yml"
-readonly PATH_WEBHOOK_DETAIL="${STFW_PROJ_DIR}/tmp_process_scripts-webhook_detail.yml"
+readonly PATH_WEBHOOK_DETAIL="${STFW_PROJ_DIR:?}/tmp_process_scripts-webhook_detail.yml"
 
 
 #---------------------------------------------------------------------------------------------------
@@ -23,15 +23,14 @@ readonly PATH_WEBHOOK_DETAIL="${STFW_PROJ_DIR}/tmp_process_scripts-webhook_detai
 #
 #---------------------------------------------------------------------------------------------------
 function plugin.process.scripts.list_files() {
-  log.func_start_trace "$@"
-
-  local _dir="$1"
+  stfw.log.func_start_trace "$@"
+  local _dir="${1:?}"
 
   find "${_dir}" -mindepth 1 -maxdepth 1 -follow -type f                                           |
   sed -e "s|${_dir}/||"                                                                            |
   sort
 
-  log.func_end_trace ${EXITCODE_SUCCESS}
+  stfw.log.func_end_trace ${EXITCODE_SUCCESS}
   return ${EXITCODE_SUCCESS}
 }
 
@@ -60,11 +59,10 @@ function plugin.process.scripts.list_files() {
 #
 #---------------------------------------------------------------------------------------------------
 function plugin.process.scripts.bulk_exec_scripts() {
-  log.func_start_trace "$@"
+  stfw.log.func_start_trace "$@"
+  local _dir="${1:?}"
 
-  local _dir="$1"
   local _before_dir="$(pwd)"
-
   log.trace "cd \"${_dir}\""
   cd "${_dir}"
 
@@ -86,12 +84,14 @@ function plugin.process.scripts.bulk_exec_scripts() {
     local _start_time=$(date '+%Y%m%d%H%M%S')
 
     local _sect_name="${_dir}/${_cur_file}"
-    log.sect_start_info "${_sect_name}"
+    stfw.log.sect_start_info "${_sect_name}"
     ./${_cur_file}
     _cur_retcode=$?
-    log.sect_end_info "${_sect_name}" "${_cur_retcode}"
 
-    if [[ ${_cur_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
+    if [[ ${_cur_retcode} -eq ${EXITCODE_SUCCESS} ]]; then
+      stfw.log.sect_end_info "${_sect_name}" "${EXITCODE_SUCCESS}"
+    else
+      stfw.log.sect_end_info "${_sect_name}" "${EXITCODE_ERROR}"
       _exitcode=${EXITCODE_ERROR}
     fi
 
@@ -103,7 +103,7 @@ function plugin.process.scripts.bulk_exec_scripts() {
   log.trace "cd \"${_before_dir}\""
   cd "${_before_dir}"
 
-  log.func_end_trace ${_exitcode}
+  stfw.log.func_end_trace ${_exitcode}
   return ${_exitcode}
 }
 
@@ -132,8 +132,8 @@ function plugin.process.scripts.bulk_exec_scripts() {
 #
 #---------------------------------------------------------------------------------------------------
 function plugin.process.scripts.webhook.append_detail() {
-  local _mode="$1"
-  local _script_name="$2"
+  local _mode="${1:?}"
+  local _script_name="${2:?}"
   local _script_retcode="$3"
   local _script_start_timestamp="$4"
 
@@ -154,10 +154,10 @@ function plugin.process.scripts.webhook.append_detail() {
 
     result)
       _result="${STATUS_SUCCESS}"
-      if [[ ${_script_retcode} -ne ${EXITCODE_SUCCESS} ]]; then _result="${STATUS_ERROR}"; fi
+      if [[ ${_script_retcode:?} -ne ${EXITCODE_SUCCESS} ]]; then _result="${STATUS_ERROR}"; fi
 
       local _timestamp="$(date '+%Y%m%d%H%M%S')"
-      _start_time=$(timestamp_to_iso ${_script_start_timestamp})
+      _start_time=$(timestamp_to_iso ${_script_start_timestamp:?})
       _end_time=$(timestamp_to_iso ${_timestamp})
       _processing_time=$(private.calc_processing_time ${_script_start_timestamp} ${_timestamp})
       ;;

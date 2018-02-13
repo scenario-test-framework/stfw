@@ -45,14 +45,14 @@ function private.exit_on_fail() {
       echo "--------------------------------------------------"
       echo " INSTALL FAILURE"
       echo "--------------------------------------------------"
-    } | log.error
+    } | log.error_oneline
     exit ${EXITCODE_ERROR}
   fi
 }
 
 
 function private.is_installed() {
-  log.func_start_trace "$@"
+  stfw.log.func_start_trace "$@"
 
   local _cmd="$1"
   local _retcode=${EXITCODE_SUCCESS}
@@ -67,13 +67,13 @@ function private.is_installed() {
   fi
   log.remove_indent
 
-  log.func_end_trace ${_retcode}
+  stfw.log.func_end_trace ${_retcode}
   return ${_retcode}
 }
 
 
 function private.is_pip_installed() {
-  log.func_start_trace "$@"
+  stfw.log.func_start_trace "$@"
 
   # pipインストール済みリスト ※同一プロセス内の再利用を考慮
   if [[ ! -f "${__TMP_PIP_LIST}" ]]; then
@@ -93,12 +93,12 @@ function private.is_pip_installed() {
   fi
   log.remove_indent
 
-  log.func_end_trace ${_retcode}
+  stfw.log.func_end_trace ${_retcode}
   return ${_retcode}
 }
 
 function private.download() {
-  log.func_start_trace "$@"
+  stfw.log.func_start_trace "$@"
 
   # オプション解析
   local _continue_option=""
@@ -145,12 +145,12 @@ function private.download() {
     _exitcode=${EXITCODE_ERROR}
   fi
 
-  log.func_end_trace ${_exitcode}
+  stfw.log.func_end_trace ${_exitcode}
   return ${_exitcode}
 }
 
 function private.gracefull_download() {
-  log.func_start_trace "$@"
+  stfw.log.func_start_trace "$@"
 
   local _download_url="$1"
   local _path_downloaded="${DIR_ARCHIVE}/$(basename ${_download_url})"
@@ -162,12 +162,12 @@ function private.gracefull_download() {
   private.download ${_option} "${_download_url}"
   _retcode=$?
 
-  log.func_end_trace ${_retcode}
+  stfw.log.func_end_trace ${_retcode}
   return ${_retcode}
 }
 
 function private.extract() {
-  log.func_start_trace "$@"
+  stfw.log.func_start_trace "$@"
   local _path_from="$1"
   local _dir_to="$2"
 
@@ -216,12 +216,12 @@ function private.extract() {
   mv "${_dir_extracted}"/* "${_dir_to}/"
   rm -fr "${_dir_extracted}"
 
-  log.func_end_trace ${_exitcode}
+  stfw.log.func_end_trace ${_exitcode}
   return ${_exitcode}
 }
 
 function private.download_and_rename() {
-  log.func_start_trace "$@"
+  stfw.log.func_start_trace "$@"
   local _target="$1"
   local _download_url="$2"
   local _path_copied="$3"
@@ -255,12 +255,12 @@ function private.download_and_rename() {
   if [[ ${EXITCODE_SUCCESS} -ne ${_retcode} ]]; then return ${_retcode}; fi
 
   log.restore_indent
-  log.func_end_trace ${_retcode}
+  stfw.log.func_end_trace ${_retcode}
   return ${_retcode}
 }
 
 function private.download_and_extract() {
-  log.func_start_trace "$@"
+  stfw.log.func_start_trace "$@"
   local _target="$1"
   local _download_url="$2"
   local _path_extracted="$3"
@@ -294,7 +294,7 @@ function private.download_and_extract() {
   if [[ ${EXITCODE_SUCCESS} -ne ${_retcode} ]]; then return ${_retcode}; fi
 
   log.restore_indent
-  log.func_end_trace ${_retcode}
+  stfw.log.func_end_trace ${_retcode}
   return ${_retcode}
 }
 
@@ -347,16 +347,42 @@ log.remove_indent
 
 
 #--------------------------------------------------------------------------------------------------
+# 依存コマンドのPATH追加
+#--------------------------------------------------------------------------------------------------
+log.info "add PATH"
+log.add_indent
+if [[ ! -d "${DIR_MODULE_BIN}" ]]; then mkdir -p "${DIR_MODULE_BIN}"; fi
+
+log.info "Tukubai"
+# shellcheck disable=SC2038,SC2016
+find "${DIR_MODULE}/Tukubai" -type f                                                               |
+xargs -I {} bash -c 'cur_file_path={}; ln -sf ${cur_file_path} $(cd $(dirname ${cur_file_path})/..; pwd)/bin/$(basename ${cur_file_path})'
+
+log.info "Parsrs"
+# shellcheck disable=SC2038,SC2016
+find "${DIR_MODULE}/Parsrs" -type f                                                                |
+xargs -I {} bash -c 'cur_file_path={}; ln -sf ${cur_file_path} $(cd $(dirname ${cur_file_path})/..; pwd)/bin/$(basename ${cur_file_path})'
+
+log.info "yaml2json"
+# shellcheck disable=SC2038,SC2016
+find "${DIR_MODULE}/yaml2json" -type f                                                             |
+xargs -I {} bash -c 'cur_file_path={}; ln -sf ${cur_file_path} $(cd $(dirname ${cur_file_path})/..; pwd)/bin/$(basename ${cur_file_path})'
+
+log.remove_indent
+
+
+
+#--------------------------------------------------------------------------------------------------
 # バイナリファイル切り替え
 #--------------------------------------------------------------------------------------------------
 log.info "switch binaries"
 
-__TMP_DIR_BINARY="${DIR_BIN_LIB}/binary/linux"
-if [ "$(is_mac)" = "true" ]; then __TMP_DIR_BINARY="${DIR_BIN_LIB}/binary/mac"; fi
+__TMP_DIR_BINARY="${DIR_MODULE}/binary/linux"
+if [ "$(is_mac)" = "true" ]; then __TMP_DIR_BINARY="${DIR_MODULE}/binary/mac"; fi
 
-# shellcheck disable=SC2038 disable=SC2016
+# shellcheck disable=SC2038,SC2016
 find "${__TMP_DIR_BINARY}" -type f                                                                 |
-xargs -I {} bash -c 'cur_file_path={}; ln -sf ${cur_file_path} $(cd $(dirname ${cur_file_path})/../..; pwd)/$(basename ${cur_file_path})'
+xargs -I {} bash -c 'cur_file_path={}; ln -sf ${cur_file_path} $(cd $(dirname ${cur_file_path})/../..; pwd)/bin/$(basename ${cur_file_path})'
 
 
 
@@ -401,12 +427,16 @@ log.remove_indent
 log.info "install process plugins"
 log.add_indent
 
-for cur_process in $(stfw.process.list); do
-  log.info "${cur_process}"
+. "${DIR_BIN_LIB}/stfw/adapter/cli/process_controller"
+for cur_process_type in $(stfw.adapter.cli.process_controller.list); do
+  log.info "${cur_process_type}"
   log.add_indent
-  plugin_path=$(stfw.process.get_path "${cur_process}")
-  stfw.process.install "${plugin_path}"
-  private.exit_on_fail $?
+  stfw.adapter.cli.process_controller.global_install "${cur_process_type}"
+  retcode=$?
+  # install済みの場合、warnが返却されるので「成功 | 警告」を除外
+  if [[ ${retcode} -ne ${EXITCODE_SUCCESS} ]] && [[ ${retcode} -ne ${EXITCODE_WARN} ]]; then
+    private.exit_on_fail ${retcode}
+  fi
   log.remove_indent
 done
 

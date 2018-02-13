@@ -1,0 +1,40 @@
+#!/bin/bash
+#===================================================================================================
+#
+# inventory controller
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/usecase/inventory/inventory_inputport"
+. "${DIR_BIN_LIB}/stfw/usecase/inventory/inventory_outputport"
+
+
+function stfw.adapter.cli.inventory_controller.is_exist() {
+  stfw.log.func_start_debug "$@"
+  local _group="${1:?}"
+
+  # usecase input
+  stfw.usecase.inputport.inventory.is_exist_group_requested "${_group}"
+  local _retcode=$?
+
+  # usecase output
+  stfw.usecase.outputport.inventory.is_exist_group_finished "${_retcode}" "${_group}"
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.adapter.cli.inventory_controller.list() {
+  stfw.log.func_start_debug "$@"
+  local _group="${1:?}"
+
+  # usecase input
+  stfw.usecase.inputport.inventory.list_requested "${_group}"
+  local _retcode=$?
+
+  # usecase output
+  stfw.usecase.outputport.inventory.list_finished "${_retcode}" "${_group}"
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}

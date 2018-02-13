@@ -1,0 +1,9 @@
+#!/bin/bash
+. "${STFW_HOME:?}/bin/lib/setenv"
+. "${DIR_BIN_LIB}/stfw/adapter/cli/webhook_controller"
+
+# 処理開始時刻を保存
+processing_time.start "${run_id:?}"
+
+stfw.adapter.cli.webhook.run_start "${run_id:?}"
+exit $?

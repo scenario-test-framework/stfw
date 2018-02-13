@@ -1,0 +1,134 @@
+#!/bin/bash
+#===================================================================================================
+#
+# bizdate inputport
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/bizdate_service"
+
+
+#--------------------------------------------------------------------------------------------------
+# 初期化
+#
+# 概要
+#   ディレクトリを初期化します。
+#
+# 引数
+#   1: シナリオディレクトリ
+#   2: 連番
+#   3: 業務日付
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     _{連番}_{業務日付}/
+#       metadata.yml
+#       bizdate.dig
+#
+#--------------------------------------------------------------------------------------------------
+function stfw.usecase.inputport.bizdate.initialize_requested() {
+  stfw.log.func_start_debug "$@"
+  local _scenario_dir="$1"
+  local _seq="$2"
+  local _bizdate="$3"
+
+  stfw.domain.service.bizdate.initialize_requested "${_scenario_dir}" "${_seq}" "${_bizdate}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+#--------------------------------------------------------------------------------------------------
+# digファイル生成
+#
+# 概要
+#   ディレクトリ構成に合わせてdigファイルを生成します。
+#
+# 引数
+#   1: bizdateディレクトリ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     _{連番}_{業務日付}/
+#       bizdate.dig
+#
+#--------------------------------------------------------------------------------------------------
+function stfw.usecase.inputport.bizdate.generate_requested() {
+  stfw.log.func_start_debug "$@"
+  local _trg_bizdate_dir="$1"
+
+  stfw.domain.service.bizdate.generate_requested "${_trg_bizdate_dir}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+#--------------------------------------------------------------------------------------------------
+# setup
+#
+# 概要
+#   setup処理を実行します。
+#
+# 引数
+#   1: bizdateディレクトリ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#--------------------------------------------------------------------------------------------------
+function stfw.usecase.inputport.bizdate.setup_requested() {
+  stfw.log.func_start_debug "$@"
+  local _trg_bizdate_dir="$1"
+
+  stfw.domain.service.bizdate.setup "${_trg_bizdate_dir}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+#--------------------------------------------------------------------------------------------------
+# teardown
+#
+# 概要
+#   teardown処理を実行します。
+#
+# 引数
+#   1: bizdateディレクトリ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#--------------------------------------------------------------------------------------------------
+function stfw.usecase.inputport.bizdate.teardown_requested() {
+  stfw.log.func_start_debug "$@"
+  local _trg_bizdate_dir="$1"
+
+  stfw.domain.service.bizdate.teardown "${_trg_bizdate_dir}"
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}

@@ -1,0 +1,78 @@
+#!/bin/bash
+#===================================================================================================
+#
+# passwd specification
+#
+#===================================================================================================
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# feature
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.spec.passwd.key_dir() {
+  echo "${DIR_CONFIG:?}/encrypt"
+}
+
+
+function stfw.domain.service.spec.passwd.path_encrypt_key() {
+  echo "$(stfw.domain.service.spec.passwd.key_dir)/encrypt_key"
+}
+
+
+function stfw.domain.service.spec.passwd.path_decrypt_key() {
+  echo "$(stfw.domain.service.spec.passwd.key_dir)/decrypt_key"
+}
+
+
+function stfw.domain.service.spec.passwd.dir() {
+  echo "${STFW_PROJ_DIR_CONFIG:?}/passwd"
+}
+
+
+function stfw.domain.service.spec.passwd.path() {
+  local _host="${1:?}"
+  local _user="${2:?}"
+
+  local _filename="${_host//:/_}-${_user//:/_}"
+  echo "$(stfw.domain.service.spec.passwd.dir)/${_filename}"
+}
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# validation
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.spec.passwd.can_generate_key() {
+  local _key_dir="$(stfw.domain.service.spec.passwd.key_dir)"
+  checks.must_not_exist_dir "${_key_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.domain.service.spec.passwd.can_save() {
+  local _host="${1:?}"
+  local _user="${2:?}"
+
+  local _path_passwd="$(stfw.domain.service.spec.passwd.path ${_host} ${_user})"
+  checks.must_not_exist_file "${_path_passwd}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.domain.service.spec.passwd.can_show() {
+  local _host="${1:?}"
+  local _user="${2:?}"
+
+  local _path_passwd="$(stfw.domain.service.spec.passwd.path ${_host} ${_user})"
+  checks.must_exist_file "${_path_passwd}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  return ${EXITCODE_SUCCESS}
+}

@@ -2,7 +2,7 @@
 #set -ex
 #===================================================================================================
 #
-# scenario test framework cli - server control
+# server control
 #
 #===================================================================================================
 #---------------------------------------------------------------------------------------------------
@@ -11,12 +11,9 @@
 dir_script="$(dirname $0)"
 cd "$(cd ${dir_script}; pwd)"
 
-# 共通設定
 readonly STFW_HOME="$(cd ../..; pwd)"
 . "${STFW_HOME}/bin/lib/setenv"
-
-# stfw digdag共通ユーティリティ
-. "${DIR_BIN_LIB}/stfw_digdag_utils"
+. "${DIR_BIN_LIB}/stfw/adapter/cli/server_controller"
 
 readonly PROGNAME="stfw $(basename $0)"
 
@@ -41,77 +38,29 @@ start options:
       --max-task-threads N : limit maxium number of task execution threads
 
 __EOT__
-}
-
-
-function private.start() {
-  log.func_start_trace
-
-  # 多重起動チェック
-  if [ -f ${PATH_PROJ_PID} ]; then
-      log.error "other ${PROGNAME} process has already running. (PID-file:${PATH_PROJ_PID} is exist.)"
-      return ${EXITCODE_ERROR}
-  fi
-
-  # バナー表示
-  cat "${STFW_HOME}/banner.txt"
-  cat "${STFW_HOME}/VERSION"
-
-  # digdag server
-  stfw.digdag.server.start
-  local _retcode=$?
-
-  log.func_end_trace ${_retcode}
-  return ${_retcode}
-}
-
-
-function private.stop() {
-  log.func_start_trace
-
-  # 停止中チェック
-  if [ ! -f ${PATH_PROJ_PID} ]; then
-      log.error "${PROGNAME} process is NOT running."
-      return ${EXITCODE_ERROR}
-  fi
-
-  # digdag server
-  stfw.digdag.server.stop
-  local _retcode=$?
-
-  log.func_end_trace ${_retcode}
-  return ${_retcode}
+  exit ${EXITCODE_ERROR}
 }
 
 
 function private.status() {
-  log.func_start_trace
-
   # digdag server
-  local _is_running=$(stfw.digdag.server.is_running)
-
+  local _is_running=$(stfw.domain.gateway.digdag.server.is_running)
   if [[ "${_is_running}" = "true" ]]; then
     log.info "${PROGNAME} process is running."
-  else
-    log.info "${PROGNAME} process is NOT running."
+    return
   fi
 
-  log.func_end_trace ${EXITCODE_SUCCESS}
-  return ${EXITCODE_SUCCESS}
+  log.info "${PROGNAME} process is NOT running."
 }
 
 
 
 #---------------------------------------------------------------------------------------------------
-# 事前処理
-#---------------------------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------
 # 引数解析
-#-------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------
 # 引数チェック
 if [[ $# -lt 1 ]]; then
   private.usage
-  exit ${EXITCODE_ERROR}
 fi
 
 # 実行コマンド
@@ -119,9 +68,9 @@ cmd="$1"
 shift
 
 
-#-------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------
 # オプション解析
-#-------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------
 while :; do
   case $1 in
     -b|--bind)
@@ -163,7 +112,7 @@ done
 
 
 #---------------------------------------------------------------------------------------------------
-# 本処理
+# コマンド実行
 #---------------------------------------------------------------------------------------------------
 case ${cmd} in
   --description)
@@ -172,26 +121,28 @@ case ${cmd} in
     ;;
 
   start)
-    private.start
+    stfw.adapter.cli.server.start 2>&1 | log.tee
+    exitcode=${PIPESTATUS[0]}
     ;;
 
   stop)
-    private.stop
+    stfw.adapter.cli.server.stop 2>&1 | log.tee
+    exitcode=${PIPESTATUS[0]}
     ;;
 
   restart)
-    private.stop
-    private.start
+    stfw.adapter.cli.server.restart 2>&1 | log.tee
+    exitcode=${PIPESTATUS[0]}
     ;;
 
   status)
-    private.status
+    private.status 2>&1 | log.tee
+    exitcode=${PIPESTATUS[0]}
     ;;
 
   *)
     private.usage
-    exit ${EXITCODE_ERROR}
     ;;
 esac
 
-exit $?
+exit ${exitcode}

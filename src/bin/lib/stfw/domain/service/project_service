@@ -1,0 +1,50 @@
+#!/bin/bash
+#===================================================================================================
+#
+# project service
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/spec/project_spec"
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# command
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.project.initialize_requested() {
+  stfw.log.func_start_trace
+
+  # validate
+  stfw.domain.service.spec.project.can_init
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  local _dir_template="$(stfw.domain.service.spec.project.template_dir)"
+  local _dir_project="$(stfw.domain.service.spec.project.project_dir)"
+
+  # コピー
+  log.trace "cp -pr \"${_dir_template}/\"* \"${_dir_project}/\""
+  cp -pr "${_dir_template}/"* "${_dir_project}/"
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# query
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.project.get_initialize_result() {
+  local _dir_project="$(stfw.domain.service.spec.project.project_dir)"
+
+  find "${_dir_project}" -type f                                                                   | # ファイルパスリストから
+  sed -e "s|${_dir_project}/||"                                                                    | # 相対パスに変換
+  grep -v ".stfw/"                                                                                 | # stfwデータディレクトリを除外
+  grep -v ".digdag/"                                                                                 # digdagデータディレクトリを除外
+}

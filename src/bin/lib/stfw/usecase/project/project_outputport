@@ -1,0 +1,23 @@
+#!/bin/bash
+#===================================================================================================
+#
+# project outputport
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/project_service"
+
+
+function stfw.usecase.outputport.project.initialize_finished() {
+  stfw.log.func_start_debug "$@"
+  local _inputport_exitcode="${1:?}"
+
+  if [[ ${_inputport_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
+    log.info "result:"
+    log.add_indent
+    stfw.domain.service.project.get_initialize_result | log.info
+    log.remove_indent
+  fi
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}

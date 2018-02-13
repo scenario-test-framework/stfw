@@ -1,0 +1,104 @@
+#!/bin/bash
+#===================================================================================================
+#
+# run specification
+#
+#===================================================================================================
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# feature
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.spec.run.uniq_id() {
+  echo "$(date '+%Y%m%d%H%M%S')_$$"
+}
+
+
+function stfw.domain.service.spec.run.run_id() {
+  local KEY_RUN_ID="run_id"
+  local _run_id=$(stfw.context.get "${KEY_RUN_ID}")
+
+  if [[ "${_run_id}x" = "x" ]]; then
+    _run_id="_$(stfw.domain.service.spec.run.uniq_id)"
+    stfw.context.put "${KEY_RUN_ID}" "${_run_id}"
+  fi
+
+  echo "${_run_id}"
+}
+
+
+function stfw.domain.service.spec.run.digdag_workspace_dir() {
+  echo "${STFW_PROJ_DIR_DATA}/runs"
+}
+
+
+function stfw.domain.service.spec.run.digdag_proj_dir() {
+  local _run_id="${1:?}"
+  echo "$(stfw.domain.service.spec.run.digdag_workspace_dir)/${_run_id}"
+}
+
+
+function stfw.domain.service.spec.run.key_attempt_id() {
+  echo "attempt_id"
+}
+
+
+function stfw.domain.service.spec.run.attempt_id() {
+  local _KEY_ATTEMPT_ID="$(stfw.domain.service.spec.run.key_attempt_id)"
+
+  local _attempt_id=$(stfw.context.get "${_KEY_ATTEMPT_ID}")
+  if [[ "${_attempt_id}x" = "x" ]]; then
+    log.error "${_KEY_ATTEMPT_ID} is not exist in stfw.context."
+    return
+  fi
+
+  echo "${_attempt_id}"
+}
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# validation
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.spec.run.can_run_on_server() {
+  local _run_opt="${1:?}"
+  shift
+  local _target_scenarios=( "$@" )
+
+  # 起動オプション
+  checks.must_not_null "run_opt" "${_run_opt}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # scenarioディレクトリ存在チェック
+  for _cur_scenario in ${_target_scenarios[*]}; do
+    checks.must_exist_dir "${STFW_PROJ_DIR}/scenario/${_cur_scenario}"
+    if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+  done
+
+  # サーバ起動チェック
+  if [[ "$(stfw.domain.gateway.digdag.server.is_running)" != "true" ]]; then
+    log.error "digdag server is not running."
+    return ${EXITCODE_ERROR}
+  fi
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.domain.service.spec.run.can_follow_log() {
+  local _run_id="${1:?}"
+  local _attempt_id="${2:?}"
+
+  # run id
+  checks.must_not_null "run id" "${_run_id}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # attempt id
+  checks.must_not_null "attempt id" "${_attempt_id}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  return ${EXITCODE_SUCCESS}
+}

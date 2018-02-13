@@ -1,0 +1,281 @@
+#!/bin/bash
+#===================================================================================================
+#
+# dig respository
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/repository/metadata_repository"
+
+
+#---------------------------------------------------------------------------------------------------
+# 依存定数
+#---------------------------------------------------------------------------------------------------
+STFW__GEN_MODE_SELF="${STFW__GEN_MODE_SELF:?}"
+STFW__GEN_MODE_CASCADE="${STFW__GEN_MODE_CASCADE:?}"
+
+
+#---------------------------------------------------------------------------------------------------
+# run.dig生成
+#
+# 概要
+#   指定のscenario rootディレクトリ配下の構成から、run.digを生成します。
+#
+# 引数
+#   1: run mode (--run | --dry-run)
+#   2: run id
+#   3: scenario rootディレクトリ
+#   4~: scenario名
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     ${scenario rootディレクトリ}/run.dig
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.repository.dig.generate_run() {
+  local _run_mode="${1:?}"
+  local _run_id="${2:?}"
+  local _dir_digdag_proj="${3:?}"
+  shift 3
+  local _scenario_names=( "$@" )
+
+  local _path_output="${_dir_digdag_proj}/${FILENAME_DIG_RUN}"
+
+  # scenario-root-dir
+  checks.must_exist_dir "${_dir_digdag_proj}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # dig作成: 開始〜setup
+  cat << __EOT__ >"${_path_output}"
+timezone: ${stfw_server_timezone:?}
+
+_export:
+  STFW_PROJ_DIR : "${_dir_digdag_proj}"
+  run_id : "${_run_id}"
+  run_mode : "${_run_mode}"
+
++run_setup:
+  sh>: stfw run --setup "${_scenario_names[@]}"
+
+__EOT__
+
+  # tasks
+  for _cur_scenario in ${_scenario_names[*]}; do
+    local _cur_scenario_dir="${_dir_digdag_proj}/scenario/${_cur_scenario}"
+    cat << __EOT__ >>"${_path_output}"
++${_cur_scenario}:
+  _export:
+    stfw_scenario_dir : "${_cur_scenario_dir}"
+    stfw_scenario_name : "${_cur_scenario}"
+  !include : scenario/${_cur_scenario}/scenario.dig
+
+__EOT__
+  done
+
+  # teardown
+  cat << __EOT__ >>"${_path_output}"
++run_teardown:
+  _export:
+    stfw_run_status : "${STATUS_SUCCESS}"
+  sh>: stfw run --teardown "${_scenario_names[@]}"
+
+_error:
+  _export:
+    stfw_run_status : "${STATUS_ERROR}"
+  sh>: stfw run --teardown "${_scenario_names[@]}"
+__EOT__
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+
+#---------------------------------------------------------------------------------------------------
+# scenario.dig生成
+#
+# 概要
+#   指定のscenarioディレクトリ配下の構成から、scenario.digを生成します。
+#
+# 引数
+#   1: generate mode (STFW__GEN_MODE_SELF | STFW__GEN_MODE_CASCADE)
+#   2: scenarioディレクトリ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     generate mode = self
+#       ${scenarioディレクトリ}/scenario.dig
+#     generate mode = cascade
+#       ${scenarioディレクトリ}/
+#         scenario.dig
+#         ${bizdateディレクトリ}/bizdate.dig
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.repository.dig.generate_scenario() {
+  local _generate_mode="${1:?}"
+  local _dir_scenario="${2:?}"
+
+  local _path_output="${_dir_scenario}/${FILENAME_DIG_SCENARIO}"
+  local _path_tmp_bizdate_list="${_path_output}.bizdate.lst"
+
+  # scenario-dir
+  checks.must_exist_dir "${_dir_scenario}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # メタ情報ファイル作成
+  stfw.domain.repository.metadata.generate "${_dir_scenario}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # bizdate-dirリスト
+  find "${_dir_scenario}" -mindepth 1 -maxdepth 1 -follow -type d                                  | # scenario-dir直下のディレクトリリストから
+  sed -e "s|${_dir_scenario}/||"                                                                   | # ディレクトリ名リストに置換
+  grep "^_"                                                                                        | # _で始まるものに絞る
+  sort                                                                                             | # 文字列でソート
+  tee > "${_path_tmp_bizdate_list}"
+
+  # 開始〜setup
+  cat << __EOT__ >"${_path_output}"
+timezone: ${stfw_server_timezone:?}
+
++scenario_setup:
+  sh>: stfw scenario --setup "\${stfw_scenario_dir}"
+
+__EOT__
+
+  # tasks
+  grep -v '^ *#' < "${_path_tmp_bizdate_list}" | while IFS= read -r _cur_bizdate_dirname; do
+    local _cur_seq="$(     echo ${_cur_bizdate_dirname} | cut -d '_' -f 2 )"
+    local _cur_bizdate="$( echo ${_cur_bizdate_dirname} | cut -d '_' -f 3 )"
+
+    cat << __EOT__ >>"${_path_output}"
++${_cur_bizdate_dirname}:
+  _export:
+    stfw_bizdate_dir : "\${stfw_scenario_dir}/${_cur_bizdate_dirname}"
+    stfw_bizdate_dirname : "${_cur_bizdate_dirname}"
+    stfw_bizdate_seq : "${_cur_seq}"
+    stfw_bizdate : "${_cur_bizdate}"
+  !include : ${_cur_bizdate_dirname}/bizdate.dig
+
+__EOT__
+  done
+
+  # teardown
+  cat << __EOT__ >>"${_path_output}"
++scenario_teardown:
+  _export:
+    stfw_run_status : "${STATUS_SUCCESS}"
+  sh>: stfw scenario --teardown "\${stfw_scenario_dir}"
+
+_error:
+  _export:
+    stfw_run_status : "${STATUS_ERROR}"
+  sh>: stfw scenario --teardown "\${stfw_scenario_dir}"
+__EOT__
+
+  # cascade
+  if [[ "${_generate_mode}" = "cascade" ]]; then
+    grep -v '^ *#' <"${_path_tmp_bizdate_list}" | while IFS= read -r _cur_bizdate_dirname; do
+      local _cur_seq="$(     echo ${_cur_bizdate_dirname} | cut -d '_' -f 2 )"
+      local _cur_bizdate="$( echo ${_cur_bizdate_dirname} | cut -d '_' -f 3 )"
+      stfw.domain.repository.dig.generate_bizdate "${_dir_scenario}/${_cur_bizdate_dirname}"
+    done
+  fi
+
+  # 一時ファイル削除
+  rm -f "${_path_tmp_bizdate_list}"
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# bizdate dig生成
+#
+# 概要
+#   指定のbizdateディレクトリ配下の構成から、bizdate.digを生成します。
+#
+# 引数
+#   1: bizdateディレクトリ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     ${bizdateディレクトリ}/bizdate.dig
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.repository.dig.generate_bizdate() {
+  local _dir_bizdate="${1:?}"
+
+  local _path_output="${_dir_bizdate}/${FILENAME_DIG_DATE}"
+  local _path_tmp_process_list="${_path_output}.process.lst"
+
+  # bizdate-dir
+  checks.must_exist_dir "${_dir_bizdate}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # メタ情報ファイル作成
+  stfw.domain.repository.metadata.generate "${_dir_bizdate}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # process-dirリスト
+  find "${_dir_bizdate}" -mindepth 1 -maxdepth 1 -follow -type d                                   | # bizdate-dir直下のディレクトリリストから
+  sed -e "s|${_dir_bizdate}/||"                                                                    | # ディレクトリ名リストに置換
+  grep "^_"                                                                                        | # _で始まるものに絞る
+  sort                                                                                             | # 文字列でソート
+  tee > "${_path_tmp_process_list}"
+
+  # 開始〜setup
+  cat << __EOT__ >"${_path_output}"
+timezone: ${stfw_server_timezone:?}
+
++bizdate_setup:
+  sh>: stfw bizdate --setup "\${stfw_bizdate_dir}"
+
+__EOT__
+
+  # tasks
+  grep -v '^ *#' < "${_path_tmp_process_list}" | while IFS= read -r _cur_process_dirname; do
+    local _cur_seq="$(     echo ${_cur_process_dirname} | cut -d '_' -f 2 )"
+    local _cur_group="$(   echo ${_cur_process_dirname} | cut -d '_' -f 3 )"
+    local _cur_process="$( echo ${_cur_process_dirname} | cut -d '_' -f 4 )"
+
+    cat << __EOT__ >>"${_path_output}"
++${_cur_process_dirname}:
+  _export:
+    stfw_process_type : "${_cur_process}"
+    stfw_process_dir : "\${stfw_bizdate_dir}/${_cur_process_dirname}"
+    stfw_process_dirname : "${_cur_process_dirname}"
+    stfw_process_seq : "${_cur_seq}"
+    stfw_process_group : "${_cur_group}"
+  sh>: stfw process \${run_mode} "\${stfw_process_dir}"
+
+__EOT__
+  done
+
+  # teardown
+  cat << __EOT__ >>"${_path_output}"
++bizdate_teardown:
+  _export:
+    stfw_run_status : "${STATUS_SUCCESS}"
+  sh>: stfw bizdate --teardown "\${stfw_bizdate_dir}"
+
+_error:
+  _export:
+    stfw_run_status : "${STATUS_ERROR}"
+  sh>: stfw bizdate --teardown "\${stfw_bizdate_dir}"
+__EOT__
+
+  # 一時ファイル削除
+  rm -f "${_path_tmp_process_list}"
+
+  return ${EXITCODE_SUCCESS}
+}

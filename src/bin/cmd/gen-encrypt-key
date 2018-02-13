@@ -2,7 +2,7 @@
 #set -ex
 #===================================================================================================
 #
-# scenario test framework cli - generate encrypt key
+# encrypt-key generater
 #
 #===================================================================================================
 #---------------------------------------------------------------------------------------------------
@@ -11,9 +11,9 @@
 dir_script="$(dirname $0)"
 cd "$(cd ${dir_script}; pwd)"
 
-# 共通設定
 readonly STFW_HOME="$(cd ../..; pwd)"
 . "${STFW_HOME}/bin/lib/setenv"
+. "${DIR_BIN_LIB}/stfw/adapter/cli/passwd_controller"
 
 readonly PROGNAME="stfw $(basename $0)"
 
@@ -39,11 +39,8 @@ __EOT__
 
 
 #---------------------------------------------------------------------------------------------------
-# 事前処理
-#---------------------------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------
 # オプション解析
-#-------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------
 # 強制上書きモード
 is_force="false"
 
@@ -56,7 +53,6 @@ while :; do
 
     -h|--help)
       private.usage
-      exit ${EXITCODE_ERROR}
       ;;
 
     -f|--force)
@@ -77,24 +73,12 @@ done
 
 
 #---------------------------------------------------------------------------------------------------
-# 本処理
+# コマンド実行
 #---------------------------------------------------------------------------------------------------
-log.script_start "${PROGNAME}"
+stfw.log.script_start "${PROGNAME}"
 
-if [[ -d "${DIR_CONFIG_ENCRYPT}" ]]; then
-  if [[ "${is_force}" != "true" ]]; then
-    log.error "${DIR_CONFIG_ENCRYPT} is already exists."
-    exit ${EXITCODE_ERROR}
-  fi
+stfw.adapter.cli.passwd_controller.generate_key "${is_force}" 2>&1 | log.tee
+exitcode=${PIPESTATUS[0]}
 
-  # ディレクトリ初期化
-  rm -fr "${DIR_CONFIG_ENCRYPT}"
-fi
-
-# キー生成
-mkdir "${DIR_CONFIG_ENCRYPT}"
-gen_encrypt_key "${PATH_ENCRYPT_KEY}" "${PATH_DECRYPT_KEY}"                                   2>&1 | log.debug
-exitcode=$?
-
-log.script_end "${PROGNAME}" "${exitcode}"
+stfw.log.script_end "${PROGNAME}" "${exitcode}"
 exit ${exitcode}

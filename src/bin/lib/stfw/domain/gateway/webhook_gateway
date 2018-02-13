@@ -1,0 +1,116 @@
+#!/bin/bash
+#===================================================================================================
+#
+# webhook gateway
+#
+#===================================================================================================
+
+
+#---------------------------------------------------------------------------------------------------
+# webhook非同期実行
+#
+# 概要
+#   stfw.webhookの設定に従って、payloadをPOST送信します。
+#   request bodyには、指定のyamlファイルをjson変換した内容を設定します。
+#
+# 引数
+#   1: payload yamlファイルパス
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#   リクエスト
+#     stfw.webhook.urls
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.gateway.webhook.async_execute() {
+  local _yaml_payload_file="${1:?}"
+
+  # 非同期実行用にpayloadファイルを複製
+  local _tmp_async_yaml="${_yaml_payload_file}.async"
+  cp "${_yaml_payload_file}" "${_tmp_async_yaml}"
+
+  # 非同期実行
+  (
+    log.clear_indent
+    stfw.domain.gateway.webhook.execute "${_tmp_async_yaml}"
+    # 実行用payloadファイルを削除
+    rm -f "${_tmp_async_yaml}"
+  ) &
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# webhook実行
+#
+# 概要
+#   stfw.webhookの設定に従って、payloadをPOST送信します。
+#   request bodyには、指定のyamlファイルをjson変換した内容を設定します。
+#
+# 引数
+#   1: payload yamlファイルパス
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#   リクエスト
+#     stfw.webhook.urls
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.gateway.webhook.execute() {
+  local _yaml_payload_file="${1:?}"
+
+  checks.must_exist_file "${_yaml_payload_file}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  local _tmp_json_payload_file="${_yaml_payload_file}.json"
+
+  # yml -> json変換
+  yaml2json "${_yaml_payload_file}" >"${_tmp_json_payload_file}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  printenv                                                                                         | # 環境変数リストから
+  grep "^stfw_webhooks_urls_"                                                                      | # webhook urlに絞り込み
+  cut -d "=" -f 2                                                                                  | # 値を射影
+  while read -r _webhooks_url; do
+    # 未設定の場合、スキップ
+    if [[ "${_webhooks_url}x" == "x" ]]; then continue; fi
+    stfw.log.sect_start_debug "${_webhooks_url}"
+
+    local _curl_cmd=(
+      curl
+        --silent
+        --show-error
+        --request POST
+        --data-binary "@${_tmp_json_payload_file}"
+        --header "Content-type: application/json"
+        "${_webhooks_url}"
+    )
+
+    log.trace "[webhook] ${_curl_cmd[*]}"
+    local _message=$( "${_curl_cmd[@]}" 2>&1 )
+
+    if [[ "${_message}" = "ok" ]]; then
+      log.trace "[webhook] ${STATUS_SUCCESS} target=${_webhooks_url}"
+      local _retcode=${EXITCODE_SUCCESS}
+
+    else
+      log.warn "[webhook] ${STATUS_ERROR} target=${_webhooks_url}, message=${_message}"
+      local _retcode=${EXITCODE_ERROR}
+    fi
+
+    stfw.log.sect_end_debug "${_webhooks_url}" ${_retcode}
+  done
+
+  rm -f "${_tmp_json_payload_file}"
+
+  return ${EXITCODE_SUCCESS}
+}

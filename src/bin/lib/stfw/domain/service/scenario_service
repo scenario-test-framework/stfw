@@ -1,0 +1,183 @@
+#!/bin/bash
+#===================================================================================================
+#
+# scenario service
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/spec/scenario_spec"
+. "${DIR_BIN_LIB}/stfw/domain/service/sub/scenario/embedded_plugin_service"
+. "${DIR_BIN_LIB}/stfw/domain/service/sub/scenario/project_plugin_service"
+. "${DIR_BIN_LIB}/stfw/domain/repository/dig_repository"
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# command
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.scenario.initialize_requested() {
+  stfw.log.func_start_trace "$@"
+  local _scenario_root_dir="${1:?}"
+  local _scenario_name="${2:?}"
+
+  # validate
+  stfw.domain.service.spec.scenario.can_initialize "${_scenario_root_dir}" "${_scenario_name}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  # ディレクトリ作成
+  local _scenario_dir="$(stfw.domain.service.spec.scenario.dir ${_scenario_root_dir} ${_scenario_name})"
+  if [[ ! -d "${_scenario_dir}" ]]; then
+    mkdir "${_scenario_dir}"
+  fi
+
+  # dig生成
+  stfw.domain.repository.dig.generate_scenario "${STFW__GEN_MODE_SELF}" "${_scenario_dir}"
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.scenario.generate_requested() {
+  stfw.log.func_start_trace "$@"
+
+  private.stfw.domain.service.scenario.generate_requested "${STFW__GEN_MODE_SELF}" "$@"
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.scenario.cascade_generate_requested() {
+  stfw.log.func_start_trace "$@"
+
+  private.stfw.domain.service.scenario.generate_requested "${STFW__GEN_MODE_CASCADE}" "$@"
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function private.stfw.domain.service.scenario.generate_requested() {
+  local _generate_mode="${1:?}"
+  local _scenario_dir="${2:?}"
+
+  # validate
+  stfw.domain.service.spec.scenario.can_generate "${_scenario_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    return ${EXITCODE_ERROR}
+  fi
+
+  # dig生成
+  stfw.domain.repository.dig.generate_scenario "${_generate_mode}" "${_scenario_dir}"
+  return $?
+}
+
+
+function stfw.domain.service.scenario.setup() {
+  stfw.log.func_start_trace "$@"
+  local _trg_scenario_dir="${1:?}"
+
+  # validate
+  stfw.domain.service.spec.scenario.can_setup "${_trg_scenario_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  # embedded plugin
+  stfw.domain.service.scenario.embedded.setup "${_trg_scenario_dir}"
+  local _retcode=$?
+
+  # project plugin
+  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.domain.service.scenario.project.setup "${_trg_scenario_dir}"
+    _retcode=$?
+  fi
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.scenario.teardown() {
+  stfw.log.func_start_trace "$@"
+  local _trg_scenario_dir="${1:?}"
+
+  # validate
+  stfw.domain.service.spec.scenario.can_teardown "${_trg_scenario_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  # project plugin
+  stfw.domain.service.scenario.project.teardown "${_trg_scenario_dir}"
+  local _retcode=$?
+
+  # embedded plugin
+  stfw.domain.service.scenario.embedded.teardown "${_trg_scenario_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    _retcode=${EXITCODE_ERROR}
+  fi
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# query
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.scenario.get_initialize_result() {
+  stfw.log.func_start_trace "$@"
+  local _dir_scenario_root="${1:?}"
+  local _scenario_name="${2:?}"
+
+  local _dirname_scenario=$(stfw.domain.service.spec.scenario.dirname "${_scenario_name}")
+  (
+    cd "${_dir_scenario_root}"
+    find "${_dirname_scenario}" -type f
+  )
+
+  stfw.log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.domain.service.scenario.get_generate_result() {
+  stfw.log.func_start_trace "$@"
+  local _dir_scenario="${1:?}"
+
+  local _dirname=$(basename ${_dir_scenario})
+  (
+    cd "${_dir_scenario}/.."
+    find "${_dirname}" -mindepth 1 -maxdepth 1 -type f
+  )
+
+  stfw.log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.domain.service.scenario.get_cascade_generate_result() {
+  stfw.log.func_start_trace "$@"
+  local _dir_scenario="${1:?}"
+
+  local _dirname=$(basename ${_dir_scenario})
+  (
+    cd "${_dir_scenario}/.."
+    find "${_dirname}" -mindepth 1 -maxdepth 2 -type f
+  )
+
+  stfw.log.func_end_trace ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}

@@ -1,0 +1,122 @@
+#!/bin/bash
+#===================================================================================================
+#
+# scenario outputport
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/scenario_service"
+
+
+#--------------------------------------------------------------------------------------------------
+# scenarioディレクトリのコンテンツ表示 初期化時
+#
+# 概要
+#   scenarioディレクトリ配下に展開された構成から、コンテンツを表示します。
+#
+# 引数
+#   1: シナリオディレクトリ
+#   2: 連番
+#   2: 業務日付
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#--------------------------------------------------------------------------------------------------
+function stfw.usecase.outputport.scenario.initialize_finished() {
+  stfw.log.func_start_debug "$@"
+  local _inputport_exitcode="${1:?}"
+  local _scenario_root_dir="${2:?}"
+  local _scenario_name="${3:?}"
+
+  if [[ ${_inputport_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
+    log.info "result:"
+    log.add_indent
+    stfw.domain.service.scenario.get_initialize_result                                             \
+      "${_scenario_root_dir}" "${_scenario_name}" | log.info
+    log.remove_indent
+  fi
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+#--------------------------------------------------------------------------------------------------
+# scenarioディレクトリのコンテンツ表示 dig生成時
+#
+# 概要
+#   scenarioディレクトリ配下に展開された構成から、コンテンツを表示します。
+#
+# 引数
+#   1: scenarioディレクトリ
+#
+# 出力
+#   環境変数
+#     なし
+#   標準出力
+#     なし
+#   ファイル
+#     なし
+#
+#--------------------------------------------------------------------------------------------------
+function stfw.usecase.outputport.scenario.generate_finished() {
+  stfw.log.func_start_debug "$@"
+  local _inputport_exitcode="${1:?}"
+  local _trg_scenario_dir="${2:?}"
+
+  if [[ ${_inputport_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
+    log.info "result:"
+    log.add_indent
+    stfw.domain.service.scenario.get_generate_result "${_trg_scenario_dir}" | log.info
+    log.remove_indent
+  fi
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.usecase.outputport.scenario.cascade_generate_finished() {
+  stfw.log.func_start_debug "$@"
+  local _inputport_exitcode="${1:?}"
+  local _trg_scenario_dir="${2:?}"
+
+  if [[ ${_inputport_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
+    log.info "result:"
+    log.add_indent
+    stfw.domain.service.scenario.get_cascade_generate_result "${_trg_scenario_dir}" | log.info
+    log.remove_indent
+  fi
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.usecase.outputport.scenario.setup_finished() {
+  stfw.log.func_start_debug "$@"
+#  local _inputport_exitcode="${1:?}"
+#  local _trg_scenario_dir="${2:?}"
+
+  # 表示なし
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.usecase.outputport.scenario.teardown_finished() {
+  stfw.log.func_start_debug "$@"
+#  local _inputport_exitcode="${1:?}"
+#  local _trg_scenario_dir="${2:?}"
+
+  # 表示なし
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}

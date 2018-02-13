@@ -1,0 +1,67 @@
+#!/bin/bash
+#===================================================================================================
+#
+# bizdate outputport
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/bizdate_service"
+
+
+function stfw.usecase.outputport.bizdate.initialize_finished() {
+  stfw.log.func_start_debug "$@"
+  local _inputport_exitcode="${1:?}"
+  local _scenario_dir="${2:?}"
+  local _seq="${3:?}"
+  local _bizdate="${4:?}"
+
+  if [[ ${_inputport_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
+    log.info "result:"
+    log.add_indent
+    stfw.domain.service.bizdate.get_initialize_result "${_scenario_dir}" "${_seq}" "${_bizdate}" | log.info
+    log.remove_indent
+  fi
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.usecase.outputport.bizdate.generate_finished() {
+  stfw.log.func_start_debug "$@"
+  local _inputport_exitcode="${1:?}"
+  local _bizdate_dir="${2:?}"
+
+  if [[ ${_inputport_exitcode} -eq ${EXITCODE_SUCCESS} ]]; then
+    log.info "result:"
+    log.add_indent
+    stfw.usecase.outputport.bizdate.get_generate_result "${_bizdate_dir}" | log.info
+    log.remove_indent
+  fi
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.usecase.outputport.bizdate.setup_finished() {
+  stfw.log.func_start_debug "$@"
+#  local _inputport_exitcode="${1:?}"
+#  local _bizdate_dir="${2:?}"
+
+  # 表示なし
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.usecase.outputport.bizdate.teardown_finished() {
+  stfw.log.func_start_debug "$@"
+#  local _inputport_exitcode="${1:?}"
+#  local _bizdate_dir="${2:?}"
+
+  # 表示なし
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}

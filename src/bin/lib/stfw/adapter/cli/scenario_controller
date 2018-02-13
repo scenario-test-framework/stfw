@@ -1,0 +1,82 @@
+#!/bin/bash
+#===================================================================================================
+#
+# scenario controller
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/usecase/scenario/scenario_inputport"
+. "${DIR_BIN_LIB}/stfw/usecase/scenario/scenario_outputport"
+
+
+function stfw.adapter.cli.scenario_controller.init() {
+  stfw.log.func_start_debug "$@"
+  local _dirname_scenario="${1:?}"
+
+  # usecase input
+  stfw.usecase.inputport.scenario.initialize_requested                                             \
+    "${STFW_EXEC_DIR}" "${_dirname_scenario}"
+  local _retcode=$?
+
+  # usecase output
+  stfw.usecase.outputport.scenario.initialize_finished "${_retcode}"                               \
+    "${STFW_EXEC_DIR}" "${_dirname_scenario}"
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.adapter.cli.scenario_controller.generate_dig() {
+  stfw.log.func_start_debug "$@"
+  local _generate_mode="${1:?}"
+
+  # usecase input
+  if [[ "${_generate_mode}" = "${STFW__GEN_MODE_SELF}" ]]; then
+    stfw.usecase.inputport.scenario.generate_requested "${STFW_EXEC_DIR}"
+  else
+    stfw.usecase.inputport.scenario.cascade_generate_requested "${STFW_EXEC_DIR}"
+  fi
+  local _retcode=$?
+
+  # usecase output
+  if [[ "${_generate_mode}" = "${STFW__GEN_MODE_SELF}" ]]; then
+    stfw.usecase.outputport.scenario.generat_finished "${_retcode}" "${STFW_EXEC_DIR}"
+  else
+    stfw.usecase.outputport.scenario.cascade_generate_finished "${_retcode}" "${STFW_EXEC_DIR}"
+  fi
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.adapter.cli.scenario_controller.setup() {
+  stfw.log.func_start_debug "$@"
+  local _trg_scenario_dir="${1:?}"
+
+  # usecase input
+  stfw.usecase.inputport.scenario.setup_requested "${_trg_scenario_dir}"
+  local _retcode=$?
+
+  # usecase output
+  stfw.usecase.outputport.scenario.setup_finished "${_retcode}" "${_trg_scenario_dir}"
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.adapter.cli.scenario_controller.teardown() {
+  stfw.log.func_start_debug "$@"
+  local _trg_scenario_dir="${1:?}"
+
+  # usecase input
+  stfw.usecase.inputport.scenario.teardown_requested "${_trg_scenario_dir}"
+  local _retcode=$?
+
+  # usecase output
+  stfw.usecase.outputport.scenario.teardown_finished "${_retcode}" "${_trg_scenario_dir}"
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}

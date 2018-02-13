@@ -1,0 +1,116 @@
+#!/bin/bash
+#===================================================================================================
+#
+# passwd service
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/spec/passwd_spec"
+. "${DIR_BIN_LIB}/stfw/domain/repository/passwd_repository"
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# command
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.passwd.generate_key() {
+  stfw.log.func_start_trace "$@"
+  local _is_force="${1:?}"
+
+  # init
+  if [[ "${_is_force}" = "true" ]]; then
+    stfw.domain.repository.passwd.remove_key
+  fi
+
+  # validate
+  stfw.domain.service.spec.passwd.can_generate_key
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  # generate key
+  stfw.domain.repository.passwd.generate_key
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.passwd.save() {
+  stfw.log.func_start_trace "$1" "$2" "$3" "PASSWORD"
+  local _is_force="${1:?}"
+  local _host="${2:?}"
+  local _user="${3:?}"
+  local _password="${4:?}"
+
+  # init
+  if [[ "${_is_force}" = "true" ]]; then
+    stfw.domain.repository.passwd.remove "${_host}" "${_user}"
+  fi
+
+  # validate
+  stfw.domain.service.spec.passwd.can_save "${_host}" "${_user}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  # save
+  stfw.domain.repository.passwd.save "${_host}" "${_user}" "${_password}"
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# query
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.passwd.get_key_result() {
+  stfw.log.func_start_trace "$@"
+
+  find "$(stfw.domain.service.spec.passwd.key_dir)" -mindepth 1 -maxdepth 1 -type f
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.passwd.get_result() {
+  stfw.log.func_start_trace "$@"
+  local _host="${1:?}"
+  local _user="${2:?}"
+
+  stfw.domain.service.spec.passwd.path "${_host}" "${_user}"
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.passwd.show() {
+  stfw.log.func_start_trace "$@"
+  local _host="${1:?}"
+  local _user="${2:?}"
+
+  # validate
+  stfw.domain.service.spec.passwd.can_show "${_host}" "${_user}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  # show
+  stfw.domain.repository.passwd.show "${_host}" "${_user}"
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}

@@ -2,4 +2,4 @@
   run:
     run_id: ${run_id}
     workspace_dir: ${STFW_PROJ_DIR}
-    params: $(stfw.get_raw_params)
+    params: ${webhook_run_params}

@@ -1,0 +1,108 @@
+#!/bin/bash
+#set -ex
+#===================================================================================================
+#
+# inventory command
+#
+#===================================================================================================
+#---------------------------------------------------------------------------------------------------
+# 設定
+#---------------------------------------------------------------------------------------------------
+dir_script="$(dirname $0)"
+cd "$(cd ${dir_script}; pwd)"
+
+readonly STFW_HOME="$(cd ../..; pwd)"
+. "${STFW_HOME}/bin/lib/setenv"
+. "${DIR_BIN_LIB}/stfw/adapter/cli/inventory_controller"
+
+readonly PROGNAME="stfw $(basename $0)"
+
+
+#---------------------------------------------------------------------------------------------------
+# 関数定義
+#---------------------------------------------------------------------------------------------------
+function private.description() {
+  echo "  $(basename $0) : read inventory settings"
+}
+
+
+function private.usage() {
+  cat << __EOT__ >&2
+usage: ${PROGNAME} [options...]
+
+options:
+  -e, --is-exist <group> : check existence of group
+  -l, --list [<group>]   : list hosts belonging to group  (default: all)
+
+__EOT__
+  exit ${EXITCODE_ERROR}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+# オプション解析
+#---------------------------------------------------------------------------------------------------
+cmd="list"
+group="all"
+
+while :; do
+  case $1 in
+    --description)
+      private.description
+      exit ${EXITCODE_ERROR}
+      ;;
+
+    -h|--help)
+      private.usage
+      ;;
+
+    -e|--is-exist)
+      if [[ $# -ne 2 ]]; then private.usage; fi
+      cmd="is_exist"
+      group="$2"
+      shift 2
+      ;;
+
+    -l|--list)
+      if [[ $# -gt 2 ]]; then private.usage; fi
+      cmd="list"
+      if [[ $# -eq 2 ]]; then
+        group="$2"
+        shift
+      fi
+      shift
+      ;;
+
+    --)
+      shift
+      break
+      ;;
+
+    *)
+      break
+      ;;
+  esac
+done
+
+
+#---------------------------------------------------------------------------------------------------
+# コマンド実行
+#---------------------------------------------------------------------------------------------------
+stfw.log.script_start "${PROGNAME} ${cmd}"
+
+case ${cmd} in
+  is_exist)
+    stfw.adapter.cli.inventory_controller.is_exist "${group}"
+    exitcode=$?
+    ;;
+  list)
+    stfw.adapter.cli.inventory_controller.list "${group}"
+    exitcode=$?
+    ;;
+  *)
+    private.usage
+    ;;
+esac
+
+stfw.log.script_end "${PROGNAME} ${cmd}" "${exitcode}"
+exit ${exitcode}

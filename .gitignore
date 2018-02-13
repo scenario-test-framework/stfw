@@ -1,10 +1,10 @@
 .DS_Store
 .git_credentials
 
-src/archives
-src/modules
-src/bin/lib/jq
-src/config/encrypt
+src/archives/
+src/modules/bin/
+src/modules/digdag
+src/config/encrypt/
 
 docs/index.html
 

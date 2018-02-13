@@ -1,0 +1,80 @@
+#!/bin/bash
+#===================================================================================================
+#
+# server service
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/spec/server_spec"
+. "${DIR_BIN_LIB}/stfw/domain/repository/server_repository"
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# command
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.server.start_requested() {
+  stfw.log.func_start_trace
+
+  # validate
+  stfw.domain.service.spec.server.can_start
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  # start
+  stfw.domain.repository.server.start
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.server.stop_requested() {
+  stfw.log.func_start_trace
+
+  # validate
+  stfw.domain.service.spec.server.can_stop
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  # stop
+  stfw.domain.repository.server.stop
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.server.restart_requested() {
+  stfw.log.func_start_trace
+
+  # validate
+  stfw.domain.service.spec.server.can_stop
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_trace ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  # stop
+  stfw.domain.repository.server.stop
+
+  # start
+  stfw.domain.repository.server.start
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# query
+#
+#---------------------------------------------------------------------------------------------------

@@ -1,0 +1,84 @@
+#!/bin/bash
+# 依存
+#   logging
+
+
+function processing_time.start() {
+  local _key="$1"
+
+  local _filepath_processing_time=$(private.processing_time.get_filepath "${_key}")
+  if [[ -f "${_filepath_processing_time}" ]]; then
+    log.error "${_filepath_processing_time} is already exist."
+    return ${EXITCODE_ERROR}
+  fi
+
+  echo -n "$(date '+%Y%m%d%H%M%S')" >"${_filepath_processing_time}"
+}
+
+
+function processing_time.get_start_time() {
+  local _key="$1"
+
+  local _filepath_processing_time=$(private.processing_time.get_filepath "${_key}")
+  if [[ ! -f "${_filepath_processing_time}" ]]; then
+    log.error "${_filepath_processing_time} is not exist. key=${_key}"
+    return ${EXITCODE_ERROR}
+  fi
+  cat "${_filepath_processing_time}"
+}
+
+
+function processing_time.get_lap_time() {
+  local _key="$1"
+
+  local _start_time=$(processing_time.get_start_time "${_key}")
+  if [[ "${_start_time}x" = "x" ]]; then return ${EXITCODE_ERROR}; fi
+
+  local _now=$(date '+%Y%m%d%H%M%S')
+  private.calc_processing_time "${_start_time}" "${_now}"
+}
+
+
+function processing_time.end() {
+  local _key="$1"
+
+  processing_time.get_lap_time "${_key}"
+  local _retcode=$?
+  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  local _filepath_processing_time=$(private.processing_time.get_filepath "${_key}")
+  rm -f "${_filepath_processing_time}"
+}
+
+
+function private.processing_time.get_filepath() {
+  local _key="$1"
+  local _DIR_STORE="/tmp/processing_time"
+  if [[ ! -d "${_DIR_STORE}" ]]; then mkdir -p "${_DIR_STORE}"; fi
+  echo "${_DIR_STORE}/$(echo ${_key//\//_} | _urlencode)"
+}
+
+
+function private.calc_processing_time() {
+  local _start_time="$1"
+  local _end_time="$2"
+  echo "${_start_time} ${_end_time}"                                                               | # 開始・終了時刻(YYYYMMddHHmmss)から
+  calclock 1 2 -                                                                                   | # エポックからのミリ秒に変換
+  awk '{ print $4 - $2}'                                                                           | # ミリ秒の差分を取得
+  calclock -r 1 -                                                                                  | # 差分をYYYYMMddHHmmssに変換
+  awk '{
+    # 197001ddHHmmss -> d
+    day = substr($2, 8, 1)
+    # 197001ddHHmmss -> HH
+    hour = substr($2, 9, 2)
+    # 197001ddHHmmss -> mm
+    min = substr($2, 11, 2)
+    # 197001ddHHmmss -> ss
+    sec = substr($2, 13, 2)
+    # 19700101からの相対日付なので、1日減算
+    if ( day > 1 ) {
+      hour = hour + ( (day - 1) * 24 )
+    }
+    print hour":"min":"sec
+  }'
+}

@@ -5,7 +5,7 @@ stfw:
   loglevel: "info"
 
   # インベントリファイル
-  inventry: staging.yml
+  inventory: staging.yml
 
   # webhook
   webhooks:

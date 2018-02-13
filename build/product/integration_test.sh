@@ -103,26 +103,26 @@ if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; 
 
 
 #---------------------------------------------------------------------------------------------------
-# STEP: inventry
+# STEP: inventory
 #---------------------------------------------------------------------------------------------------
-STEP="inventry"
+STEP="inventory"
 echo "  ${STEP}"
 
-stfw inventry --list
+stfw inventory --list
 retcode=$?
-if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
+if [[ ${retcode} -ne 0 ]]; then echo "    error occurred in ${STEP} step. retcode=${retcode}" >&2; exit 1; fi
 
-hosts=$(stfw inventry --list ap)
-if [[ "${hosts}" != "127.0.0.1" ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
+hosts=$(stfw inventory --list ap)
+if [[ "${hosts}" != "127.0.0.1" ]]; then echo "    error occurred in ${STEP} step. hosts=${hosts}" >&2; exit 1; fi
 
-hosts=$(stfw inventry --list NOTEXIST)
-if [[ "${hosts}" != "" ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
+hosts=$(stfw inventory --list NOTEXIST)
+if [[ "${hosts}" != "" ]]; then echo "    error occurred in ${STEP} step. hosts=${hosts}" >&2; exit 1; fi
 
-is_exist=$(stfw inventry --is-exist ap)
-if [[ "${is_exist}" != "true" ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
+is_exist=$(stfw inventory --is-exist ap)
+if [[ "${is_exist}" != "true" ]]; then echo "    error occurred in ${STEP} step. is_exist=${is_exist}" >&2; exit 1; fi
 
-is_exist=$(stfw inventry --is-exist NOTEXIST)
-if [[ "${is_exist}" != "false" ]]; then echo "    error occurred in ${STEP} step." >&2; exit 1; fi
+is_exist=$(stfw inventory --is-exist NOTEXIST)
+if [[ "${is_exist}" != "false" ]]; then echo "    error occurred in ${STEP} step. is_exist=${is_exist}" >&2; exit 1; fi
 
 
 #---------------------------------------------------------------------------------------------------

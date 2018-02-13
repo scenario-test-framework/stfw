@@ -36,12 +36,9 @@ path_target="${DIR_ANALYZE_DIST}/target.lst"
 path_report="${DIR_ANALYZE_DIST}/report.txt"
 
 echo "  list sources"
+pwd
 find "${DIR_SRC}/bin" -type f                                                                      |
-grep -v "lib/binary/"                                                                              |
-grep -v "lib/Tukubai/"                                                                             |
-grep -v "lib/Parsrs/"                                                                              |
-grep -v "lib/yaml2json"                                                                            |
-grep -v "lib/json2yaml"                                                                            |
+sed -e "s|${DIR_BASE}/||"                                                                          |
 grep -v "\.DS_Store" >>"${path_target}"
 
 

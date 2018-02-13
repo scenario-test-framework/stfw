@@ -1,0 +1,50 @@
+#!/bin/bash
+#===================================================================================================
+#
+# scenario.embedded_plugin service
+#
+#===================================================================================================
+
+
+function stfw.domain.service.scenario.project.setup() {
+  stfw.log.func_start_trace "$@"
+  local _trg_scenario_dir="${1:?}"
+
+  log.trace "cd \"${_trg_scenario_dir}\""
+  cd "${_trg_scenario_dir}"
+
+  local _retcode=${EXITCODE_SUCCESS}
+  local _dir_proj_setup="$(stfw.get_installed_plugin_path scenario/_common/setup)"
+  if [[ "${_dir_proj_setup}x" != "x" ]]; then
+    stfw.bulk_exec_scripts "${_dir_proj_setup}"
+    _retcode=$?
+  fi
+
+  log.trace "cd -"
+  cd - >/dev/null 2>&1
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.service.scenario.project.teardown() {
+  stfw.log.func_start_trace "$@"
+  local _trg_scenario_dir="${1:?}"
+
+  log.trace "cd \"${_trg_scenario_dir}\""
+  cd "${_trg_scenario_dir}"
+
+  local _retcode=${EXITCODE_SUCCESS}
+  local _dir_proj_teardown="$(stfw.get_installed_plugin_path scenario/_common/teardown)"
+  if [[ "${_dir_proj_teardown}x" != "x" ]]; then
+    stfw.bulk_exec_scripts "${_dir_proj_teardown}"
+    _retcode=$?
+  fi
+
+  log.trace "cd -"
+  cd - >/dev/null 2>&1
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}

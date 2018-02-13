@@ -1,0 +1,40 @@
+#!/bin/bash
+#===================================================================================================
+#
+# server inputport
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/server_service"
+
+
+function stfw.usecase.inputport.server.start_requested() {
+  stfw.log.func_start_debug
+
+  stfw.domain.service.server.start_requested
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.usecase.inputport.server.stop_requested() {
+  stfw.log.func_start_debug
+
+  stfw.domain.service.server.stop_requested
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.usecase.inputport.server.restart_requested() {
+  stfw.log.func_start_debug
+
+  stfw.domain.service.server.restart_requested
+  local _retcode=$?
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}

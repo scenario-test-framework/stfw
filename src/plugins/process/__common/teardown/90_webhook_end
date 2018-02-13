@@ -1,0 +1,6 @@
+#!/bin/bash
+. "${STFW_HOME:?}/bin/lib/setenv"
+. "${DIR_BIN_LIB}/stfw/adapter/cli/webhook_controller"
+
+stfw.adapter.cli.webhook.process_end "${stfw_process_dir:?}" "${stfw_process_type:?}"
+exit $?

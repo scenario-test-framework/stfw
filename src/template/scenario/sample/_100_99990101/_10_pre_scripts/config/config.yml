@@ -1,4 +1,0 @@
-stfw:
-  process:
-    scripts:
-      some_key: defined at 10_pre_scripts

@@ -1,0 +1,212 @@
+#!/bin/bash
+#===================================================================================================
+#
+# webhook specification
+#
+#===================================================================================================
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# feature
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.spec.webhook.id() {
+  local _webhook_type="${1:?}"
+
+  local _tmp_webhook_id="${run_id:?}${task_name:?}"
+  if [[ "${_webhook_type}" = "process" ]]; then
+    echo "${_tmp_webhook_id}"
+    return
+  fi
+
+  stfw.domain.service.spec.webhook.parent_id "${_tmp_webhook_id}}"
+}
+
+
+function stfw.domain.service.spec.webhook.parent_id() {
+  local _base_id="${1:?}"
+
+  # digdag task_name を path に変換
+  local _tmp_webhook_id=$(
+    echo "${_base_id}"                                                                             |
+    sed -e 's|\+|/|g'                                                                              | # 区切り文字を/に置換
+    sed -e 's|\^|/|g'
+  )
+  local _webhook_id=$(dirname "${_tmp_webhook_id}" | sed -e 's|/|+|g')
+
+  echo "${_webhook_id}"
+}
+
+
+function stfw.domain.service.spec.webhook.payload_file() {
+  local _webhook_type="${1:?}"
+  local _event="${2:?}"
+
+  echo "/tmp/stfw_webhook_payload_${_webhook_type}_${_event}_$$.yml"
+}
+
+
+#---------------------------------------------------------------------------------------------------
+#
+# validation
+#
+#---------------------------------------------------------------------------------------------------
+function stfw.domain.service.spec.webhook.can_run_start() {
+  local _run_id="${1:?}"
+
+  # 実行設定
+  if [[ "${stfw_webhooks_on_start:?}" != "true" ]]; then return ${EXITCODE_ERROR}; fi
+
+  # run id
+  checks.must_not_null "run id" "${_run_id}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.domain.service.spec.webhook.can_run_end() {
+  local _run_id="${1:?}"
+
+  # 実行設定
+  if [[ "${stfw_run_status:?}" -eq "${STATUS_SUCCESS}" ]]; then
+    if [[ "${stfw_webhooks_on_success:?}" != "true" ]]; then return ${EXITCODE_ERROR}; fi
+  fi
+  if [[ "${stfw_run_status:?}" -eq "${STATUS_ERROR}" ]]; then
+    if [[ "${stfw_webhooks_on_error:?}" != "true" ]]; then return ${EXITCODE_ERROR}; fi
+  fi
+
+  # run id
+  checks.must_not_null "run id" "${_run_id}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.domain.service.spec.webhook.can_scenario_start() {
+  local _scenario_dir="${1:?}"
+
+  # 実行設定
+  if [[ "${stfw_webhooks_on_start:?}" != "true" ]]; then return ${EXITCODE_ERROR}; fi
+
+  # scenario dir
+  checks.must_not_null "scenario dir" "${_scenario_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  checks.must_exist_dir "${_scenario_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.domain.service.spec.webhook.can_scenario_end() {
+  local _scenario_dir="${1:?}"
+
+  # 実行設定
+  if [[ "${stfw_run_status:?}" -eq "${STATUS_SUCCESS}" ]]; then
+    if [[ "${stfw_webhooks_on_success:?}" != "true" ]]; then return ${EXITCODE_ERROR}; fi
+  fi
+  if [[ "${stfw_run_status:?}" -eq "${STATUS_ERROR}" ]]; then
+    if [[ "${stfw_webhooks_on_error:?}" != "true" ]]; then return ${EXITCODE_ERROR}; fi
+  fi
+
+  # scenario dir
+  checks.must_not_null "scenario dir" "${_scenario_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  checks.must_exist_dir "${_scenario_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.domain.service.spec.webhook.can_bizdate_start() {
+  local _bizdate_dir="${1:?}"
+
+  # 実行設定
+  if [[ "${stfw_webhooks_on_start:?}" != "true" ]]; then return ${EXITCODE_ERROR}; fi
+
+  # bizdate dir
+  checks.must_not_null "bizdate dir" "${_bizdate_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  checks.must_exist_dir "${_bizdate_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.domain.service.spec.webhook.can_bizdate_end() {
+  local _bizdate_dir="${1:?}"
+
+  # 実行設定
+  if [[ "${stfw_run_status:?}" -eq "${STATUS_SUCCESS}" ]]; then
+    if [[ "${stfw_webhooks_on_success:?}" != "true" ]]; then return ${EXITCODE_ERROR}; fi
+  fi
+  if [[ "${stfw_run_status:?}" -eq "${STATUS_ERROR}" ]]; then
+    if [[ "${stfw_webhooks_on_error:?}" != "true" ]]; then return ${EXITCODE_ERROR}; fi
+  fi
+
+  # bizdate dir
+  checks.must_not_null "bizdate dir" "${_bizdate_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  checks.must_exist_dir "${_bizdate_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.domain.service.spec.webhook.can_process_start() {
+  local _process_dir="${1:?}"
+  local _process_type="${2:?}"
+
+  # 実行設定
+  if [[ "${stfw_webhooks_on_start:?}" != "true" ]]; then return ${EXITCODE_ERROR}; fi
+
+  # process dir
+  checks.must_not_null "process dir" "${_process_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  checks.must_exist_dir "${_process_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # process type
+  checks.must_not_null "process type" "${_process_type}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.domain.service.spec.webhook.can_process_end() {
+  local _process_dir="${1:?}"
+  local _process_type="${2:?}"
+
+  # 実行設定
+  if [[ "${stfw_process_retcode:?}" -eq "${STATUS_SUCCESS}" ]]; then
+    if [[ "${stfw_webhooks_on_success:?}" != "true" ]]; then return ${EXITCODE_ERROR}; fi
+  fi
+  if [[ "${stfw_process_retcode:?}" -eq "${STATUS_ERROR}" ]]; then
+    if [[ "${stfw_webhooks_on_error:?}" != "true" ]]; then return ${EXITCODE_ERROR}; fi
+  fi
+
+  # process dir
+  checks.must_not_null "process dir" "${_process_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  checks.must_exist_dir "${_process_dir}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # process type
+  checks.must_not_null "process type" "${_process_type}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  return ${EXITCODE_SUCCESS}
+}

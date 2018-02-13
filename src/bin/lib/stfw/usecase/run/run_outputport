@@ -1,0 +1,65 @@
+#!/bin/bash
+#===================================================================================================
+#
+# run outputport
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/service/run_service"
+
+
+function stfw.usecase.outputport.run.run_on_server_finished() {
+  stfw.log.func_start_debug "$@"
+  local _inputport_exitcode="${1:?}"
+#  local _run_opt="${2:?}"
+  local _is_follow="${3:?}"
+#  shift 3
+#  local _target_scenarios=( "$@" )
+
+  if [[ ${_inputport_exitcode} -ne ${EXITCODE_SUCCESS} ]]; then
+    stfw.log.func_end_debug ${EXITCODE_ERROR}
+    return ${EXITCODE_ERROR}
+  fi
+
+  # start info
+  log.info "start info"
+  log.add_indent
+  log.info "$(stfw.domain.service.run.get_start_info)"
+  log.remove_indent
+
+  # follow
+  local _retcode=${EXITCODE_SUCCESS}
+  if [[ "${_is_follow}" = "true" ]]; then
+    stfw.domain.service.run.follow_log_requested
+    _retcode=$?
+
+  else
+    # url表示
+    local _attempt_url="$(stfw.domain.service.run.get_attempt_url)"
+    log.info "If you want to check progress status on browser, execute \`open ${_attempt_url}\`"
+  fi
+
+  stfw.log.func_end_debug ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.usecase.outputport.run.setup_finished() {
+  stfw.log.func_start_debug "$@"
+  local _inputport_exitcode="${1:?}"
+
+  # 表示なし
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}
+
+
+function stfw.usecase.outputport.run.teardown_finished() {
+  stfw.log.func_start_debug "$@"
+  local _inputport_exitcode="${1:?}"
+
+  # 表示なし
+
+  stfw.log.func_end_debug ${EXITCODE_SUCCESS}
+  return ${EXITCODE_SUCCESS}
+}

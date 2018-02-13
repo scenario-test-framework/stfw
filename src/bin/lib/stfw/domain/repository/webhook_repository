@@ -1,0 +1,355 @@
+#!/bin/bash
+#===================================================================================================
+#
+# webhook repository
+#
+#===================================================================================================
+. "${DIR_BIN_LIB}/stfw/domain/gateway/webhook_gateway"
+. "${DIR_BIN_LIB}/stfw/domain/gateway/digdag_gateway"
+
+
+function stfw.domain.repository.webhook.add_run_start() {
+  local _processing_time_key="${1:?}"
+
+  # payload設定
+  readonly webhook_type="run"
+  readonly webhook_id=$(stfw.domain.service.spec.webhook.id "${webhook_type}")
+  readonly webhook_status="${STATUS_STARTED}"
+
+  # payloadファイル生成
+  local _event="start"
+  local _payload_file="$(stfw.domain.service.spec.webhook.payload_file ${webhook_type} ${_event})"
+  private.stfw.domain.repository.webhook.gen_start_payload "${_processing_time_key}" "${_payload_file}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # 送信
+  stfw.domain.gateway.webhook.async_execute "${_payload_file}"
+
+  return $?
+}
+
+
+function stfw.domain.repository.webhook.add_run_end() {
+  local _processing_time_key="${1:?}"
+
+  # payload設定
+  readonly webhook_type="run"
+  readonly webhook_id=$(stfw.domain.service.spec.webhook.id "${webhook_type}")
+  readonly webhook_status="${stfw_run_status:?}"
+
+  # payloadファイル生成
+  local _event="end"
+  local _payload_file="$(stfw.domain.service.spec.webhook.payload_file ${webhook_type} ${_event})"
+  private.stfw.domain.repository.webhook.gen_end_payload "${_processing_time_key}" "${_payload_file}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # 送信
+  stfw.domain.gateway.webhook.async_execute "${_payload_file}"
+
+  return $?
+}
+
+
+function stfw.domain.repository.webhook.add_scenario_start() {
+  local _processing_time_key="${1:?}"
+
+  # payload設定
+  readonly webhook_type="scenario"
+  readonly webhook_id=$(stfw.domain.service.spec.webhook.id "${webhook_type}")
+  readonly webhook_status="${STATUS_STARTED}"
+
+  # payloadファイル生成
+  local _event="start"
+  local _payload_file="$(stfw.domain.service.spec.webhook.payload_file ${webhook_type} ${_event})"
+  private.stfw.domain.repository.webhook.gen_start_payload "${_processing_time_key}" "${_payload_file}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # 送信
+  stfw.domain.gateway.webhook.async_execute "${_payload_file}"
+
+  return $?
+}
+
+
+function stfw.domain.repository.webhook.add_scenario_end() {
+  local _processing_time_key="${1:?}"
+
+  # payload設定
+  readonly webhook_type="scenario"
+  readonly webhook_id=$(stfw.domain.service.spec.webhook.id "${webhook_type}")
+  readonly webhook_status="${stfw_run_status:?}"
+
+  # payloadファイル生成
+  local _event="end"
+  local _payload_file="$(stfw.domain.service.spec.webhook.payload_file ${webhook_type} ${_event})"
+  private.stfw.domain.repository.webhook.gen_end_payload "${_processing_time_key}" "${_payload_file}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # 送信
+  stfw.domain.gateway.webhook.async_execute "${_payload_file}"
+
+  return $?
+}
+
+
+function stfw.domain.repository.webhook.add_bizdate_start() {
+  local _processing_time_key="${1:?}"
+
+  # payload設定
+  readonly webhook_type="bizdate"
+  readonly webhook_id=$(stfw.domain.service.spec.webhook.id "${webhook_type}")
+  readonly webhook_status="${STATUS_STARTED}"
+
+  # payloadファイル生成
+  local _event="start"
+  local _payload_file="$(stfw.domain.service.spec.webhook.payload_file ${webhook_type} ${_event})"
+  private.stfw.domain.repository.webhook.gen_start_payload "${_processing_time_key}" "${_payload_file}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # 送信
+  stfw.domain.gateway.webhook.async_execute "${_payload_file}"
+
+  return $?
+}
+
+
+function stfw.domain.repository.webhook.add_bizdate_end() {
+  local _processing_time_key="${1:?}"
+
+  # payload設定
+  readonly webhook_type="bizdate"
+  readonly webhook_id=$(stfw.domain.service.spec.webhook.id "${webhook_type}")
+  readonly webhook_status="${stfw_run_status:?}"
+
+  # payloadファイル生成
+  local _event="end"
+  local _payload_file="$(stfw.domain.service.spec.webhook.payload_file ${webhook_type} ${_event})"
+  private.stfw.domain.repository.webhook.gen_end_payload "${_processing_time_key}" "${_payload_file}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # 送信
+  stfw.domain.gateway.webhook.async_execute "${_payload_file}"
+
+  return $?
+}
+
+
+function stfw.domain.repository.webhook.add_process_start() {
+  local _processing_time_key="${1:?}"
+  local _process_type="${2:?}"
+
+  # payload設定
+  readonly webhook_type="process"
+  readonly webhook_id=$(stfw.domain.service.spec.webhook.id "${webhook_type}")
+  readonly webhook_status="${STATUS_STARTED}"
+
+  # payloadファイル生成
+  local _event="start"
+  local _payload_file="$(stfw.domain.service.spec.webhook.payload_file ${webhook_type} ${_event})"
+  private.stfw.domain.repository.webhook.gen_start_payload "${_processing_time_key}" "${_payload_file}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # process typeごとのpayloadを追記
+  private.stfw.domain.repository.webhook.append_process_payload "${_process_type}" "${_event}" "${_payload_file}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # 送信
+  stfw.domain.gateway.webhook.async_execute "${_payload_file}"
+
+  return $?
+}
+
+
+function stfw.domain.repository.webhook.add_process_end() {
+  local _processing_time_key="${1:?}"
+  local _process_type="${2:?}"
+
+  # payload設定
+  readonly webhook_type="process"
+  readonly webhook_id=$(stfw.domain.service.spec.webhook.id "${webhook_type}")
+  if [[ ${stfw_process_retcode:?} -eq ${EXITCODE_SUCCESS} ]]; then
+    readonly webhook_status="${STATUS_SUCCESS}"
+  else
+    readonly webhook_status="${STATUS_ERROR}"
+  fi
+
+  # payloadファイル生成
+  local _event="end"
+  local _payload_file="$(stfw.domain.service.spec.webhook.payload_file ${webhook_type} ${_event})"
+  private.stfw.domain.repository.webhook.gen_end_payload "${_processing_time_key}" "${_payload_file}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # process typeごとのpayloadを追記
+  private.stfw.domain.repository.webhook.append_process_payload "${_process_type}" "${_event}" "${_payload_file}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then return ${EXITCODE_ERROR}; fi
+
+  # 送信
+  stfw.domain.gateway.webhook.async_execute "${_payload_file}"
+
+  return $?
+}
+
+
+
+
+function private.stfw.domain.repository.webhook._apply_common_vars() {
+  # create_time
+  readonly webhook_create_time=$(timestamp_to_iso "$(date '+%Y%m%d%H%M%S')")
+  # parent_id
+  readonly webhook_parent_id=$(stfw.domain.service.spec.webhook.parent_id "${webhook_id:?}")
+  # start_time
+  local _tmp_start_time=$(processing_time.get_start_time "${_processing_time_key}")
+  readonly webhook_start_time=$(timestamp_to_iso ${_tmp_start_time})
+
+  # stfw.host
+  readonly webhook_stfw_host="$(get_ip)"
+  # stfw.user
+  readonly webhook_stfw_user="$(whoami)"
+
+  # digdag.url
+  readonly webhook_digdag_url="$(stfw.domain.gateway.digdag.url)"
+  # digdag.version
+  readonly webhook_digdag_version="$(stfw.domain.gateway.digdag.version)"
+
+  # stfw.stfw.proj.home
+  readonly webhook_stfw_proj_home="$(stfw.project_home)"
+
+  # run.params
+  readonly webhook_run_params="$(stfw.get_raw_params)"
+}
+
+function private.stfw.domain.repository.webhook.gen_start_payload() {
+  local _processing_time_key="${1:?}"
+  local _payload_file="${2:?}"
+
+  # payload共通項目
+  private.stfw.domain.repository.webhook._apply_common_vars
+
+  # end_time       : null
+  # processing_time: null
+
+  private.stfw.domain.repository.webhook._gen_common_payload "${_processing_time_key}" "${_payload_file}"
+}
+
+
+function private.stfw.domain.repository.webhook.gen_end_payload() {
+  local _processing_time_key="${1:?}"
+  local _payload_file="${2:?}"
+
+  # payload共通項目
+  private.stfw.domain.repository.webhook._apply_common_vars
+
+  # end_time
+  local _tmp_end_time=$(date '+%Y%m%d%H%M%S')
+  readonly webhook_end_time=$(timestamp_to_iso ${_tmp_end_time})
+  # processing_time
+  readonly webhook_processing_time=$(processing_time.end "${_processing_time_key}")
+
+  private.stfw.domain.repository.webhook._gen_common_payload "${_processing_time_key}" "${_payload_file}"
+}
+
+
+function private.stfw.domain.repository.webhook._gen_common_payload() {
+  local _processing_time_key="${1:?}"
+  local _payload_file="${2:?}"
+
+  # webhook type に合わせて、template設定
+  local _templates=( "${DIR_CONFIG}/webhook/payload.yml" )
+  case "${webhook_type:?}" in
+    run)
+      _templates+=( "${DIR_CONFIG}/webhook/run.yml" )
+      ;;
+    scenario)
+      _templates+=( "${DIR_CONFIG}/webhook/run.yml" )
+      _templates+=( "${DIR_CONFIG}/webhook/scenario.yml" )
+      ;;
+    bizdate)
+      _templates+=( "${DIR_CONFIG}/webhook/run.yml" )
+      _templates+=( "${DIR_CONFIG}/webhook/scenario.yml" )
+      _templates+=( "${DIR_CONFIG}/webhook/bizdate.yml" )
+      ;;
+    process)
+      _templates+=( "${DIR_CONFIG}/webhook/run.yml" )
+      _templates+=( "${DIR_CONFIG}/webhook/scenario.yml" )
+      _templates+=( "${DIR_CONFIG}/webhook/bizdate.yml" )
+      _templates+=( "${DIR_CONFIG}/webhook/process.yml" )
+      ;;
+    *)
+      ;;
+  esac
+
+  # payloadファイル出力
+  cat "${_templates[@]}"                                                                           | # templateを連結
+  grep -v "^#"                                                                                     | # コメント業を除外
+  while IFS= read -r _line; do
+    # 変数展開
+    eval "echo \"${_line}\""
+  done >"${_payload_file}"
+}
+
+
+function private.stfw.domain.repository.webhook.append_process_payload() {
+  local _process_type="${1:?}"
+  local _event="${2:?}"
+  local _payload_file="${3:?}"
+
+  cd "${stfw_process_dir:?}"
+
+  local _plugin_dir=$(stfw.get_installed_plugin_path "process/${_process_type}")
+  "${_plugin_dir}/bin/webhook/get_${_event}_content" | grep -v "^#" >>"${_payload_file}"
+  local _retcode=${PIPESTATUS[0]}
+
+  if [[ ${_retcode} -ne ${EXITCODE_SUCCESS} ]]; then
+    log.error "get_${_event}_content is failed. process_type=${_process_type}"
+  fi
+
+  cd - >/dev/null 2>&1
+  return ${_retcode}
+}
+
+
+
+
+function stfw.domain.repository.webhook.get_start_payload() {
+  stfw.log.func_start_trace
+
+  local _event="start"
+  local _payload_file="$(stfw.domain.service.spec.webhook.payload_file ${webhook_type:?} ${_event})"
+  private.stfw.domain.repository.webhook.show_result_payload "${_payload_file}"
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function stfw.domain.repository.webhook.get_end_payload() {
+  stfw.log.func_start_trace
+
+  local _event="end"
+  local _payload_file="$(stfw.domain.service.spec.webhook.payload_file ${webhook_type:?} ${_event})"
+  private.stfw.domain.repository.webhook.show_result_payload "${_payload_file}"
+  local _retcode=$?
+
+  stfw.log.func_end_trace ${_retcode}
+  return ${_retcode}
+}
+
+
+function private.stfw.domain.repository.webhook.show_result_payload() {
+  local _payload_file="${1:?}"
+
+  # 存在チェック
+  checks.must_exist_file "${_payload_file}"
+  if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
+    return ${EXITCODE_ERROR}
+  fi
+
+  # 表示
+  cat "${_payload_file}"
+
+  # 削除
+  rm -f "${_payload_file}"
+
+  return ${EXITCODE_SUCCESS}
+}

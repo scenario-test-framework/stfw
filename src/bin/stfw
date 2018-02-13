@@ -32,11 +32,6 @@ export readonly STFW_HOME="$(cd ..; pwd)"
 export readonly STFW_VERSION="$(cat ${STFW_HOME}/VERSION)"
 . "${STFW_HOME}/bin/lib/setenv"
 
-# 標準出力するサブコマンド
-STDOUT_SUB_COMMANDS=(
-  "inventry"
-)
-
 # 起動引数
 export stfw_raw_params="$*"
 
@@ -154,14 +149,15 @@ fi
 #---------------------------------------------------------------------------------------------------
 # 本処理
 #---------------------------------------------------------------------------------------------------
+# context初期化
+stfw.context.init
+
 # サブコマンド実行
-if [[ "${STDOUT_SUB_COMMANDS[*]//${subcmd}/}" = "${STDOUT_SUB_COMMANDS[*]}" ]]; then
-  "${DIR_BIN_CMD}/${subcmd}" "$@"                                                               2>&1 | log.tee
-  retcode=${PIPESTATUS[0]}
-else
-  "${DIR_BIN_CMD}/${subcmd}" "$@"
-  retcode=$?
-fi
+"${DIR_BIN_CMD}/${subcmd}" "$@"
+retcode=$?
+
+# context破棄
+stfw.context.destroy
 
 
 
