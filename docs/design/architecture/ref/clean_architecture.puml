@@ -4,7 +4,7 @@
 actor user
 node web
 node system
-database database
+database datastore
 
 entity files
 
@@ -60,7 +60,7 @@ webapi <-up- web
 web <-up- user
 system -down-> webapi
 system <-down- gateway_impl
-database <-down- gateway_impl
+datastore <-down- gateway_impl
 
 
 @enduml
