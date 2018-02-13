@@ -175,13 +175,23 @@ function gen_ssh_server_key() {
 #--------------------------------------------------------------------------------------------------
 function get_ip() {
   # TODO eth0,en0 に絞ったほうが良さそう
+  # TODO wirelessの場合、wlXXXXも考慮したほうが良さそう
   # 自IPを標準出力
-  LANG=C /sbin/ifconfig                                                                            |
-  grep 'inet '                                                                                     |
-  grep -v 127.0.0.1                                                                                |
-  head -n 1                                                                                        |
-  awk '{print $2}'                                                                                 |
-  cut -d ':' -f 2
+  if [[ -x "/sbin/ifconfig" ]]; then
+    LANG=C /sbin/ifconfig                                                                            |
+    grep 'inet '                                                                                     |
+    grep -v 127.0.0.1                                                                                |
+    head -n 1                                                                                        |
+    awk '{print $2}'                                                                                 |
+    cut -d ':' -f 2
+  else
+    LANG=C ip addr show                                                                              | 
+    grep 'inet '                                                                                     | 
+    grep -v 127.0.0.1                                                                                | 
+    head -n 1                                                                                        | 
+    awk '{print $2}'                                                                                 | 
+    cut -d '/' -f 1
+  fi
   return 0
 }
 

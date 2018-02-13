@@ -50,7 +50,7 @@ sub_cmd -down-> controller
 plugin_script -down-> controller
 note right : \
 presenterは利用しません。\n\
-outputportに出力ロジックを持たます。\n
+outputportに出力ロジックを持たせます。\n
 
 
 controller -down-> inputport

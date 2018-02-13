@@ -42,7 +42,7 @@ STFW__GEN_MODE_CASCADE="cascade"
 
 # ホストグループ: 全件
 # shellcheck disable=SC2034
-STFW__INVENTRY_GROUP_ALL="all"
+STFW__INVENTORY_GROUP_ALL="all"
 
 # digdag起動情報
 # shellcheck disable=SC2034

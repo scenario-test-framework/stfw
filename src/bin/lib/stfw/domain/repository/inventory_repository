@@ -30,7 +30,7 @@
 # 依存定数
 #---------------------------------------------------------------------------------------------------
 # 全件ホストグループ
-STFW__INVENTRY_GROUP_ALL="${STFW__INVENTRY_GROUP_ALL:?}"
+STFW__INVENTORY_GROUP_ALL="${STFW__INVENTORY_GROUP_ALL:?}"
 
 
 #---------------------------------------------------------------------------------------------------
@@ -61,7 +61,7 @@ function stfw.domain.repository.inventory.list_group_hosts() {
 
   # allの場合、絞り込み条件を、任意の文字列に変更
   local _group="${_arg_group}"
-  if [[ "${_group}" = "${STFW__INVENTRY_GROUP_ALL}" ]]; then _group=".*"; fi
+  if [[ "${_group}" = "${STFW__INVENTORY_GROUP_ALL}" ]]; then _group=".*"; fi
 
   # 定義からグループ名で絞り込み
   local _criteria="^stfw_inventory_[0-9]*_${_group}_[0-9]*\="
