@@ -177,21 +177,20 @@ function get_ip() {
   # TODO eth0,en0 に絞ったほうが良さそう
   # TODO wirelessの場合、wlXXXXも考慮したほうが良さそう
   # 自IPを標準出力
+  local _cmd=$(LANG=C ip addr show 2> /dev/null )
+  local _delimter="/"
+  local _field_num=1
   if [[ -x "/sbin/ifconfig" ]]; then
-    LANG=C /sbin/ifconfig                                                                            |
-    grep 'inet '                                                                                     |
-    grep -v 127.0.0.1                                                                                |
-    head -n 1                                                                                        |
-    awk '{print $2}'                                                                                 |
-    cut -d ':' -f 2
-  else
-    LANG=C ip addr show                                                                              | 
-    grep 'inet '                                                                                     | 
-    grep -v 127.0.0.1                                                                                | 
-    head -n 1                                                                                        | 
-    awk '{print $2}'                                                                                 | 
-    cut -d '/' -f 1
+    _cmd=$(LANG=C /sbin/ifconfig)
+    _delimter=":"
+    _field_num=2
   fi
+  "${_cmd[@]}"                                                                                     |
+  grep 'inet '                                                                                     |
+  grep -v 127.0.0.1                                                                                |
+  head -n 1                                                                                        |
+  awk '{print $2}'                                                                                 |
+  cut -d "${_delimter}" -f ${_field_num}
   return 0
 }
 
