@@ -323,22 +323,10 @@ log.add_indent
 log.info "check requires"
 log.add_indent
 
-private.is_installed "java"
+private.is_installed "serverspec-init"
 private.exit_on_fail $?
 
-private.is_installed "curl"
-private.exit_on_fail $?
-
-private.is_installed "python"
-private.exit_on_fail $?
-
-private.is_installed "pip"
-private.exit_on_fail $?
-
-private.is_pip_installed "pyaml"
-private.exit_on_fail $?
-
-private.is_pip_installed "docopt"
+( cd ${STFW_HOME}/modules/serverspec; rake spec:localhost )
 private.exit_on_fail $?
 
 rm -f "${__TMP_PIP_LIST}"
