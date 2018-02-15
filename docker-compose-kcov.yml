@@ -1,0 +1,9 @@
+version: '3'
+services:
+  stfw-kcov:
+    build:
+      context: "."
+      dockerfile: "dockerfiles/kcov/Dockerfile"
+    volumes:
+      - ./:/source
+    command: --include-pattern /source /source/dist/coverage /source/build/product/integration_test.sh /source/dist/stfw-with-depends-0.2.0-SNAPSHOT.tar.gz
