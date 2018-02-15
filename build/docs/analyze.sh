@@ -18,8 +18,8 @@ readonly DIR_BASE="$(pwd)"
 #---------------------------------------------------------------------------------------------------
 # check
 #---------------------------------------------------------------------------------------------------
-if [[ "$(which redpen)x" = "x" ]]; then
-  echo "redpen is not installed." >&2
+${DIR_BASE}/build/lib/check_installed.sh docs-analyze
+if [[ $? -ne 0 ]]; then
   exit 1
 fi
 

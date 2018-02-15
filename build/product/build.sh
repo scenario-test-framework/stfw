@@ -23,8 +23,8 @@ archive_name_with_dpends="${product}-with-depends-${version}"
 #---------------------------------------------------------------------------------------------------
 # check
 #---------------------------------------------------------------------------------------------------
-if [[ "$(which md5sum)x" = "x" ]]; then
-  echo "md5sum is not installed." >&2
+${DIR_BASE}/build/lib/check_installed.sh product-build
+if [[ $? -ne 0 ]]; then
   exit 1
 fi
 

@@ -20,6 +20,8 @@ before_install:
   - 'DIR_CACHE="${HOME}/custom_cache"'
 
 install:
+  # build/stfw dependencies
+  - 'gem install serverspec'
   # build/docs: redpen
   - 'curl --request GET --location --continue-at - --create-dirs --output "${DIR_CACHE}/redpen-${REDPEN_VERSION}.tar.gz" "${REDPEN_URL}/redpen-${REDPEN_VERSION}/redpen-${REDPEN_VERSION}.tar.gz"'
   - 'cd ${DIR_CACHE} && tar xf "./redpen-${REDPEN_VERSION}.tar.gz" && cd -'

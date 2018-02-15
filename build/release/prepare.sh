@@ -27,18 +27,8 @@ if [[ "${GITHUB_TOKEN}x" = "x" ]]; then
   exit 1
 fi
 
-if [[ "$(which node)x" = "x" ]]; then
-  echo "nodejs is not installed." >&2
-  exit 1
-fi
-
-if [[ "$(which npm)x" = "x" ]]; then
-  echo "npm is not installed." >&2
-  exit 1
-fi
-
-if [[ "$(which conventional-changelog)x" = "x" ]]; then
-  echo "conventional-changelog-cli is not installed." >&2
+${DIR_BASE}/build/lib/check_installed.sh release-prepare
+if [[ $? -ne 0 ]]; then
   exit 1
 fi
 
