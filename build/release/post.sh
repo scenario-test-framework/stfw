@@ -27,6 +27,11 @@ if [[ "${GITHUB_TOKEN}x" = "x" ]]; then
   exit 1
 fi
 
+${DIR_BASE}/build/lib/check_installed.sh release-post
+if [[ $? -ne 0 ]]; then
+  exit 1
+fi
+
 
 #---------------------------------------------------------------------------------------------------
 # main
