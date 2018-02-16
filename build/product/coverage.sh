@@ -16,5 +16,18 @@ if [ ! -f ${DIR_BASE}/dist/${archive_name_with_dpends}.tar.gz ]; then
   exit 2
 fi
 
-sudo docker-compose -f docker-compose-kcov.yml up
+tar xzf ${DIR_BASE}/dist/${archive_name_with_dpends}.tar.gz -C ${DIR_BASE}/dist/
+mv ${DIR_BASE}/dist/${archive_name_with_dpends} ${DIR_BASE}/dist/test
+sudo docker-compose -f docker-compose-kcov.yml \
+     run stfw-kcov --include-pattern /source \
+         /source/dist/coverage \
+         /source/test/ut/ut_all.sh /source/dist/test /source/dist/proj
+
+rm -R ${DIR_BASE}/dist/test
+rm -R ${DIR_BASE}/dist/proj
+
+sudo docker-compose -f docker-compose-kcov.yml \
+     run stfw-kcov --include-pattern /source \
+         /source/dist/coverage \
+         /source/build/product/integration_test.sh /source/dist/${archive_name_with_dpends}.tar.gz
 
