@@ -200,23 +200,7 @@ function private.log.format() {
     -v _log_level="${_log_level}"                                                                  \
     -v LOG__INDENT_STR="${LOG__INDENT_STR}"                                                        \
     -v LOG__INDENT_COUNT="${LOG__INDENT_COUNT}"                                                    \
-    '
-    {
-      # 「TIMESTAMP LOG_LEVEL」の出力
-      printf _timestamp" "_log_level
-
-      # 「 INDENT」の出力
-      for (i = 0; i < LOG__INDENT_COUNT; i++) {
-        if ( i == 0) {
-          printf " "
-        }
-        printf LOG__INDENT_STR
-      }
-
-      # 「MESSAGE + 改行」の出力
-      print " "$0
-    }
-  '                                                                                                |
+    ' { printf _timestamp" "_log_level; for (i = 0; i < LOG__INDENT_COUNT; i++) { if ( i == 0) { printf " " }; printf LOG__INDENT_STR; }; print " "$0; }' |
   log.mask
 }
 
