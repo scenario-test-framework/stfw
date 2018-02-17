@@ -31,8 +31,6 @@ cd "$(cd ${dir_script}; pwd)"
 export readonly STFW_HOME="$(cd ..; pwd)"
 . "${STFW_HOME}/bin/lib/setenv"
 
-readonly __TMP_PIP_LIST="/tmp/pip_freeze_$$"
-
 
 #---------------------------------------------------------------------------------------------------
 # 関数定義
@@ -60,8 +58,8 @@ function private.is_installed() {
   log.info "${_cmd}"
   log.add_indent
   if [[ "$(which ${_cmd})x" = "x" ]]; then
-    log.error "${_cmd} is not installed."
-    _retcode=${EIXTCODE_ERROR}
+    log.error_oneline "${_cmd} is not installed."
+    _retcode=${EXITCODE_ERROR}
   else
     log.info "${_cmd} is installed."
   fi
@@ -71,31 +69,23 @@ function private.is_installed() {
   return ${_retcode}
 }
 
-
-function private.is_pip_installed() {
+function private.serverspec() {
   stfw.log.func_start_trace "$@"
+  local _target="$1"
 
-  # pipインストール済みリスト ※同一プロセス内の再利用を考慮
-  if [[ ! -f "${__TMP_PIP_LIST}" ]]; then
-    pip freeze > "${__TMP_PIP_LIST}"
-  fi
+  cd ${STFW_HOME}/modules/serverspec
+  cmd=( rake "spec:${_target}" )
 
-  local _cmd="$1"
-  local _retcode=${EXITCODE_SUCCESS}
+  log.info "${cmd[@]}"
+  "${cmd[@]}"
+  local _retcode=$?
 
-  log.info "${_cmd}"
-  log.add_indent
-  if [[ "$(grep ${_cmd} ${__TMP_PIP_LIST})x" = "x" ]]; then
-    log.error "pip.${_cmd} is not installed."
-    _retcode=${EIXTCODE_ERROR}
-  else
-    log.info "pip.${_cmd} is installed."
-  fi
-  log.remove_indent
+  cd - >/dev/null
 
   stfw.log.func_end_trace ${_retcode}
   return ${_retcode}
 }
+
 
 function private.download() {
   stfw.log.func_start_trace "$@"
@@ -326,10 +316,10 @@ log.add_indent
 private.is_installed "serverspec-init"
 private.exit_on_fail $?
 
-( cd ${STFW_HOME}/modules/serverspec; rake spec:localhost )
+# pre_required
+private.serverspec "pre_required"
 private.exit_on_fail $?
 
-rm -f "${__TMP_PIP_LIST}"
 log.remove_indent
 
 
@@ -404,6 +394,24 @@ private.exit_on_fail $?
 #readonly DIR_LOGFILTER="${DIR_MODULE}/logfilter"
 #private.download_and_extract "logfilter" "${URL_LOGFILTER}" "${DIR_LOGFILTER}"
 #private.exit_on_fail $?
+
+log.remove_indent
+
+
+
+#--------------------------------------------------------------------------------------------------
+# 結果チェック
+#--------------------------------------------------------------------------------------------------
+log.info "check result"
+log.add_indent
+
+(
+  export PATH_DIGDAG
+  export DIR_MODULE_BIN
+  export PATH="${DIR_MODULE_BIN}:${PATH}"
+  private.serverspec "post_install"
+  private.exit_on_fail $?
+)
 
 log.remove_indent
 
