@@ -9,7 +9,7 @@ describe command("which #{target}") do
   its(:exit_status) { should eq 0}
 end
 
-# permittion
+# permission
 describe file("#{dir_module_bin}/#{target}") do
   it { should be_file }
   it { should be_executable.by('owner') }
