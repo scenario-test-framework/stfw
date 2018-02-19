@@ -1,0 +1,37 @@
+#!/bin/bash
+
+
+function get_stfw_proj_dir() {
+  local _reldir=$(echo "$0" | sed -e "s|${DIR_UT}/scripts/||" -e 's|.sh$||')
+  echo "${DIR_UT}/resources/tmp/${_reldir}/proj"
+}
+
+function _get_template_dir() {
+  local _template=${1:?}
+  echo "${DIR_UT}/resources/projects/${_template}"
+}
+
+
+function init_stfw_proj() {
+  local _template=${1:?}
+
+  clean_stfw_proj
+
+  local _proj_dir=$(get_stfw_proj_dir)
+  mkdir -p "${_proj_dir}"
+
+  local _template_dir="$(_get_template_dir ${_template})"
+  if [[ ! -d "${_template_dir}" ]]; then
+    echo "template: ${_template} is not exist." >&2
+    exit 1
+  fi
+
+  cp -pr "${_template_dir}"/* "${_proj_dir}"/
+}
+
+function clean_stfw_proj() {
+  local _proj_dir=$(get_stfw_proj_dir)
+  if [[ -d "${_proj_dir}" ]]; then
+    rm -fr "${_proj_dir}"
+  fi
+}

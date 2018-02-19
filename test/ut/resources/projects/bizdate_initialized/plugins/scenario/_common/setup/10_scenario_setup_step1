@@ -1,0 +1,4 @@
+#!/bin/bash
+echo "this is $0"
+# printenv | sort
+exit 0
