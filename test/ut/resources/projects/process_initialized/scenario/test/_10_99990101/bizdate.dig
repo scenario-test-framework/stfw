@@ -1,0 +1,23 @@
+timezone: Asia/Tokyo
+
++bizdate_setup:
+  sh>: stfw bizdate --setup "${stfw_bizdate_dir}"
+
++_10_group_scripts:
+  _export:
+    stfw_process_type : "scripts"
+    stfw_process_dir : "${stfw_bizdate_dir}/_10_group_scripts"
+    stfw_process_dirname : "_10_group_scripts"
+    stfw_process_seq : "10"
+    stfw_process_group : "group"
+  sh>: stfw process ${run_mode} "${stfw_process_dir}"
+
++bizdate_teardown:
+  _export:
+    stfw_run_status : "Success"
+  sh>: stfw bizdate --teardown "${stfw_bizdate_dir}"
+
+_error:
+  _export:
+    stfw_run_status : "Error"
+  sh>: stfw bizdate --teardown "${stfw_bizdate_dir}"

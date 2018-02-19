@@ -67,7 +67,7 @@ function stfw.domain.service.spec.process.dir() {
 }
 
 
-function stfw.domain.service.spec.get_process_type() {
+function stfw.domain.service.spec.process.type() {
   local _trg_process_dir="${1:?}"
 
   basename "${_trg_process_dir}" | cut -d '_' -f 4

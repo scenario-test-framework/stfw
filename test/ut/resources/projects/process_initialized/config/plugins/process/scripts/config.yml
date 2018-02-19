@@ -1,0 +1,4 @@
+stfw:
+  process:
+    scripts:
+      some_key: value defined at proj
