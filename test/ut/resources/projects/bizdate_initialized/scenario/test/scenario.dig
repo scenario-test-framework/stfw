@@ -1,0 +1,14 @@
+timezone: Asia/Tokyo
+
++scenario_setup:
+  sh>: stfw scenario --setup "${stfw_scenario_dir}"
+
++scenario_teardown:
+  _export:
+    stfw_run_status : "Success"
+  sh>: stfw scenario --teardown "${stfw_scenario_dir}"
+
+_error:
+  _export:
+    stfw_run_status : "Error"
+  sh>: stfw scenario --teardown "${stfw_scenario_dir}"

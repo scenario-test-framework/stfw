@@ -82,7 +82,7 @@ function stfw.domain.service.process.dry_run_requested() {
   export stfw_process_retcode=${EXITCODE_SUCCESS}
 
   # validate
-  local _process_type=$(stfw.domain.service.spec.get_process_type "${_trg_process_dir}")
+  local _process_type=$(stfw.domain.service.spec.process.type "${_trg_process_dir}")
   stfw.domain.service.spec.process.can_dry_run "${_trg_process_dir}" "${_process_type}"
   if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
     stfw_process_retcode=${EXITCODE_ERROR}
@@ -129,7 +129,7 @@ function stfw.domain.service.process.run_requested() {
   export stfw_process_retcode=${EXITCODE_SUCCESS}
 
   # validate
-  local _process_type=$(stfw.domain.service.spec.get_process_type "${_trg_process_dir}")
+  local _process_type=$(stfw.domain.service.spec.process.type "${_trg_process_dir}")
   stfw.domain.service.spec.process.can_run "${_trg_process_dir}" "${_process_type}"
   if [[ $? -ne ${EXITCODE_SUCCESS} ]]; then
     stfw_process_retcode=${EXITCODE_ERROR}

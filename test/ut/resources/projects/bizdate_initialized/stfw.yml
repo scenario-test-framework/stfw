@@ -1,0 +1,43 @@
+stfw:
+  project_version: 0.1.0
+
+  # ログレベル trace | debug | info | warn | error
+  loglevel: "info"
+
+  # インベントリファイル
+  inventory: staging.yml
+
+  # webhook
+  webhooks:
+    urls:
+      # 任意のURLを指定できます。
+      - http://your.domain/endpoint
+      # 環境変数でも指定できます。
+      - ${URL_WEBHOOK}
+      # webhookの動作を確認したい場合、stfwのtest siteを利用することもできます。
+      # ※結果は https://webhook.site/#/7e769801-aac8-4335-91df-1ff1c8cfd972 で確認できます。
+#      - https://webhook.site/7e769801-aac8-4335-91df-1ff1c8cfd972
+    on_start: true
+    on_success: true
+    on_error: true
+
+  # digdag
+  server:
+    # バインドホスト
+    bind: "0.0.0.0"
+    # ポート
+    port: 65432
+    # DBモード --memory | --database /path/to/db_dir
+    db_mode: "--database ${STFW_PROJ_DIR_DATA}/db"
+    # taskスレッド上限
+    max_task_threads: 64
+
+  # sample
+  sample:
+    key: value
+    map:
+      key1: map_value1
+      key2: map_value2
+    list:
+      - list_value1
+      - list_value2

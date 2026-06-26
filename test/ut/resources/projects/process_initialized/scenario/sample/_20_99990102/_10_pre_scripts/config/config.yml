@@ -1,0 +1,9 @@
+stfw:
+  process:
+    scripts:
+      some_key: value defined at scenario
+      list:
+        - key1: list[0] value1
+          key2: list[0] value2
+        - key1: list[1] value1
+          key2: list[1] value2
