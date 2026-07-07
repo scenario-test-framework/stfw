@@ -14,8 +14,8 @@ stfw:
   webhooks:
     urls:
       # 任意のURLを指定できます。
-      - http://your.domain/endpoint
-      # 環境変数でも指定できます。
+#      - http://your.domain/endpoint
+      # 環境変数でも指定できます (未定義の場合は送信されません)。
       - ${URL_WEBHOOK}
       # webhookの動作を確認したい場合、https://webhook.site で発行したURLを指定してください。
 #      - https://webhook.site/00000000-0000-0000-0000-000000000000
