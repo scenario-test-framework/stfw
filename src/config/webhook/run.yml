@@ -1,5 +1,0 @@
-#payload:
-  run:
-    run_id: ${run_id}
-    workspace_dir: ${STFW_PROJ_DIR}
-    params: ${webhook_run_params}
