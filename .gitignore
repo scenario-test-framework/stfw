@@ -1,15 +1,10 @@
 .DS_Store
 .git_credentials
 
-src/archives/
-src/modules/bin/
-src/modules/digdag
-src/config/encrypt/
+# Go build outputs
+/stfw
+dist/
 
 docs/index.html
 
-dist/
-
-.analyze/
 .stfw/
-.digdag/

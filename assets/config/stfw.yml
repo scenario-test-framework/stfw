@@ -1,0 +1,6 @@
+stfw:
+  # ログレベル trace | debug | info | warn | error
+  loglevel: "info"
+
+  # タイムゾーン
+  timezone: "Asia/Tokyo"
