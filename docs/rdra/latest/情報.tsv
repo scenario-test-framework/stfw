@@ -6,7 +6,7 @@
 プロジェクト環境管理	インベントリ	インベントリファイル名（環境単位。例: staging.yml）、グループ名（web/ap/db 等＋予約値 all）、ホスト一覧（ip または hostname）	プロジェクト、プロジェクト設定（stfw.yml）、パスワード、SSH サーバキー（known_hosts）	""	ホストグループ	環境単位（例: staging）にテスト対象ホストをグループ（web/ap/db 等）で管理し、グループ存在確認・ホスト一覧取得に使うため。グループ名 all は全グループ横断の予約値
 プロジェクト環境管理	暗号化キー	encrypt_key（暗号化キー）、decrypt_key（復号キー）、RSA 2048 キーペア（config/encrypt/ 配下、プロジェクトに 1 組）	プロジェクト、パスワード	""	""	パスワードを S/MIME(AES256) で暗号化・復号するための RSA 2048 キーペア（プロジェクトに 1 組）を管理するため
 プロジェクト環境管理	パスワード	ホスト、ユーザー（ファイル名 {host}-{user}、config/passwd/ 配下）、暗号化済み文字列（password・token 等）	プロジェクト、暗号化キー、インベントリ	""	""	テスト対象ホストへの資格情報をホスト×ユーザー単位で暗号化保管し、平文保管を避けて参照できるようにするため（重複登録は禁止）
-プロジェクト環境管理	プラグイン	プラグイン名（process/{process_type}）、bin/（install・run・webhook）、config.yml、template/、スコープ（プロジェクト/組込み）	stfw 本体、プロジェクト、プロセス、Process / Plugin 設定（config.yml）	""	プロセスタイプ、プラグインスコープ	プロセスタイプの実行方式を提供する拡張単位（同梱は scripts のみ）。プロジェクト→組込みの解決順で管理するため
+プロジェクト環境管理	プラグイン	プラグイン名（process/{process_type}）、bin/（install・run）、config.yml、template/、スコープ（プロジェクト/組込み）	stfw 本体、プロジェクト、プロセス、Process / Plugin 設定（config.yml）	""	プロセスタイプ、プラグインスコープ	プロセスタイプの実行方式を提供する拡張単位（同梱は scripts のみ）。プロジェクト→組込みの解決順で管理するため
 プロジェクト環境管理	SSH サーバキー（known_hosts）	対象ホスト、SSH サーバ公開鍵、known_hosts ファイル	インベントリ	""	""	テスト対象ホストへのリモート適用に先立ち、SSH サーバキーを known_hosts へ自動登録して接続確認の手間と中間者リスクを避けるため（実装上は未参照候補であり、採否はユーザー確認対象として継続）
 シナリオ構造管理	シナリオ	シナリオ名（scenario/{name} ディレクトリ）、metadata.yml、scenario.dig	プロジェクト、業務日付、ワークフロー定義（dig）、メタ情報（metadata.yml）、実行（run）、OTel トレース（スパンツリー）	""	""	業務日付をまたぐ一連の業務処理を記述するテストの最上位単位（scenario/{name} ディレクトリ）を識別・管理するため
 シナリオ構造管理	業務日付	ディレクトリ名（_{seq}_{bizdate}）、seq（実行順）、bizdate（YYYYMMDD）、metadata.yml、bizdate.dig	シナリオ、プロセス、ワークフロー定義（dig）、メタ情報（metadata.yml）、OTel トレース（スパンツリー）	""	""	シナリオ内でテストを日付単位に区切って進行させる単位（_{seq}_{bizdate}、YYYYMMDD）を実行順つきで管理するため
