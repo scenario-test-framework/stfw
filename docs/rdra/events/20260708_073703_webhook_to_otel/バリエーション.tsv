@@ -1,0 +1,3 @@
+コンテキスト	バリエーション	値	説明
+通知管理	スパン階層タイプ	run、scenario、bizdate、process、step	OTLP トレースのスパンツリーを構成する実行階層の区分。run をルートスパン、scenario / bizdate / process を子スパン、step を末端スパンとしてマップする
+通知管理	OTel エクスポート設定	OTEL_EXPORTER_OTLP_ENDPOINT（OTel 標準環境変数）、stfw.otel.endpoint（stfw.yml）	OTLP トレースのエクスポート先の指定方法の区分。OTel 標準の環境変数を尊重し、stfw.yml でも設定できる。いずれも未設定の場合はトレースを送信しない

@@ -1,5 +1,5 @@
 外部システム群	外部システム	役割
 ワークフローエンジン	digdag	シナリオ実行の委譲先となるワークフローエンジン。stfwがワークフロー定義（run.dig/scenario.dig/bizdate.dig）をpushして実行を開始し、sh>オペレータでstfwを呼び戻して各階層のsetup/teardown・プロセス実行を進める。server起動・停止・状態確認の制御対象であり、Web UIとログ追従で実行状況・結果の確認手段を提供する
-通知受信システム	webhook 受信先	run/scenario/bizdate/process各階層の実行開始・終了（成功/失敗）時に、進捗・所要時間・ステップ別結果を含むJSON payloadを非同期HTTP POSTで受け取る任意のHTTPエンドポイント（CI/チャット/監視等）。実行状況の外部監視・可視化に使う
 テスト対象システム	テスト対象ホスト群	シナリオテストを適用するテスト対象のホスト群（web/ap/db等）。環境別inventoryでグループ管理され、ホスト×ユーザー単位の暗号化パスワードとSSHサーバキー登録の対象となる。実際の操作はプロセスのユーザースクリプトに委ねられる
 モジュール配布元	dl.bintray.com	インストール時に依存モジュール（digdag jar等）をダウンロードする配布元サイト
+オブザーバビリティ基盤	OTLP 受信先（OpenTelemetry Collector / 互換バックエンド）	run/scenario/bizdate/process/step 各階層の実行状況を OTLP トレース（スパンツリー）として受信する OpenTelemetry Collector または OTLP 互換バックエンド（Jaeger / Grafana Tempo / Datadog 等）。既存のオブザーバビリティ基盤でそのまま可視化・分析でき、実行状況の外部監視に使う。送信先未設定時は送信されず、送信失敗は実行を失敗させない（ログ警告のみ）

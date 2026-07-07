@@ -1,0 +1,2 @@
+外部システム群	外部システム	役割
+オブザーバビリティ基盤	OTLP 受信先（OpenTelemetry Collector / 互換バックエンド）	run/scenario/bizdate/process/step 各階層の実行状況を OTLP トレース（スパンツリー）として受信する OpenTelemetry Collector または OTLP 互換バックエンド（Jaeger / Grafana Tempo / Datadog 等）。既存のオブザーバビリティ基盤でそのまま可視化・分析でき、実行状況の外部監視に使う。送信先未設定時は送信されず、送信失敗は実行を失敗させない（ログ警告のみ）
