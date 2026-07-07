@@ -74,10 +74,6 @@ func (c *Config) Environ() []string {
 	return env
 }
 
-// flattenYAML は YAML を v0.2 の export_yaml 互換規則でフラット化し dst に上書きする。
-//   - map はキーを `_` で連結 (stfw.loglevel → stfw_loglevel)
-//   - list は添字を付与 (stfw.webhooks.urls[0] → stfw_webhooks_urls_0)
-//   - 値中の ${VAR} は環境変数で展開 (未定義は空文字。bash の source と同挙動)
 // flattenYAMLFile は path の YAML をフラット化して dst に上書きする。
 // ファイルが存在しない場合は何もしない (設定の上書きチェーンの任意段)。
 func flattenYAMLFile(path string, dst map[string]string) error {
@@ -94,6 +90,10 @@ func flattenYAMLFile(path string, dst map[string]string) error {
 	return nil
 }
 
+// flattenYAML は YAML を v0.2 の export_yaml 互換規則でフラット化し dst に上書きする。
+//   - map はキーを `_` で連結 (stfw.loglevel → stfw_loglevel)
+//   - list は添字を付与 (stfw.webhooks.urls[0] → stfw_webhooks_urls_0)
+//   - 値中の ${VAR} は環境変数で展開 (未定義は空文字。bash の source と同挙動)
 func flattenYAML(raw []byte, dst map[string]string) error {
 	var root map[string]any
 	if err := yaml.Unmarshal(raw, &root); err != nil {

@@ -1,0 +1,34 @@
+{
+  "payload": {
+    "id": "RUN_ID+run+demo",
+    "parent_id": "RUN_ID+run",
+    "type": "scenario",
+    "status": "Started",
+    "create_time": "TS",
+    "start_time": "TS",
+    "end_time": "",
+    "processing_time": "",
+    "stfw": {
+      "host": "HOST",
+      "user": "USER",
+      "home": "",
+      "version": "VERSION",
+      "digdag": {
+        "url": "",
+        "version": ""
+      },
+      "project": {
+        "home": "PROJ_DIR",
+        "version": "0.1.0"
+      }
+    },
+    "run": {
+      "run_id": "RUN_ID",
+      "workspace_dir": "PROJ_DIR/.stfw/runs/RUN_ID",
+      "params": "demo",
+      "scenario": {
+        "name": "demo"
+      }
+    }
+  }
+}

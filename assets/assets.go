@@ -18,3 +18,8 @@ var DefaultConfig []byte
 //
 //go:embed all:plugins
 var Plugins embed.FS
+
+// Report は HTML レポートのテンプレート (html/template + inline CSS の自己完結)。
+//
+//go:embed report
+var Report embed.FS

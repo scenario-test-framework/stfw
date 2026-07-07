@@ -26,6 +26,7 @@ func TestAcceptance(t *testing.T) {
 		Dir: "testdata/script",
 		Cmds: map[string]func(ts *testscript.TestScript, neg bool, args []string){
 			"normjournal": cmdNormJournal,
+			"latestrun":   cmdLatestRun,
 		},
 	})
 }
@@ -70,4 +71,17 @@ func cmdNormJournal(ts *testscript.TestScript, neg bool, args []string) {
 		out.WriteByte('\n')
 	}
 	ts.Check(os.WriteFile(ts.MkAbs(args[1]), out.Bytes(), 0o644))
+}
+
+// cmdLatestRun は最新 run の run_id を環境変数へ設定する
+// (HTML レポートのパス runs/{run_id}.html の検証用)。
+//
+//	使い方: latestrun <projdir> <envvar>
+func cmdLatestRun(ts *testscript.TestScript, neg bool, args []string) {
+	if neg || len(args) != 2 {
+		ts.Fatalf("usage: latestrun <projdir> <envvar>")
+	}
+	runID, err := repository.LatestRunID(ts.MkAbs(args[0]))
+	ts.Check(err)
+	ts.Setenv(args[1], runID)
 }

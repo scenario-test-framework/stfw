@@ -64,16 +64,22 @@ func Run(log *slog.Logger, out, errOut io.Writer, projDir string, cfg *repositor
 	}
 	defer journal.Close()
 
+	// webhook 通知は run 終了時に全送信の完了を待つ (エラー時も待つ)
+	notifier := newWebhookNotifier(log, cfg, projDir, version, runID, now)
+	defer notifier.wait()
+
 	r := &runner{
-		log:     log,
-		out:     out,
-		errOut:  errOut,
-		projDir: projDir,
-		dryRun:  dryRun,
-		now:     now,
-		journal: journal,
-		agg:     run.NewRun(runID),
-		baseEnv: baseEnv(cfg, projDir, version, runID, dryRun),
+		log:      log,
+		out:      out,
+		errOut:   errOut,
+		projDir:  projDir,
+		dryRun:   dryRun,
+		now:      now,
+		journal:  journal,
+		agg:      run.NewRun(runID),
+		baseEnv:  baseEnv(cfg, projDir, version, runID, dryRun),
+		notifier: notifier,
+		reporter: newReporter(log, projDir, runID),
 	}
 
 	fmt.Fprintf(out, "run_id: %s\n", runID)
@@ -90,23 +96,32 @@ func Run(log *slog.Logger, out, errOut io.Writer, projDir string, cfg *repositor
 
 // runner は 1 回の実行のオーケストレーション状態を保持する。
 type runner struct {
-	log     *slog.Logger
-	out     io.Writer
-	errOut  io.Writer
-	projDir string
-	dryRun  bool
-	now     func() time.Time
-	journal *repository.Journal
-	agg     *run.Run
-	baseEnv map[string]string
+	log      *slog.Logger
+	out      io.Writer
+	errOut   io.Writer
+	projDir  string
+	dryRun   bool
+	now      func() time.Time
+	journal  *repository.Journal
+	agg      *run.Run
+	baseEnv  map[string]string
+	notifier *webhookNotifier
+	reporter *reporter
 }
 
 // emit は生成時検証 (リプレイと同一の状態遷移検証) を通してジャーナルへ追記する。
+// webhook 通知と HTML レポートはジャーナルイベントの投影のため、追記成功後に
+// 連動させる (投影の失敗はログのみで実行結果へは影響しない)。
 func (r *runner) emit(ev run.Event) error {
 	if err := r.agg.Apply(ev); err != nil {
 		return err
 	}
-	return r.journal.Append(ev)
+	if err := r.journal.Append(ev); err != nil {
+		return err
+	}
+	r.notifier.onEvent(ev)
+	r.reporter.onEvent(ev)
+	return nil
 }
 
 // runRun は run 階層を実行する: setup フック → シナリオの逐次実行 → teardown フック。
