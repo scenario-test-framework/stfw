@@ -6,10 +6,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/rogpeppe/go-internal/testscript"
@@ -31,6 +35,7 @@ func TestAcceptance(t *testing.T) {
 			"normjournal": cmdNormJournal,
 			"latestrun":   cmdLatestRun,
 			"execcode":    cmdExecCode,
+			"otlpserver":  cmdOTLPServer,
 		},
 	})
 }
@@ -59,6 +64,33 @@ func cmdExecCode(ts *testscript.TestScript, neg bool, args []string) {
 	if got != want {
 		ts.Fatalf("exit code = %d, want %d", got, want)
 	}
+}
+
+// cmdOTLPServer は OTLP/HTTP 受信サーバ (httptest 相当) を起動し、
+// URL を環境変数へ、受信リクエストの記録 (method / path / content-type) を
+// logfile へ 1 行ずつ書き出す。
+//
+//	使い方: otlpserver <envvar> <logfile>
+func cmdOTLPServer(ts *testscript.TestScript, neg bool, args []string) {
+	if neg || len(args) != 2 {
+		ts.Fatalf("usage: otlpserver <envvar> <logfile>")
+	}
+	logPath := ts.MkAbs(args[1])
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer f.Close()
+		fmt.Fprintf(f, "%s %s %s\n", req.Method, req.URL.Path, req.Header.Get("Content-Type"))
+		w.WriteHeader(http.StatusOK)
+	}))
+	ts.Defer(srv.Close)
+	ts.Setenv(args[0], srv.URL)
 }
 
 // runIDPattern は run_id (`_{yyyymmddhhmmss}_{pid}`) の出現箇所。

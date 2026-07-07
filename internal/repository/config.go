@@ -92,7 +92,7 @@ func flattenYAMLFile(path string, dst map[string]string) error {
 
 // flattenYAML は YAML を v0.2 の export_yaml 互換規則でフラット化し dst に上書きする。
 //   - map はキーを `_` で連結 (stfw.loglevel → stfw_loglevel)
-//   - list は添字を付与 (stfw.webhooks.urls[0] → stfw_webhooks_urls_0)
+//   - list は添字を付与 (stfw.sample.list[0] → stfw_sample_list_0)
 //   - 値中の ${VAR} は環境変数で展開 (未定義は空文字。bash の source と同挙動)
 func flattenYAML(raw []byte, dst map[string]string) error {
 	var root map[string]any

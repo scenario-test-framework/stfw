@@ -1,23 +1,16 @@
 package notify
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/scenario-test-framework/stfw/internal/domain/run"
 )
 
-// testEvents は run > scenario > bizdate > process の開始イベント列を組み立てる。
-func testProjector(t *testing.T) (*Projector, map[string]run.NodeID) {
+// testNodeIDs は run > scenario > bizdate > process の NodeID を組み立てる。
+func testNodeIDs(t *testing.T) map[string]run.NodeID {
 	t.Helper()
-	ctx := Context{
-		Host:           "192.0.2.1",
-		User:           "tester",
-		Version:        "1.0.0-test",
-		ProjectVersion: "0.1.0",
-		ProjectHome:    "/proj",
-		WorkspaceDir:   "/proj/.stfw/runs/_20200101120000_99",
-	}
 	runID, err := run.ParseRunID("_20200101120000_99")
 	if err != nil {
 		t.Fatal(err)
@@ -39,169 +32,230 @@ func testProjector(t *testing.T) (*Projector, map[string]run.NodeID) {
 		t.Fatal(err)
 	}
 	ids["process"] = process
-	return NewProjector(ctx), ids
+	return ids
 }
 
 func ts(sec int) time.Time {
 	return time.Date(2020, 1, 1, 12, 0, sec, 0, time.FixedZone("JST", 9*60*60))
 }
 
-func TestProjectorHierarchy(t *testing.T) {
-	p, ids := testProjector(t)
-	now := ts(0)
+// applyAll はイベント列を投影し、途中のイベントがスパンを返さないことを検証する。
+func applyAll(t *testing.T, p *Projector, events []run.Event) []Span {
+	t.Helper()
+	for i, ev := range events {
+		spans, err := p.Apply(ev)
+		if err != nil {
+			t.Fatalf("event %d (%s): %v", i, ev.Type, err)
+		}
+		if i < len(events)-1 && spans != nil {
+			t.Fatalf("event %d (%s): spans must be deferred until run end, got %+v", i, ev.Type, spans)
+		}
+		if i == len(events)-1 {
+			return spans
+		}
+	}
+	return nil
+}
 
-	// run start: 即時に通知 1 件
-	notifs, err := p.Project(run.NewNodeStartEvent(ts(0), ids["run"], run.NodeTypeRun,
-		map[string]string{"run_id": "_20200101120000_99", "run_mode": "--run", "params": "demo"}), now)
-	if err != nil {
-		t.Fatal(err)
+// attrValue はスパン属性の値を返す (未設定は nil)。
+func attrValue(s Span, key string) any {
+	for _, a := range s.Attrs {
+		if a.Key == key {
+			return a.Value
+		}
 	}
-	if len(notifs) != 1 || notifs[0].Event != EventStart {
-		t.Fatalf("run start notifs = %+v, want 1 start", notifs)
-	}
-	body := notifs[0].Payload.Payload
-	if body.ID != "_20200101120000_99+run" || body.ParentID != "_20200101120000_99" {
-		t.Errorf("id/parent_id = %v/%v", body.ID, body.ParentID)
-	}
-	if body.Type != "run" || body.Status != "Started" {
-		t.Errorf("type/status = %s/%s", body.Type, body.Status)
-	}
-	// payload の時刻は v0.2 の timestamp_to_iso と同じコロン無しタイムゾーン
-	if body.StartTime != "2020-01-01T12:00:00+0900" {
-		t.Errorf("start_time = %s", body.StartTime)
-	}
-	if body.EndTime != "" || body.ProcessingTime != "" {
-		t.Errorf("start payload must have empty end_time/processing_time: %+v", body)
-	}
-	if body.Run == nil || body.Run.RunID != "_20200101120000_99" || body.Run.Params != "demo" {
-		t.Errorf("run attrs = %+v", body.Run)
-	}
-	if body.Run.Scenario != nil {
-		t.Errorf("run payload must not contain scenario: %+v", body.Run.Scenario)
-	}
+	return nil
+}
 
-	// scenario / bizdate start
-	if _, err := p.Project(run.NewNodeStartEvent(ts(1), ids["scenario"], run.NodeTypeScenario,
-		map[string]string{"name": "demo"}), now); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := p.Project(run.NewNodeStartEvent(ts(2), ids["bizdate"], run.NodeTypeBizdate,
-		map[string]string{"dirname": "_10_99990101", "seq": "10", "bizdate": "99990101"}), now); err != nil {
-		t.Fatal(err)
-	}
+func TestProjectorTreeSuccess(t *testing.T) {
+	ids := testNodeIDs(t)
+	p := NewProjector()
 
-	// process start はステップ列挙まで保留される (v0.2 の Pending 列挙付き start payload)
-	notifs, err = p.Project(run.NewNodeStartEvent(ts(3), ids["process"], run.NodeTypeProcess,
-		map[string]string{"dirname": "_10_pre_scripts", "seq": "10", "group": "pre", "process_type": "scripts"}), now)
-	if err != nil {
-		t.Fatal(err)
+	spans := applyAll(t, p, []run.Event{
+		run.NewNodeStartEvent(ts(0), ids["run"], run.NodeTypeRun,
+			map[string]string{"run_id": "_20200101120000_99", "run_mode": "--run", "params": "demo"}),
+		run.NewNodeStartEvent(ts(1), ids["scenario"], run.NodeTypeScenario,
+			map[string]string{"name": "demo"}),
+		run.NewNodeStartEvent(ts(2), ids["bizdate"], run.NodeTypeBizdate,
+			map[string]string{"dirname": "_10_99990101", "seq": "10", "bizdate": "99990101"}),
+		run.NewNodeStartEvent(ts(3), ids["process"], run.NodeTypeProcess,
+			map[string]string{"dirname": "_10_pre_scripts", "seq": "10", "group": "pre", "process_type": "scripts"}),
+		run.NewStepsEnumeratedEvent(ts(3), ids["process"], []string{"100_step1", "200_step2"}),
+		run.NewStepEndEvent(ts(4), ids["process"], "100_step1", run.StepSuccess, 0, ts(3), ts(4)),
+		run.NewStepEndEvent(ts(5), ids["process"], "200_step2", run.StepSuccess, 0, ts(4), ts(5)),
+		run.NewNodeEndEvent(ts(6), ids["process"], run.NodeSuccess),
+		run.NewNodeEndEvent(ts(7), ids["bizdate"], run.NodeSuccess),
+		run.NewNodeEndEvent(ts(8), ids["scenario"], run.NodeSuccess),
+		run.NewNodeEndEvent(ts(9), ids["run"], run.NodeSuccess),
+	})
+
+	// スパンは開始順 (親が先)、step は親 process の直後
+	wantNames := []string{"stfw run", "demo", "_10_99990101", "_10_pre_scripts", "100_step1", "200_step2"}
+	if len(spans) != len(wantNames) {
+		t.Fatalf("spans = %d, want %d", len(spans), len(wantNames))
 	}
-	if len(notifs) != 0 {
-		t.Fatalf("process start must be deferred, got %+v", notifs)
-	}
-	notifs, err = p.Project(run.NewStepsEnumeratedEvent(ts(3), ids["process"], []string{"100_step1", "200_step2"}), now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(notifs) != 1 || notifs[0].Event != EventStart {
-		t.Fatalf("steps_enumerated notifs = %+v, want deferred start", notifs)
-	}
-	process := notifs[0].Payload.Payload.Run.Scenario.Bizdate.Process
-	// 階層別属性の unquoted 値は yaml2json (PyYAML) と同じ型になる
-	if process.Seq != int64(10) {
-		t.Errorf("process seq = %v (%T), want int64(10)", process.Seq, process.Seq)
-	}
-	if bizdate := notifs[0].Payload.Payload.Run.Scenario.Bizdate; bizdate.Bizdate != int64(99990101) {
-		t.Errorf("bizdate = %v (%T), want int64(99990101)", bizdate.Bizdate, bizdate.Bizdate)
-	}
-	if process.Plugin == nil || process.Plugin.Type != "scripts" {
-		t.Fatalf("plugin = %+v", process.Plugin)
-	}
-	if len(process.Plugin.Targets) != 2 {
-		t.Fatalf("targets = %+v", process.Plugin.Targets)
-	}
-	if target := process.Plugin.Targets[0]["100_step1"]; target.Result != "Pending" || target.StartTime != "" {
-		t.Errorf("pending target = %+v", target)
+	for i, want := range wantNames {
+		if spans[i].Name != want {
+			t.Errorf("spans[%d].Name = %s, want %s", i, spans[i].Name, want)
+		}
 	}
 
-	// step_end: Success + Error、後続 Blocked
-	if _, err := p.Project(run.NewStepEndEvent(ts(5), ids["process"], "100_step1", run.StepError, 6, ts(4), ts(5)), now); err != nil {
-		t.Fatal(err)
+	// 親子関係: run をルートに scenario > bizdate > process > step
+	if spans[0].ParentID != "" {
+		t.Errorf("run span must be root, parent = %s", spans[0].ParentID)
 	}
-	if _, err := p.Project(run.NewStepBlockedEvent(ts(5), ids["process"], "200_step2"), now); err != nil {
-		t.Fatal(err)
+	for i := 1; i < 4; i++ {
+		if spans[i].ParentID != spans[i-1].ID {
+			t.Errorf("spans[%d].ParentID = %s, want %s", i, spans[i].ParentID, spans[i-1].ID)
+		}
+	}
+	for _, step := range spans[4:] {
+		if step.ParentID != ids["process"].String() {
+			t.Errorf("step %s parent = %s, want %s", step.Name, step.ParentID, ids["process"])
+		}
 	}
 
-	// process end: ステップ詳細と処理時間を含む
-	notifs, err = p.Project(run.NewNodeEndEvent(ts(6), ids["process"], run.NodeError), now)
-	if err != nil {
-		t.Fatal(err)
+	// 開始・終了時刻はジャーナルイベントの時刻と一致する
+	if !spans[0].Start.Equal(ts(0)) || !spans[0].End.Equal(ts(9)) {
+		t.Errorf("run span time = %v-%v, want %v-%v", spans[0].Start, spans[0].End, ts(0), ts(9))
 	}
-	if len(notifs) != 1 || notifs[0].Event != EventEnd || notifs[0].Status != "Error" {
-		t.Fatalf("process end notifs = %+v", notifs)
+	if !spans[3].Start.Equal(ts(3)) || !spans[3].End.Equal(ts(6)) {
+		t.Errorf("process span time = %v-%v, want %v-%v", spans[3].Start, spans[3].End, ts(3), ts(6))
 	}
-	body = notifs[0].Payload.Payload
-	if body.EndTime != "2020-01-01T12:00:06+0900" || body.ProcessingTime != "00:00:03" {
-		t.Errorf("end_time/processing_time = %s/%s", body.EndTime, body.ProcessingTime)
+	if !spans[4].Start.Equal(ts(3)) || !spans[4].End.Equal(ts(4)) {
+		t.Errorf("step1 span time = %v-%v, want %v-%v", spans[4].Start, spans[4].End, ts(3), ts(4))
 	}
-	targets := body.Run.Scenario.Bizdate.Process.Plugin.Targets
-	if target := targets[0]["100_step1"]; target.Result != "Error" || target.ProcessingTime != "00:00:01" {
-		t.Errorf("error target = %+v", target)
+
+	// 全 Success → 全スパン Ok
+	for _, s := range spans {
+		if s.Status != SpanStatusOK || s.StatusMessage != "" {
+			t.Errorf("span %s status = %s (%s), want Ok", s.Name, s.Status, s.StatusMessage)
+		}
 	}
-	if target := targets[1]["200_step2"]; target.Result != "Blocked" || target.StartTime != "" {
-		t.Errorf("blocked target = %+v", target)
+
+	// 階層別属性 (該当階層にあるもののみ)
+	for _, s := range spans {
+		if attrValue(s, AttrRunID) != "_20200101120000_99" {
+			t.Errorf("span %s %s = %v", s.Name, AttrRunID, attrValue(s, AttrRunID))
+		}
+	}
+	if v := attrValue(spans[0], AttrNodeType); v != "run" {
+		t.Errorf("run %s = %v", AttrNodeType, v)
+	}
+	if v := attrValue(spans[0], AttrRunMode); v != "run" {
+		t.Errorf("run %s = %v, want run", AttrRunMode, v)
+	}
+	if v := attrValue(spans[0], AttrNodeID); v != ids["run"].String() {
+		t.Errorf("run %s = %v", AttrNodeID, v)
+	}
+	if v := attrValue(spans[1], AttrNodeType); v != "scenario" {
+		t.Errorf("scenario %s = %v", AttrNodeType, v)
+	}
+	if v := attrValue(spans[2], AttrBizdate); v != "99990101" {
+		t.Errorf("bizdate %s = %v", AttrBizdate, v)
+	}
+	if v := attrValue(spans[2], AttrSeq); v != "10" {
+		t.Errorf("bizdate %s = %v", AttrSeq, v)
+	}
+	if v := attrValue(spans[3], AttrGroup); v != "pre" {
+		t.Errorf("process %s = %v", AttrGroup, v)
+	}
+	if v := attrValue(spans[3], AttrProcessType); v != "scripts" {
+		t.Errorf("process %s = %v", AttrProcessType, v)
+	}
+	if v := attrValue(spans[4], AttrNodeType); v != "step" {
+		t.Errorf("step %s = %v", AttrNodeType, v)
+	}
+	if v := attrValue(spans[4], AttrStepStatus); v != "Success" {
+		t.Errorf("step %s = %v", AttrStepStatus, v)
+	}
+	if v := attrValue(spans[4], AttrStepExit); v != int64(0) {
+		t.Errorf("step %s = %v (%T), want int64(0)", AttrStepExit, v, v)
 	}
 }
 
-func TestProjectorZeroStepProcess(t *testing.T) {
-	// ステップ 0 件の scripts プロセス: steps_enumerated が来ないまま
-	// node_end に到達した時点で保留中の start を flush する (targets は null)
-	p, ids := testProjector(t)
-	now := ts(0)
-	seed := []run.Event{
-		run.NewNodeStartEvent(ts(0), ids["run"], run.NodeTypeRun, map[string]string{"run_id": "_20200101120000_99", "params": "demo"}),
-		run.NewNodeStartEvent(ts(1), ids["scenario"], run.NodeTypeScenario, map[string]string{"name": "demo"}),
-		run.NewNodeStartEvent(ts(2), ids["bizdate"], run.NodeTypeBizdate, map[string]string{"dirname": "_10_99990101", "seq": "10", "bizdate": "99990101"}),
+func TestProjectorTreeError(t *testing.T) {
+	ids := testNodeIDs(t)
+	p := NewProjector()
+
+	// step1 がエラー終了 → step2 は Blocked、全階層の end が Error
+	spans := applyAll(t, p, []run.Event{
+		run.NewNodeStartEvent(ts(0), ids["run"], run.NodeTypeRun,
+			map[string]string{"run_id": "_20200101120000_99", "run_mode": "--dry-run", "params": "demo"}),
+		run.NewNodeStartEvent(ts(1), ids["scenario"], run.NodeTypeScenario,
+			map[string]string{"name": "demo"}),
+		run.NewNodeStartEvent(ts(2), ids["bizdate"], run.NodeTypeBizdate,
+			map[string]string{"dirname": "_10_99990101", "seq": "10", "bizdate": "99990101"}),
+		run.NewNodeStartEvent(ts(3), ids["process"], run.NodeTypeProcess,
+			map[string]string{"dirname": "_10_pre_scripts", "seq": "10", "group": "pre", "process_type": "scripts"}),
+		run.NewStepsEnumeratedEvent(ts(3), ids["process"], []string{"100_step1", "200_step2"}),
+		run.NewStepEndEvent(ts(4), ids["process"], "100_step1", run.StepError, 6, ts(3), ts(4)),
+		run.NewStepBlockedEvent(ts(5), ids["process"], "200_step2"),
+		run.NewNodeEndEvent(ts(6), ids["process"], run.NodeError),
+		run.NewNodeEndEvent(ts(7), ids["bizdate"], run.NodeError),
+		run.NewNodeEndEvent(ts(8), ids["scenario"], run.NodeError),
+		run.NewNodeEndEvent(ts(9), ids["run"], run.NodeError),
+	})
+	if len(spans) != 6 {
+		t.Fatalf("spans = %d, want 6", len(spans))
 	}
-	for _, ev := range seed {
-		if _, err := p.Project(ev, now); err != nil {
-			t.Fatal(err)
+
+	// dry-run は stfw.run.mode=dry-run
+	if v := attrValue(spans[0], AttrRunMode); v != "dry-run" {
+		t.Errorf("run %s = %v, want dry-run", AttrRunMode, v)
+	}
+
+	// Error 終了の階層はスパンステータス Error (メッセージ付き)
+	for _, i := range []int{0, 1, 2, 3} {
+		if spans[i].Status != SpanStatusError {
+			t.Errorf("span %s status = %s, want Error", spans[i].Name, spans[i].Status)
+		}
+		if !strings.Contains(spans[i].StatusMessage, "Error") {
+			t.Errorf("span %s message = %q", spans[i].Name, spans[i].StatusMessage)
 		}
 	}
-	if _, err := p.Project(run.NewNodeStartEvent(ts(3), ids["process"], run.NodeTypeProcess,
-		map[string]string{"dirname": "_10_pre_scripts", "seq": "10", "group": "pre", "process_type": "scripts"}), now); err != nil {
-		t.Fatal(err)
+
+	// エラーステップはスパンステータス Error + exit_code 属性
+	step1 := spans[4]
+	if step1.Status != SpanStatusError {
+		t.Errorf("step1 status = %s, want Error", step1.Status)
 	}
-	notifs, err := p.Project(run.NewNodeEndEvent(ts(4), ids["process"], run.NodeSuccess), now)
-	if err != nil {
-		t.Fatal(err)
+	if !strings.Contains(step1.StatusMessage, "exit_code 6") {
+		t.Errorf("step1 message = %q", step1.StatusMessage)
 	}
-	if len(notifs) != 2 || notifs[0].Event != EventStart || notifs[1].Event != EventEnd {
-		t.Fatalf("notifs = %+v, want flushed start + end", notifs)
+	if v := attrValue(step1, AttrStepExit); v != int64(6) {
+		t.Errorf("step1 %s = %v", AttrStepExit, v)
 	}
-	if targets := notifs[0].Payload.Payload.Run.Scenario.Bizdate.Process.Plugin.Targets; targets != nil {
-		t.Errorf("zero-step targets = %+v, want nil", targets)
+
+	// Blocked ステップはスパンステータス Unset のまま属性で表現する
+	step2 := spans[5]
+	if step2.Status != SpanStatusUnset {
+		t.Errorf("step2 status = %s, want Unset", step2.Status)
+	}
+	if v := attrValue(step2, AttrStepStatus); v != "Blocked" {
+		t.Errorf("step2 %s = %v, want Blocked", AttrStepStatus, v)
+	}
+	if v := attrValue(step2, AttrStepExit); v != nil {
+		t.Errorf("step2 %s = %v, want unset", AttrStepExit, v)
+	}
+	// 未実行のためイベント時刻を点として持つ
+	if !step2.Start.Equal(ts(5)) || !step2.End.Equal(ts(5)) {
+		t.Errorf("step2 time = %v-%v, want %v", step2.Start, step2.End, ts(5))
 	}
 }
 
-func TestYamlScalar(t *testing.T) {
-	// v0.2 の yaml2json (PyYAML) の unquoted スカラー解決を再現する
-	tests := []struct {
-		in   string
-		want any
-	}{
-		{in: "", want: nil},
-		{in: "10", want: int64(10)},
-		{in: "0", want: int64(0)},
-		{in: "99990101", want: int64(99990101)},
-		{in: "05", want: int64(5)}, // 先頭 0 は 8 進
-		{in: "09", want: "09"},     // 8 進として不正なら文字列
-		{in: "_10_99990101", want: "_10_99990101"},
-		{in: "demo", want: "demo"},
+func TestProjectorUnknownNode(t *testing.T) {
+	ids := testNodeIDs(t)
+	p := NewProjector()
+
+	// 未開始ノードへの step_end / node_end はエラー
+	if _, err := p.Apply(run.NewStepEndEvent(ts(1), ids["process"], "100_step1", run.StepSuccess, 0, ts(0), ts(1))); err == nil {
+		t.Error("step_end for unknown node must fail")
 	}
-	for _, tt := range tests {
-		if got := yamlScalar(tt.in); got != tt.want {
-			t.Errorf("yamlScalar(%q) = %v (%T), want %v", tt.in, got, got, tt.want)
-		}
+	if _, err := p.Apply(run.NewNodeEndEvent(ts(1), ids["run"], run.NodeSuccess)); err == nil {
+		t.Error("node_end for unknown node must fail")
+	}
+	if _, err := p.Apply(run.Event{Type: "unknown"}); err == nil {
+		t.Error("unknown event type must fail")
 	}
 }

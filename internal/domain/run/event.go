@@ -17,7 +17,7 @@ const (
 const TSFormat = "2006-01-02T15:04:05Z07:00"
 
 // Event は journal.jsonl の 1 行に対応する追記専用イベント。
-// webhook payload (M4) と HTML レポートの材料になる属性を欠落なく保持する。
+// OTLP トレースと HTML レポートの材料になる属性を欠落なく保持する。
 type Event struct {
 	Type     EventType         `json:"event"`
 	TS       string            `json:"ts"`
@@ -34,7 +34,7 @@ type Event struct {
 }
 
 // NewNodeStartEvent は階層の実行開始 (Started) イベントを組み立てる。
-// attrs には webhook payload の階層別属性 (run: run_id/run_mode/params,
+// attrs には投影 (OTLP トレース / HTML レポート) の階層別属性 (run: run_id/run_mode/params,
 // scenario: name, bizdate: dirname/seq/bizdate, process: dirname/seq/group/process_type)
 // を記録する。
 func NewNodeStartEvent(ts time.Time, id NodeID, nodeType NodeType, attrs map[string]string) Event {

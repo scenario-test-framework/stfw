@@ -1,10 +1,11 @@
 # v0.2 (Bash + digdag) から v1.0 (Go) への移行ガイド
 
-v1.0 は全面再実装です。次の 3 つの互換境界は維持されているため、**シナリオ資産（ディレクトリ・スクリプト）はそのまま動きます**:
+v1.0 は全面再実装です。次の 2 つの互換境界は維持されているため、**シナリオ資産（ディレクトリ・スクリプト）はそのまま動きます**:
 
 1. ディレクトリ規約: `scenario/{name}/_{seq}_{bizdate}/_{seq}_{group}_{type}/`
 2. プロセスプラグイン実行契約: 環境変数 + リターンコード (0/3/6)
-3. webhook payload JSON スキーマ（下記の非互換 2 点を除く）
+
+webhook 通知は v1.0 で廃止され、OTLP トレースエクスポートに置き換わりました（下記「非互換事項」参照）。
 
 ## コマンド対応表
 
@@ -38,16 +39,45 @@ v1.0 は全面再実装です。次の 3 つの互換境界は維持されてい
    - 事前に `stfw secret keygen` で age キーペアを生成してください
    - 旧ファイルは `.bak` として退避されます
 4. `stfw validate` を実行する。残存 `*.dig` ファイルは「v1.0 では不要」と警告されるので削除してよい
-5. webhook 受信側がある場合は下記「非互換事項」を確認する
+5. webhook 受信側がある場合は下記「非互換事項 > webhook の廃止」に従って OTLP トレースへ移行する
 
 ## 非互換事項
 
-### webhook
+### webhook の廃止（OTLP トレースへの置換）
 
-- **webhook_id の形式が変わりました**: 旧実装には id 導出に余分な `}` が混入するバグがあり、v1.0 は正しい形式（`{run_id}+run+...`）に統一しています。受信側が旧（壊れた）id 形式に依存している場合は修正が必要です
-- **通知抑制設定が機能するようになりました**: 旧実装はバグ（文字列の `-eq` 数値比較）により `on_success` / `on_error` = false でも end 通知が常に送信されていました。v1.0 では設定どおり抑制されます。`on_*` は `true` のみ有効（未設定は送信しない）
-- payload の `stfw.home`・`digdag.url`・`digdag.version` はキーを維持したまま空文字になります（STFW_HOME / digdag の廃止のため）
-- 独自プラグインの webhook 詳細契約（`bin/webhook/get_{start,end}_content`）は廃止しました。step 詳細の投影は組込み `scripts` タイプのみです（実行ジャーナルが唯一のソース）
+**webhook 通知機能は v1.0 で廃止されました。** 実行状況の外部連携は OpenTelemetry の OTLP トレースエクスポートに一本化されています。
+
+- `stfw.yml` の `stfw.webhooks.*` 設定（`urls` / `on_start` / `on_success` / `on_error`）は廃止されました（残っていても読み飛ばされ、HTTP POST は一切送信されません）
+- webhook payload JSON スキーマの互換維持要求も廃止されました
+- 通知抑制設定（`on_start` 等）に相当する機能はありません（トレースは常にスパンツリー全体を送信します）
+- 独自プラグインの webhook 詳細契約（`bin/webhook/get_{start,end}_content`）は廃止されました。step 詳細の投影は組込み `scripts` タイプのみです（実行ジャーナルが唯一のソース）
+
+置き換え後のマッピング:
+
+| v0.2 webhook | v1.0 OTLP トレース |
+|---|---|
+| 各階層の start / end 通知 (JSON POST) | 1 run = 1 トレース。run をルートに scenario / bizdate / process / step をスパンツリーで表現 |
+| payload の階層別属性 (run_id / seq / group 等) | スパン属性 (`stfw.run_id` / `stfw.node.type` / `stfw.node.id` / `stfw.bizdate` / `stfw.seq` / `stfw.group` / `stfw.process.type` / `stfw.step.status` / `stfw.step.exit_code` / `stfw.run.mode`) |
+| status = Error | スパンステータス Error（Blocked ステップは `stfw.step.status=Blocked` 属性） |
+| `stfw.webhooks.urls` | `OTEL_EXPORTER_OTLP_ENDPOINT` 環境変数 または `stfw.yml` の `stfw.otel.endpoint` |
+
+設定例:
+
+```yaml
+# stfw.yml (環境変数 OTEL_EXPORTER_OTLP_ENDPOINT が設定されている場合はそちらが優先)
+stfw:
+  otel:
+    endpoint: http://localhost:4318   # パス省略時は /v1/traces に送信
+```
+
+```console
+# OTel 標準環境変数でも指定できます
+$ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 stfw run sample
+```
+
+どちらも未設定の場合、トレースは一切送信されません。送信失敗は実行を失敗させず、警告ログのみ記録されます。
+
+既存の webhook 受信側を残したい場合は、[OpenTelemetry Collector](https://opentelemetry.io/docs/collector/) で OTLP トレースを受信し、任意の形式（HTTP 転送等）へ変換してください。Jaeger / Grafana Tempo / Datadog 等の OTLP 対応基盤へはそのまま送信できます。
 
 ### 実行
 

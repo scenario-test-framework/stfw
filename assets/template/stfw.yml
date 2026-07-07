@@ -10,18 +10,12 @@ stfw:
   # インベントリファイル
   inventory: staging.yml
 
-  # webhook
-  webhooks:
-    urls:
-      # 任意のURLを指定できます。
-#      - http://your.domain/endpoint
-      # 環境変数でも指定できます (未定義の場合は送信されません)。
-      - ${URL_WEBHOOK}
-      # webhookの動作を確認したい場合、https://webhook.site で発行したURLを指定してください。
-#      - https://webhook.site/00000000-0000-0000-0000-000000000000
-    on_start: true
-    on_success: true
-    on_error: true
+  # OpenTelemetry (実行状況の OTLP トレースエクスポート)
+  # 送信先は OTel 標準環境変数 OTEL_EXPORTER_OTLP_ENDPOINT でも指定できます (環境変数が優先)。
+  # endpoint と環境変数のどちらも未設定の場合は送信されません。
+  otel:
+    # OTLP/HTTP エンドポイントのベース URL (パス省略時は /v1/traces に送信)
+#    endpoint: http://localhost:4318
 
   # sample
   sample:

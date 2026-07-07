@@ -64,9 +64,9 @@ func Run(log *slog.Logger, out, errOut io.Writer, projDir string, cfg *repositor
 	}
 	defer journal.Close()
 
-	// webhook 通知は run 終了時に全送信の完了を待つ (エラー時も待つ)
-	notifier := newWebhookNotifier(log, cfg, projDir, version, runID, now)
-	defer notifier.wait()
+	// OTLP トレースは run 終了時に flush の完了を待つ (エラー時も待つ)
+	notifier := newOTelNotifier(log, cfg, version)
+	defer notifier.close()
 
 	r := &runner{
 		log:      log,
@@ -105,12 +105,12 @@ type runner struct {
 	journal  *repository.Journal
 	agg      *run.Run
 	baseEnv  map[string]string
-	notifier *webhookNotifier
+	notifier *otelNotifier
 	reporter *reporter
 }
 
 // emit は生成時検証 (リプレイと同一の状態遷移検証) を通してジャーナルへ追記する。
-// webhook 通知と HTML レポートはジャーナルイベントの投影のため、追記成功後に
+// OTLP トレースと HTML レポートはジャーナルイベントの投影のため、追記成功後に
 // 連動させる (投影の失敗はログのみで実行結果へは影響しない)。
 func (r *runner) emit(ev run.Event) error {
 	if err := r.agg.Apply(ev); err != nil {

@@ -18,6 +18,10 @@ exists scenario/sample/_20_99990102/_10_pre_scripts/scripts/200_2nd_step
 # dig ファイルは v1.0 では生成されない
 ! exists scenario/sample/scenario.dig
 
+# stfw.yml に webhook 設定 (v1.0 で廃止) は含まれず、otel 設定の雛形がある (SPEC-010-01)
+! grep 'webhooks' stfw.yml
+grep 'otel' stfw.yml
+
 # 再初期化は禁止 (v0.2 互換の条件)
 ! exec stfw init
 stderr 'already initialized'

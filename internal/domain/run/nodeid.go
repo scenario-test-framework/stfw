@@ -55,7 +55,7 @@ func (n NodeID) Child(segment string) (NodeID, error) {
 	return NodeID{value: n.value + "+" + segment}, nil
 }
 
-// Parent は親 ID の文字列を返す (webhook parent_id の導出規則:
+// Parent は親 ID の文字列を返す (v0.2 の webhook parent_id の導出規則:
 // `+` を `/` に置換 → dirname → `+` 連結に戻す、と同じ結果)。
 // run 階層の親は run_id 自身になる。
 func (n NodeID) Parent() string {

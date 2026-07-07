@@ -2,275 +2,227 @@ package notify
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/scenario-test-framework/stfw/internal/domain/run"
 )
 
-// EventKind は webhook イベント種別 (v0.2 の start / end)。
-type EventKind string
-
-const (
-	EventStart EventKind = "start"
-	EventEnd   EventKind = "end"
-)
-
-// Notification は投影済みの webhook 通知 1 件。送信可否は Settings.ShouldNotify で判定する。
-type Notification struct {
-	Event   EventKind
-	Status  string
-	Payload Payload
-}
-
-// nodeState は payload 組み立てに必要なノードの投影状態。
+// nodeState はスパン記述の組み立てに必要なノードの投影状態。
 type nodeState struct {
 	id       string
 	parentID string
 	nodeType run.NodeType
+	name     string
 	attrs    map[string]string
-	startTS  string
-	steps    []*stepState
+	start    time.Time
+	end      time.Time
+	status   SpanStatus
+	message  string
+	ended    bool
+	steps    []Span
 }
 
-// stepState はステップ実行結果の投影状態。未実行は時刻を空文字で持つ。
-type stepState struct {
-	name    string
-	result  string
-	startTS string
-	endTS   string
-}
-
-// Projector はジャーナルイベントを webhook 通知へ投影する。
-// ジャーナルが webhook payload の唯一のソース (イベントの投影) であり、
+// Projector はジャーナルイベントをスパン記述へ投影する。
+// ジャーナルがトレースの唯一のソース (イベントの投影) であり、
 // イベントは Run 集約で検証済みの順序で渡される前提。
+// 1 run = 1 トレース: ルート (run) の node_end でスパンツリー全体を確定して返す。
 type Projector struct {
-	ctx   Context
+	runID string
 	nodes map[string]*nodeState
-	// pendingStart は start 通知を保留中の process ノード。
-	// v0.2 の process start payload はステップの Pending 列挙を含むため、
-	// node_start 直後の steps_enumerated を待ってから通知を組み立てる。
-	pendingStart *nodeState
+	// order はノードの開始順 (親が先)。スパンの返却順に使う。
+	order []string
 }
 
 // NewProjector は投影器を生成する。
-func NewProjector(ctx Context) *Projector {
-	return &Projector{ctx: ctx, nodes: map[string]*nodeState{}}
+func NewProjector() *Projector {
+	return &Projector{nodes: map[string]*nodeState{}}
 }
 
-// Project はイベント 1 件を投影し、送信対象の通知 (0..2 件) を返す。
-// now は create_time に記録する時刻源。
-func (p *Projector) Project(ev run.Event, now time.Time) ([]Notification, error) {
+// Apply はイベント 1 件を投影する。ルート (run) の node_end で
+// 完成したスパンツリー (親が先の順) を返し、それ以外は nil を返す。
+func (p *Projector) Apply(ev run.Event) ([]Span, error) {
 	switch ev.Type {
 	case run.EventNodeStart:
-		return p.projectNodeStart(ev, now)
+		return nil, p.applyNodeStart(ev)
 	case run.EventStepsEnumerated:
-		return p.projectStepsEnumerated(ev, now)
+		// Pending の列挙はスパンにしない (step は step_end で完成する)
+		return nil, nil
 	case run.EventStepEnd:
-		return p.projectStepEnd(ev, now)
+		return nil, p.applyStepEnd(ev)
 	case run.EventNodeEnd:
-		return p.projectNodeEnd(ev, now)
+		return p.applyNodeEnd(ev)
 	default:
 		return nil, fmt.Errorf("%s is not journal event type", ev.Type)
 	}
 }
 
-func (p *Projector) projectNodeStart(ev run.Event, now time.Time) ([]Notification, error) {
-	notifs, err := p.flushPending(now)
+func (p *Projector) applyNodeStart(ev run.Event) error {
+	start, err := parseTS(ev.TS)
 	if err != nil {
-		return nil, err
-	}
-	attrs := make(map[string]string, len(ev.Attrs))
-	for k, v := range ev.Attrs {
-		attrs[k] = v
+		return fmt.Errorf("node %s: %w", ev.NodeID, err)
 	}
 	n := &nodeState{
 		id:       ev.NodeID,
 		parentID: ev.ParentID,
 		nodeType: ev.NodeType,
-		attrs:    attrs,
-		startTS:  ev.TS,
+		attrs:    ev.Attrs,
+		start:    start,
 	}
+	if ev.NodeType == run.NodeTypeRun {
+		// run はルートスパン (親を持たない)
+		n.parentID = ""
+		p.runID = ev.Attrs["run_id"]
+	}
+	n.name = spanName(n)
 	p.nodes[ev.NodeID] = n
-
-	// process の start 通知はステップ列挙イベントを待って保留する
-	if n.nodeType == run.NodeTypeProcess {
-		p.pendingStart = n
-		return notifs, nil
-	}
-	start, err := p.build(n, EventStart, string(run.NodeStarted), "", now)
-	if err != nil {
-		return nil, err
-	}
-	return append(notifs, start), nil
+	p.order = append(p.order, ev.NodeID)
+	return nil
 }
 
-func (p *Projector) projectStepsEnumerated(ev run.Event, now time.Time) ([]Notification, error) {
+func (p *Projector) applyStepEnd(ev run.Event) error {
 	n, ok := p.nodes[ev.NodeID]
 	if !ok {
-		return nil, fmt.Errorf("node %s is not started", ev.NodeID)
+		return fmt.Errorf("node %s is not started", ev.NodeID)
 	}
-	for _, step := range ev.Steps {
-		n.steps = append(n.steps, &stepState{name: step, result: string(run.StepPending)})
-	}
-	return p.flushPending(now)
-}
-
-func (p *Projector) projectStepEnd(ev run.Event, now time.Time) ([]Notification, error) {
-	notifs, err := p.flushPending(now)
-	if err != nil {
-		return nil, err
-	}
-	n, ok := p.nodes[ev.NodeID]
-	if !ok {
-		return nil, fmt.Errorf("node %s is not started", ev.NodeID)
-	}
-	for _, step := range n.steps {
-		if step.name != ev.Step {
-			continue
-		}
-		step.result = ev.Status
-		step.startTS = ev.StartTS
-		step.endTS = ev.EndTS
-		return notifs, nil
-	}
-	return nil, fmt.Errorf("node %s: step %s is not enumerated", ev.NodeID, ev.Step)
-}
-
-func (p *Projector) projectNodeEnd(ev run.Event, now time.Time) ([]Notification, error) {
-	notifs, err := p.flushPending(now)
-	if err != nil {
-		return nil, err
-	}
-	n, ok := p.nodes[ev.NodeID]
-	if !ok {
-		return nil, fmt.Errorf("node %s is not started", ev.NodeID)
-	}
-	end, err := p.build(n, EventEnd, ev.Status, ev.TS, now)
-	if err != nil {
-		return nil, err
-	}
-	return append(notifs, end), nil
-}
-
-// flushPending は保留中の process start 通知を組み立てて返す。
-// ステップ列挙後 (またはステップ 0 件のまま次のイベントが来た時点) で確定する。
-func (p *Projector) flushPending(now time.Time) ([]Notification, error) {
-	if p.pendingStart == nil {
-		return nil, nil
-	}
-	n := p.pendingStart
-	p.pendingStart = nil
-	start, err := p.build(n, EventStart, string(run.NodeStarted), "", now)
-	if err != nil {
-		return nil, err
-	}
-	return []Notification{start}, nil
-}
-
-// build はノードの投影状態から通知 1 件を組み立てる。
-func (p *Projector) build(n *nodeState, kind EventKind, status, endTS string, now time.Time) (Notification, error) {
-	body := Body{
-		ID:         n.id,
-		ParentID:   yamlScalar(n.parentID),
-		Type:       string(n.nodeType),
-		Status:     status,
-		CreateTime: now.Format(payloadTSFormat),
-		StartTime:  payloadTime(n.startTS),
-		Stfw: Stfw{
-			Host:    p.ctx.Host,
-			User:    p.ctx.User,
-			Version: p.ctx.Version,
-			Project: Project{Home: p.ctx.ProjectHome, Version: p.ctx.ProjectVersion},
+	span := Span{
+		ID:       ev.NodeID + "+" + ev.Step,
+		ParentID: ev.NodeID,
+		Name:     ev.Step,
+		Attrs: []Attr{
+			{Key: AttrRunID, Value: p.runID},
+			{Key: AttrNodeType, Value: "step"},
+			{Key: AttrNodeID, Value: ev.NodeID + "+" + ev.Step},
+			{Key: AttrStepStatus, Value: ev.Status},
 		},
 	}
-	if kind == EventEnd {
-		elapsed, err := run.ElapsedString(n.startTS, endTS)
+	switch run.StepStatus(ev.Status) {
+	case run.StepBlocked:
+		// 未実行のため開始・終了時刻を持たない: イベント時刻を点として記録し、
+		// スパンステータスは Unset のまま stfw.step.status=Blocked で表現する
+		ts, err := parseTS(ev.TS)
 		if err != nil {
-			return Notification{}, fmt.Errorf("node %s: %w", n.id, err)
+			return fmt.Errorf("step %s: %w", span.ID, err)
 		}
-		body.EndTime = payloadTime(endTS)
-		body.ProcessingTime = elapsed
+		span.Start, span.End = ts, ts
+		span.Status = SpanStatusUnset
+	case run.StepSuccess, run.StepError:
+		start, err := parseTS(ev.StartTS)
+		if err != nil {
+			return fmt.Errorf("step %s: %w", span.ID, err)
+		}
+		end, err := parseTS(ev.EndTS)
+		if err != nil {
+			return fmt.Errorf("step %s: %w", span.ID, err)
+		}
+		span.Start, span.End = start, end
+		exitCode := int64(0)
+		if ev.ExitCode != nil {
+			exitCode = int64(*ev.ExitCode)
+		}
+		span.Attrs = append(span.Attrs, Attr{Key: AttrStepExit, Value: exitCode})
+		span.Status = SpanStatusOK
+		if run.StepStatus(ev.Status) == run.StepError {
+			span.Status = SpanStatusError
+			span.StatusMessage = fmt.Sprintf("step %s failed with exit_code %d", ev.Step, exitCode)
+		}
+	default:
+		return fmt.Errorf("step %s: %s is not step status", span.ID, ev.Status)
 	}
+	n.steps = append(n.steps, span)
+	return nil
+}
 
-	runNode, err := p.buildTree(n)
+func (p *Projector) applyNodeEnd(ev run.Event) ([]Span, error) {
+	n, ok := p.nodes[ev.NodeID]
+	if !ok {
+		return nil, fmt.Errorf("node %s is not started", ev.NodeID)
+	}
+	end, err := parseTS(ev.TS)
 	if err != nil {
-		return Notification{}, err
+		return nil, fmt.Errorf("node %s: %w", ev.NodeID, err)
 	}
-	body.Run = runNode
-	return Notification{Event: kind, Status: status, Payload: Payload{Payload: body}}, nil
+	n.end = end
+	n.ended = true
+	n.status = SpanStatusOK
+	if run.NodeStatus(ev.Status) == run.NodeError {
+		n.status = SpanStatusError
+		n.message = fmt.Sprintf("%s %s finished with status Error", n.nodeType, n.name)
+	}
+	if n.nodeType != run.NodeTypeRun {
+		return nil, nil
+	}
+	return p.tree(), nil
 }
 
-// buildTree は run > scenario > bizdate > process の階層別属性を
-// 親子チェーンから組み立てる (v0.2 の階層別テンプレート合成の再現)。
-func (p *Projector) buildTree(n *nodeState) (*RunNode, error) {
-	chain := map[run.NodeType]*nodeState{}
-	for cur := n; ; {
-		chain[cur.nodeType] = cur
-		if cur.nodeType == run.NodeTypeRun {
-			break
+// tree は開始順 (親が先) にスパンツリー全体を組み立てる。
+// step スパンは親 process スパンの直後に並べる。
+func (p *Projector) tree() []Span {
+	var spans []Span
+	for _, id := range p.order {
+		n := p.nodes[id]
+		if !n.ended {
+			continue
 		}
-		parent, ok := p.nodes[cur.parentID]
-		if !ok {
-			return nil, fmt.Errorf("node %s: parent %s is not started", cur.id, cur.parentID)
-		}
-		cur = parent
+		spans = append(spans, Span{
+			ID:            n.id,
+			ParentID:      n.parentID,
+			Name:          n.name,
+			Start:         n.start,
+			End:           n.end,
+			Status:        n.status,
+			StatusMessage: n.message,
+			Attrs:         nodeAttrs(p.runID, n),
+		})
+		spans = append(spans, n.steps...)
 	}
-
-	root := chain[run.NodeTypeRun]
-	runNode := &RunNode{
-		RunID:        yamlScalar(root.attrs["run_id"]),
-		WorkspaceDir: yamlScalar(p.ctx.WorkspaceDir),
-		Params:       yamlScalar(root.attrs["params"]),
-	}
-	scenario, ok := chain[run.NodeTypeScenario]
-	if !ok {
-		return runNode, nil
-	}
-	runNode.Scenario = &ScenarioNode{Name: yamlScalar(scenario.attrs["name"])}
-
-	bizdate, ok := chain[run.NodeTypeBizdate]
-	if !ok {
-		return runNode, nil
-	}
-	runNode.Scenario.Bizdate = &BizdateNode{
-		DirName: yamlScalar(bizdate.attrs["dirname"]),
-		Seq:     yamlScalar(bizdate.attrs["seq"]),
-		Bizdate: yamlScalar(bizdate.attrs["bizdate"]),
-	}
-
-	process, ok := chain[run.NodeTypeProcess]
-	if !ok {
-		return runNode, nil
-	}
-	runNode.Scenario.Bizdate.Process = &ProcessNode{
-		DirName: yamlScalar(process.attrs["dirname"]),
-		Seq:     yamlScalar(process.attrs["seq"]),
-		Group:   yamlScalar(process.attrs["group"]),
-		Plugin:  buildPlugin(process),
-	}
-	return runNode, nil
+	return spans
 }
 
-// buildPlugin は scripts プロセスのステップ詳細 (v0.2 の webhook_detail) を組み立てる。
-// ステップ詳細を投影できるのはジャーナルにステップイベントを記録する組込み
-// scripts タイプのみ。独自プラグインの webhook 用コンテンツ生成
-// (bin/webhook/get_*_content) は v1.0 で廃止したため plugin キー自体を省略する。
-func buildPlugin(n *nodeState) *Plugin {
-	processType := n.attrs["process_type"]
-	if processType != "scripts" {
-		return nil
+// spanName はスパン名を導出する。run は "stfw run"、
+// scenario はシナリオ名、bizdate / process はディレクトリ名。
+func spanName(n *nodeState) string {
+	switch n.nodeType {
+	case run.NodeTypeRun:
+		return "stfw run"
+	case run.NodeTypeScenario:
+		return n.attrs["name"]
+	default:
+		return n.attrs["dirname"]
 	}
-	plugin := &Plugin{Type: processType}
-	for _, step := range n.steps {
-		target := Target{Result: step.result}
-		if step.startTS != "" && step.endTS != "" {
-			target.StartTime = payloadTime(step.startTS)
-			target.EndTime = payloadTime(step.endTS)
-			if elapsed, err := run.ElapsedString(step.startTS, step.endTS); err == nil {
-				target.ProcessingTime = elapsed
-			}
-		}
-		plugin.Targets = append(plugin.Targets, map[string]Target{step.name: target})
+}
+
+// nodeAttrs は階層スパンの属性を組み立てる (該当階層にあるもののみ)。
+func nodeAttrs(runID string, n *nodeState) []Attr {
+	attrs := []Attr{
+		{Key: AttrRunID, Value: runID},
+		{Key: AttrNodeType, Value: string(n.nodeType)},
+		{Key: AttrNodeID, Value: n.id},
 	}
-	return plugin
+	switch n.nodeType {
+	case run.NodeTypeRun:
+		// run_mode は実行契約の "--run" | "--dry-run" を run | dry-run に正規化する
+		attrs = append(attrs, Attr{Key: AttrRunMode, Value: strings.TrimPrefix(n.attrs["run_mode"], "--")})
+	case run.NodeTypeBizdate:
+		attrs = append(attrs,
+			Attr{Key: AttrBizdate, Value: n.attrs["bizdate"]},
+			Attr{Key: AttrSeq, Value: n.attrs["seq"]},
+		)
+	case run.NodeTypeProcess:
+		attrs = append(attrs,
+			Attr{Key: AttrSeq, Value: n.attrs["seq"]},
+			Attr{Key: AttrGroup, Value: n.attrs["group"]},
+			Attr{Key: AttrProcessType, Value: n.attrs["process_type"]},
+		)
+	}
+	return attrs
+}
+
+// parseTS はジャーナルのタイムスタンプ (run.TSFormat) をスパンの時刻へ変換する。
+func parseTS(ts string) (time.Time, error) {
+	t, err := time.Parse(run.TSFormat, ts)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("ts %s: %w", ts, err)
+	}
+	return t, nil
 }

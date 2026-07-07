@@ -4,7 +4,7 @@ import "testing"
 
 // v0.2 export_yaml のサンプル (bash_utils のコメント) と同じ規則であることを固定する。
 func TestFlattenYAML(t *testing.T) {
-	t.Setenv("URL_WEBHOOK", "http://env.example/hook")
+	t.Setenv("EXPAND_VAR_FOR_TEST", "http://env.example/endpoint")
 
 	raw := []byte(`
 map:
@@ -12,7 +12,7 @@ map:
   list:
   - list_value1
   - list_value2
-expand: ${URL_WEBHOOK}
+expand: ${EXPAND_VAR_FOR_TEST}
 missing: ${UNDEFINED_VAR_FOR_TEST}
 `)
 	got := map[string]string{}
@@ -24,7 +24,7 @@ missing: ${UNDEFINED_VAR_FOR_TEST}
 		"map_key":    "value1",
 		"map_list_0": "list_value1",
 		"map_list_1": "list_value2",
-		"expand":     "http://env.example/hook",
+		"expand":     "http://env.example/endpoint",
 		"missing":    "", // bash の source と同じく未定義は空文字
 	}
 	for k, w := range want {
