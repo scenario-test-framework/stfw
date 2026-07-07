@@ -1,0 +1,69 @@
+# STEP: プロジェクト独自プラグイン (process タイプが scripts 以外) の exec 契約
+# フェーズ順 (pre_execute -> execute -> post_execute) と config.yml の
+# 上書きチェーン (プラグイン -> プロジェクト -> プロセス) を確認する
+
+chmod 755 plugins/process/myproc/bin/install/is_installed
+chmod 755 plugins/process/myproc/bin/run/pre_execute
+chmod 755 plugins/process/myproc/bin/run/execute
+chmod 755 plugins/process/myproc/bin/run/post_execute
+
+exec stfw run demo
+cmp phases.log phases_golden.log
+
+exec stfw status
+stdout '\n      _10_grp_myproc \[Success\]'
+
+# dry-run では pre_execute のみ実行される (execute / post_execute をスキップ)
+rm phases.log
+exec stfw run --dry-run demo
+cmp phases.log phases_dryrun_golden.log
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  timezone: "Asia/Tokyo"
+-- scenario/demo/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_grp_myproc/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_grp_myproc/config/config.yml --
+stfw:
+  process:
+    myproc:
+      key: process-value
+-- plugins/process/myproc/config.yml --
+stfw:
+  process:
+    myproc:
+      key: plugin-value
+      base: plugin-base
+-- config/plugins/process/myproc/config.yml --
+stfw:
+  process:
+    myproc:
+      key: project-value
+-- plugins/process/myproc/bin/install/is_installed --
+#!/bin/bash
+echo "true"
+exit 0
+-- plugins/process/myproc/bin/run/pre_execute --
+#!/bin/bash
+echo "pre_execute $(basename "$(pwd)")" >>"${STFW_PROJ_DIR}/phases.log"
+exit 0
+-- plugins/process/myproc/bin/run/execute --
+#!/bin/bash
+echo "execute ${stfw_process_myproc_key} ${stfw_process_myproc_base}" >>"${STFW_PROJ_DIR}/phases.log"
+exit 0
+-- plugins/process/myproc/bin/run/post_execute --
+#!/bin/bash
+echo "post_execute" >>"${STFW_PROJ_DIR}/phases.log"
+exit 0
+-- phases_golden.log --
+pre_execute _10_grp_myproc
+execute process-value plugin-base
+post_execute
+-- phases_dryrun_golden.log --
+pre_execute _10_grp_myproc

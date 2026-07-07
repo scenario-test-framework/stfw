@@ -1,0 +1,29 @@
+# STEP: status のエラー系
+# リプレイは reconstitution 経路なので、生成時と同じ状態遷移検証を通す
+
+# 実行履歴が無い場合はエラー
+! exec stfw status
+stderr 'no runs'
+
+# run_id 形式が不正な場合はエラー
+! exec stfw status bogus
+stderr 'is not run_id format'
+
+# 外部から編集された不正なジャーナル (node_start 前の node_end) はリプレイでエラー
+mkdir .stfw/runs/_19700101000000_1
+cp fixtures/broken_journal.jsonl .stfw/runs/_19700101000000_1/journal.jsonl
+! exec stfw status _19700101000000_1
+stderr 'journal replay'
+stderr 'is not started'
+
+# 存在しない run_id はエラー
+! exec stfw status _19700101000000_9
+stderr 'no such file'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  timezone: "Asia/Tokyo"
+-- fixtures/broken_journal.jsonl --
+{"event":"node_end","ts":"1970-01-01T00:00:00Z","node_id":"_19700101000000_1+run","status":"Success"}

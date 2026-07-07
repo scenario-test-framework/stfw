@@ -85,6 +85,8 @@ func newRootCmd(a *app) *cobra.Command {
 		newInitCmd(a),
 		newNewCmd(a),
 		newValidateCmd(a),
+		newRunCmd(a),
+		newStatusCmd(a),
 		newPluginCmd(a),
 	)
 	return cmd

@@ -30,6 +30,8 @@ type scenarioNode struct {
 
 type bizdateNode struct {
 	dirName   string
+	seq       string
+	bizdate   string
 	parseErr  error
 	raw       RawDir
 	processes []processNode // 走査規則適用済み (昇順)
@@ -37,6 +39,8 @@ type bizdateNode struct {
 
 type processNode struct {
 	dirName     string
+	seq         string
+	group       string
 	processType string
 	parseErr    error
 	hasConfig   bool // config/config.yml が存在するか
@@ -54,14 +58,19 @@ func NewScenarioTree(scenarios []RawDir) *ScenarioTree {
 		node := scenarioNode{name: s.Name, raw: s}
 		for _, b := range runTargets(s.Dirs) {
 			bNode := bizdateNode{dirName: b.Name, raw: b}
-			if _, _, err := ParseBizdateDirName(b.Name); err != nil {
+			if seq, bizdate, err := ParseBizdateDirName(b.Name); err != nil {
 				bNode.parseErr = err
+			} else {
+				bNode.seq = seq.String()
+				bNode.bizdate = bizdate.String()
 			}
 			for _, p := range runTargets(b.Dirs) {
 				pNode := processNode{dirName: p.Name, raw: p, hasConfig: hasConfigFile(p)}
-				if _, _, processType, err := ParseProcessDirName(p.Name); err != nil {
+				if seq, group, processType, err := ParseProcessDirName(p.Name); err != nil {
 					pNode.parseErr = err
 				} else {
+					pNode.seq = seq.String()
+					pNode.group = group.String()
 					pNode.processType = processType
 				}
 				bNode.processes = append(bNode.processes, pNode)
@@ -155,6 +164,63 @@ func digViolations(parent string, dir RawDir) Violations {
 		vs = append(vs, digViolations(cur, child)...)
 	}
 	return vs
+}
+
+// ScenarioView / BizdateView / ProcessView は走査規則適用済みの実行計画ビュー。
+// 実行順 (昇順) を保持する。Validate が通った木でのみ完全な値を持つ。
+type ScenarioView struct {
+	Name     string
+	Bizdates []BizdateView
+}
+
+type BizdateView struct {
+	DirName   string
+	Seq       string
+	Bizdate   string
+	Processes []ProcessView
+}
+
+type ProcessView struct {
+	DirName     string
+	Seq         string
+	Group       string
+	ProcessType string
+}
+
+// ScenarioViews は実行順 (名前昇順) のシナリオビューを返す。
+func (t *ScenarioTree) ScenarioViews() []ScenarioView {
+	views := make([]ScenarioView, 0, len(t.scenarios))
+	for _, s := range t.scenarios {
+		views = append(views, scenarioView(s))
+	}
+	return views
+}
+
+// ScenarioView は名前指定でシナリオビューを返す。
+func (t *ScenarioTree) ScenarioView(name string) (ScenarioView, bool) {
+	for _, s := range t.scenarios {
+		if s.name == name {
+			return scenarioView(s), true
+		}
+	}
+	return ScenarioView{}, false
+}
+
+func scenarioView(s scenarioNode) ScenarioView {
+	view := ScenarioView{Name: s.name}
+	for _, b := range s.bizdates {
+		bView := BizdateView{DirName: b.dirName, Seq: b.seq, Bizdate: b.bizdate}
+		for _, p := range b.processes {
+			bView.Processes = append(bView.Processes, ProcessView{
+				DirName:     p.dirName,
+				Seq:         p.seq,
+				Group:       p.group,
+				ProcessType: p.processType,
+			})
+		}
+		view.Bizdates = append(view.Bizdates, bView)
+	}
+	return view
 }
 
 // runTargets は走査規則を適用する: `_` 始まりのディレクトリのみを名前昇順で返す。

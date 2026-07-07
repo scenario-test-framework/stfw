@@ -1,0 +1,68 @@
+# STEP: run --dry-run (execute / post_execute をスキップし、
+# setup / teardown フックと計画列挙は行う)
+
+chmod 755 plugins/process/_common/setup/10_mark
+chmod 755 plugins/process/_common/teardown/90_mark
+
+exec stfw run --dry-run demo
+stdout 'run_id: _'
+
+# ユーザースクリプトは実行されない (ファイル副作用で確認)
+! exists executed_step.txt
+
+# setup / teardown フックは実行される
+exists hook_setup.txt
+exists hook_teardown.txt
+
+# ジャーナル: 計画列挙 (steps_enumerated) は行われ、step_end は記録されない
+normjournal . journal_actual.jsonl
+cmp journal_actual.jsonl journal_golden.jsonl
+
+# status ではステップが Pending のまま表示される
+exec stfw status
+stdout 'run \[Success\]'
+stdout '\n        - 100_step1 \[Pending\]'
+stdout '\n        - 200_step2 \[Pending\]'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  timezone: "Asia/Tokyo"
+-- scenario/demo/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_pre_scripts/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_pre_scripts/config/config.yml --
+stfw:
+  process:
+    scripts:
+      some_key: value defined at scenario
+-- scenario/demo/_10_99990101/_10_pre_scripts/scripts/100_step1 --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/executed_step.txt"
+exit 0
+-- scenario/demo/_10_99990101/_10_pre_scripts/scripts/200_step2 --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/executed_step.txt"
+exit 0
+-- plugins/process/_common/setup/10_mark --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/hook_setup.txt"
+exit 0
+-- plugins/process/_common/teardown/90_mark --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/hook_teardown.txt"
+exit 0
+-- journal_golden.jsonl --
+{"attrs":{"params":"demo","run_id":"RUN_ID","run_mode":"--dry-run"},"event":"node_start","node_id":"RUN_ID+run","node_type":"run","parent_id":"RUN_ID"}
+{"attrs":{"name":"demo"},"event":"node_start","node_id":"RUN_ID+run+demo","node_type":"scenario","parent_id":"RUN_ID+run"}
+{"attrs":{"bizdate":"99990101","dirname":"_10_99990101","seq":"10"},"event":"node_start","node_id":"RUN_ID+run+demo+_10_99990101","node_type":"bizdate","parent_id":"RUN_ID+run+demo"}
+{"attrs":{"dirname":"_10_pre_scripts","group":"pre","process_type":"scripts","seq":"10"},"event":"node_start","node_id":"RUN_ID+run+demo+_10_99990101+_10_pre_scripts","node_type":"process","parent_id":"RUN_ID+run+demo+_10_99990101"}
+{"event":"steps_enumerated","node_id":"RUN_ID+run+demo+_10_99990101+_10_pre_scripts","steps":["100_step1","200_step2"]}
+{"event":"node_end","node_id":"RUN_ID+run+demo+_10_99990101+_10_pre_scripts","status":"Success"}
+{"event":"node_end","node_id":"RUN_ID+run+demo+_10_99990101","status":"Success"}
+{"event":"node_end","node_id":"RUN_ID+run+demo","status":"Success"}
+{"event":"node_end","node_id":"RUN_ID+run","status":"Success"}

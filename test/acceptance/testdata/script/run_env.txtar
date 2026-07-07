@@ -1,0 +1,54 @@
+# STEP: env 契約ゴールデンテスト
+# ユーザースクリプトへ注入される stfw_* / STFW_* / run_* の公開変数一覧を固定する。
+# 値が実行ごとに変わるもの (プロジェクトパス / run_id / バージョン) は
+# スクリプト側で PROJ_DIR / RUN_ID / VERSION にマスクする。
+
+exec stfw run envtest
+cmp env_dump.txt env_golden.txt
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  timezone: "Asia/Tokyo"
+-- scenario/envtest/metadata.yml --
+description:
+-- scenario/envtest/_10_99990101/metadata.yml --
+description:
+-- scenario/envtest/_10_99990101/_10_pre_scripts/metadata.yml --
+description:
+-- scenario/envtest/_10_99990101/_10_pre_scripts/config/config.yml --
+stfw:
+  process:
+    scripts:
+      some_key: env-contract
+-- scenario/envtest/_10_99990101/_10_pre_scripts/scripts/100_env_dump --
+#!/bin/bash
+printenv | grep -e '^STFW_' -e '^stfw_' -e '^run_' | LC_ALL=C sort |
+  sed -e "s|${STFW_PROJ_DIR}|PROJ_DIR|g" \
+      -e "s|${run_id}|RUN_ID|g" \
+      -e "s|${STFW_VERSION}|VERSION|g" >"${STFW_PROJ_DIR}/env_dump.txt"
+exit 0
+-- env_golden.txt --
+STFW_PROJ_DIR=PROJ_DIR
+STFW_PROJ_DIR_CONFIG=PROJ_DIR/config
+STFW_PROJ_DIR_DATA=PROJ_DIR/.stfw
+STFW_PROJ_DIR_PLUGIN=PROJ_DIR/plugins
+STFW_VERSION=VERSION
+run_id=RUN_ID
+run_mode=--run
+stfw_bizdate=99990101
+stfw_bizdate_dir=PROJ_DIR/scenario/envtest/_10_99990101
+stfw_bizdate_dirname=_10_99990101
+stfw_bizdate_seq=10
+stfw_loglevel=info
+stfw_process_dir=PROJ_DIR/scenario/envtest/_10_99990101/_10_pre_scripts
+stfw_process_dirname=_10_pre_scripts
+stfw_process_group=pre
+stfw_process_scripts_some_key=env-contract
+stfw_process_seq=10
+stfw_process_type=scripts
+stfw_project_version=0.1.0
+stfw_scenario_dir=PROJ_DIR/scenario/envtest
+stfw_scenario_name=envtest
+stfw_timezone=Asia/Tokyo

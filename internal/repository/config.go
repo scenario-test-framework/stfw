@@ -51,6 +51,15 @@ func (c *Config) Get(key string) string { return c.flat[key] }
 // LogLevel は設定されたログレベル文字列を返す。
 func (c *Config) LogLevel() string { return c.flat["stfw_loglevel"] }
 
+// Flat はフラット化済み設定のコピーを返す (実行時 env の組み立て用)。
+func (c *Config) Flat() map[string]string {
+	flat := make(map[string]string, len(c.flat))
+	for k, v := range c.flat {
+		flat[k] = v
+	}
+	return flat
+}
+
 // Environ はプラグインへ公開する KEY=VALUE リストをキー昇順で返す。
 func (c *Config) Environ() []string {
 	keys := make([]string, 0, len(c.flat))
@@ -69,6 +78,22 @@ func (c *Config) Environ() []string {
 //   - map はキーを `_` で連結 (stfw.loglevel → stfw_loglevel)
 //   - list は添字を付与 (stfw.webhooks.urls[0] → stfw_webhooks_urls_0)
 //   - 値中の ${VAR} は環境変数で展開 (未定義は空文字。bash の source と同挙動)
+// flattenYAMLFile は path の YAML をフラット化して dst に上書きする。
+// ファイルが存在しない場合は何もしない (設定の上書きチェーンの任意段)。
+func flattenYAMLFile(path string, dst map[string]string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if err := flattenYAML(raw, dst); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	return nil
+}
+
 func flattenYAML(raw []byte, dst map[string]string) error {
 	var root map[string]any
 	if err := yaml.Unmarshal(raw, &root); err != nil {

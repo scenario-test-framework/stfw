@@ -117,6 +117,40 @@ func CopyPluginTemplate(loc PluginLocation, destDir string) ([]string, error) {
 	return copyFSTree(os.DirFS(src), ".", destDir)
 }
 
+// ProcessConfigEnv はプロセス実行時に注入するプラグイン設定の env を返す。
+// 優先順 (後勝ち) はプラグイン config.yml → プロジェクト
+// config/plugins/process/{type}/config.yml → プロセス config/config.yml
+// (v0.2 の process_service.private.export_config + scripts プラグイン execute の
+// export_yaml と同じ上書きチェーン)。
+func ProcessConfigEnv(projDir string, loc PluginLocation, processType, processDir string) (map[string]string, error) {
+	flat := map[string]string{}
+
+	// プラグイン設定
+	if loc.Embedded {
+		if raw, err := fs.ReadFile(assets.Plugins, path.Join(loc.EmbedPath, "config.yml")); err == nil {
+			if err := flattenYAML(raw, flat); err != nil {
+				return nil, fmt.Errorf("%s/config.yml: %w", loc.EmbedPath, err)
+			}
+		}
+	} else {
+		if err := flattenYAMLFile(filepath.Join(loc.Dir, "config.yml"), flat); err != nil {
+			return nil, err
+		}
+	}
+
+	// プロジェクト上書き
+	projConf := filepath.Join(projDir, "config", "plugins", "process", processType, "config.yml")
+	if err := flattenYAMLFile(projConf, flat); err != nil {
+		return nil, err
+	}
+
+	// プロセス設定
+	if err := flattenYAMLFile(filepath.Join(processDir, "config", "config.yml"), flat); err != nil {
+		return nil, err
+	}
+	return flat, nil
+}
+
 // IsPluginInstalled はプラグインの bin/install/is_installed を実行して
 // インストール済みかを判定する。標準出力が "true" の場合のみ true
 // (v0.2 の process_spec.is_installed と同じ判定)。

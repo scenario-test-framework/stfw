@@ -3,12 +3,16 @@
 package acceptance
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/rogpeppe/go-internal/testscript"
 
 	"github.com/scenario-test-framework/stfw/internal/presentation/cli"
+	"github.com/scenario-test-framework/stfw/internal/repository"
 )
 
 func TestMain(m *testing.M) {
@@ -20,5 +24,50 @@ func TestMain(m *testing.M) {
 func TestAcceptance(t *testing.T) {
 	testscript.Run(t, testscript.Params{
 		Dir: "testdata/script",
+		Cmds: map[string]func(ts *testscript.TestScript, neg bool, args []string){
+			"normjournal": cmdNormJournal,
+		},
 	})
+}
+
+// runIDPattern は run_id (`_{yyyymmddhhmmss}_{pid}`) の出現箇所。
+var runIDPattern = regexp.MustCompile(`_\d{14}_\d+`)
+
+// cmdNormJournal は最新 run のジャーナルを正規化して outfile へ書き出す。
+//
+//	使い方: normjournal <projdir> <outfile>
+//
+// 正規化規則 (ゴールデン比較用):
+//   - ts / start_ts / end_ts を除去する (実行時刻に依存するため)
+//   - run_id を RUN_ID へ置換する (採番時刻・pid に依存するため)
+//   - キーはアルファベット順で再整列する
+func cmdNormJournal(ts *testscript.TestScript, neg bool, args []string) {
+	if neg || len(args) != 2 {
+		ts.Fatalf("usage: normjournal <projdir> <outfile>")
+	}
+	projDir := ts.MkAbs(args[0])
+
+	runID, err := repository.LatestRunID(projDir)
+	ts.Check(err)
+	raw, err := os.ReadFile(repository.JournalPath(projDir, runID))
+	ts.Check(err)
+
+	var out bytes.Buffer
+	for _, line := range bytes.Split(raw, []byte("\n")) {
+		if len(line) == 0 {
+			continue
+		}
+		var event map[string]any
+		if err := json.Unmarshal(line, &event); err != nil {
+			ts.Fatalf("journal line %q: %v", line, err)
+		}
+		delete(event, "ts")
+		delete(event, "start_ts")
+		delete(event, "end_ts")
+		normalized, err := json.Marshal(event)
+		ts.Check(err)
+		out.Write(runIDPattern.ReplaceAll(normalized, []byte("RUN_ID")))
+		out.WriteByte('\n')
+	}
+	ts.Check(os.WriteFile(ts.MkAbs(args[1]), out.Bytes(), 0o644))
 }
