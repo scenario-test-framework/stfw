@@ -5,8 +5,11 @@ package acceptance
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
+	"os/exec"
 	"regexp"
+	"strconv"
 	"testing"
 
 	"github.com/rogpeppe/go-internal/testscript"
@@ -27,8 +30,35 @@ func TestAcceptance(t *testing.T) {
 		Cmds: map[string]func(ts *testscript.TestScript, neg bool, args []string){
 			"normjournal": cmdNormJournal,
 			"latestrun":   cmdLatestRun,
+			"execcode":    cmdExecCode,
 		},
 	})
+}
+
+// cmdExecCode はコマンドを実行し、終了コードが期待値と一致することを検証する
+// (`! exec` は非 0 しか検証できないため、exit code 6 等の互換確認に使う)。
+//
+//	使い方: execcode <want> <command> [args...]
+func cmdExecCode(ts *testscript.TestScript, neg bool, args []string) {
+	if neg || len(args) < 2 {
+		ts.Fatalf("usage: execcode <want> <command> [args...]")
+	}
+	want, err := strconv.Atoi(args[0])
+	if err != nil {
+		ts.Fatalf("execcode: invalid exit code %q", args[0])
+	}
+
+	got := 0
+	if execErr := ts.Exec(args[1], args[2:]...); execErr != nil {
+		var exitErr *exec.ExitError
+		if !errors.As(execErr, &exitErr) {
+			ts.Fatalf("execcode: %v", execErr)
+		}
+		got = exitErr.ExitCode()
+	}
+	if got != want {
+		ts.Fatalf("exit code = %d, want %d", got, want)
+	}
 }
 
 // runIDPattern は run_id (`_{yyyymmddhhmmss}_{pid}`) の出現箇所。

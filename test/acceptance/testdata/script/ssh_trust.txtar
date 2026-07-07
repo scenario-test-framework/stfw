@@ -1,0 +1,42 @@
+# STEP: ssh trust (v0.2 の未配線関数 gen_ssh_server_key の正式コマンド化)
+# 実 sshd は使わず、ssh-keygen / ssh-keyscan を PATH 上のモックに差し替えて
+# 呼び出し引数を検証する
+
+[windows] skip 'mock scripts require a POSIX shell'
+
+exec stfw init
+
+chmod 755 mockbin/ssh-keygen
+chmod 755 mockbin/ssh-keyscan
+env PATH=$WORK/mockbin${:}$PATH
+env HOME=$WORK/home
+mkdir home/.ssh
+
+# 単一ホスト: ssh-keygen -R (既存キー削除) + ssh-keyscan (再登録) が呼ばれる
+exec stfw ssh trust 192.0.2.10
+grep '^ssh-keygen -R 192.0.2.10$' calls.txt
+grep '^ssh-keyscan 192.0.2.10$' calls.txt
+
+# ssh-keyscan の出力が ~/.ssh/known_hosts へ追記される
+grep '^192.0.2.10 ssh-ed25519 MOCKKEY$' home/.ssh/known_hosts
+
+# 登録済みホストはスキップされる (v0.2 互換: already exists は正常終了)
+cp calls.txt calls_before.txt
+exec stfw ssh trust 192.0.2.10
+cmp calls.txt calls_before.txt
+
+# inventory グループ指定: グループ内全ホストが対象になる
+exec stfw ssh trust ap
+grep '^ssh-keygen -R 127.0.0.1$' calls.txt
+grep '^ssh-keyscan 127.0.0.1$' calls.txt
+grep '^127.0.0.1 ssh-ed25519 MOCKKEY$' home/.ssh/known_hosts
+
+-- mockbin/ssh-keygen --
+#!/bin/bash
+echo "ssh-keygen $*" >> "${WORK}/calls.txt"
+exit 0
+-- mockbin/ssh-keyscan --
+#!/bin/bash
+echo "ssh-keyscan $*" >> "${WORK}/calls.txt"
+echo "$1 ssh-ed25519 MOCKKEY"
+exit 0
