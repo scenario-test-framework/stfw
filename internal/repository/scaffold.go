@@ -56,3 +56,9 @@ func ProjectConfigExists(projDir, filename string) bool {
 	_, err := os.Stat(filepath.Join(projDir, filename))
 	return err == nil
 }
+
+// DirExists はディレクトリの存在を確認する。
+func DirExists(dir string) bool {
+	info, err := os.Stat(dir)
+	return err == nil && info.IsDir()
+}

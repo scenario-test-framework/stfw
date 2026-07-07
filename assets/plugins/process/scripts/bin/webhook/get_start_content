@@ -1,0 +1,16 @@
+#!/bin/bash
+. "${STFW_HOME}/bin/lib/setenv"
+
+readonly plugin_dir=$(cd "$(dirname $0)/.."; pwd)
+. "${plugin_dir}/lib/common"
+
+# webhook詳細ファイルを初期化
+cat /dev/null >"${PATH_WEBHOOK_DETAIL}"
+
+for _cur_file in $(plugin.process.scripts.list_files "scripts"); do
+  # webhook詳細: Pending
+  plugin.process.scripts.webhook.append_detail "start" "${_cur_file}"
+done
+
+# 作成した、詳細ファイルと合わせて表示
+cat "${PATH_WEBHOOK_TEMPLATE}" "${PATH_WEBHOOK_DETAIL}"

@@ -3,6 +3,7 @@ package cli
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -44,6 +45,8 @@ func Execute() int {
 		if errors.As(err, &coded) {
 			return coded.code.Int()
 		}
+		// exitError 以外 (引数パースエラー等) はコマンド側で未出力のためここで出力する
+		fmt.Fprintln(os.Stderr, err)
 		return run.ExitError.Int()
 	}
 	return run.ExitSuccess.Int()
@@ -52,9 +55,9 @@ func Execute() int {
 func newRootCmd(a *app) *cobra.Command {
 	var logLevel string
 	cmd := &cobra.Command{
-		Use:           "stfw",
-		Short:         "scenario test framework cli",
-		Version:       Version,
+		Use:          "stfw",
+		Short:        "scenario test framework cli",
+		Version:      Version,
 		SilenceUsage: true,
 		// エラーはコマンド側で slog へ出力するため cobra の二重出力を抑止する
 		SilenceErrors: true,
@@ -78,7 +81,12 @@ func newRootCmd(a *app) *cobra.Command {
 		},
 	}
 	cmd.PersistentFlags().StringVarP(&logLevel, "log-level", "l", "", "log level [error, warn, info, debug, trace] (default: info)")
-	cmd.AddCommand(newInitCmd(a))
+	cmd.AddCommand(
+		newInitCmd(a),
+		newNewCmd(a),
+		newValidateCmd(a),
+		newPluginCmd(a),
+	)
 	return cmd
 }
 

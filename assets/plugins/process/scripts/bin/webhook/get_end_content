@@ -1,0 +1,8 @@
+#!/bin/bash
+. "${STFW_HOME}/bin/lib/setenv"
+
+plugin_dir=$(cd "$(dirname $0)/..";pwd)
+. "${plugin_dir}/lib/common"
+
+# execute時に作成した、詳細ファイルと合わせて表示
+cat "${PATH_WEBHOOK_TEMPLATE}" "${PATH_WEBHOOK_DETAIL}"

@@ -12,3 +12,9 @@ var Template embed.FS
 //
 //go:embed config/stfw.yml
 var DefaultConfig []byte
+
+// Plugins は同梱プラグイン (v0.2 の src/plugins から移植)。
+// プラグイン解決順はプロジェクト plugins/ → 同梱の順 (v0.2 互換)。
+//
+//go:embed all:plugins
+var Plugins embed.FS

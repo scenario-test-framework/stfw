@@ -1,0 +1,82 @@
+# STEP: create scenario (integration_test.sh STEP5 相当)
+# new scenario → new bizdate (day1/day2) → new process → validate の流れを固定する
+
+exec stfw init
+
+# scenario scaffold
+exec stfw new scenario test
+stdout 'scenario/test/metadata.yml'
+exists scenario/test/metadata.yml
+
+# bizdate scaffold (day1) はシナリオディレクトリで実行する
+cd scenario/test
+exec stfw new bizdate 10 99990101
+stdout 'scenario/test/_10_99990101/metadata.yml'
+exists _10_99990101/metadata.yml
+
+# process scaffold は業務日付ディレクトリで実行する
+cd _10_99990101
+exec stfw new process 10 pre scripts
+stdout 'scenario/test/_10_99990101/_10_pre_scripts/config/config.yml'
+exists _10_pre_scripts/config/config.yml
+exists _10_pre_scripts/scripts/100_1st_step
+exists _10_pre_scripts/scripts/200_2nd_step
+exists _10_pre_scripts/metadata.yml
+
+# bizdate scaffold (day2)
+cd ..
+exec stfw new bizdate 20 99990102
+cd _20_99990102
+exec stfw new process 10 pre scripts
+exists _10_pre_scripts/scripts/200_2nd_step
+
+# dig ファイルは v1.0 では生成されない
+cd $WORK
+! exists scenario/test/scenario.dig
+! exists scenario/test/_10_99990101/bizdate.dig
+
+# 構造検証が pass する (dig 生成 + 検証の v1.0 代替)
+exec stfw validate test
+
+# 全シナリオ対象 (テンプレートの sample 含む) でも pass する
+exec stfw validate
+
+# ---- 不正引数 ----
+
+# 引数の数が不足
+! exec stfw new scenario
+stderr 'accepts 1 arg'
+
+cd scenario/test
+
+# seq は数字のみ
+! exec stfw new bizdate 1a 99990101
+stderr 'must be number'
+
+# bizdate は 8 桁数字
+! exec stfw new bizdate 30 2025011
+stderr 'must be YYYYMMDD format'
+
+# bizdate は実在する日付
+! exec stfw new bizdate 30 99990230
+stderr 'is not a valid date'
+
+cd _10_99990101
+
+# group に `_` は使えない (ディレクトリ名パースの保護)
+! exec stfw new process 20 pre_group scripts
+stderr 'can not contains'
+
+# 未インストールのプロセスタイプは使えない
+! exec stfw new process 20 pre unknown
+stderr 'process-plugin: unknown is not installed'
+
+# 階層違反: プロジェクトルートで bizdate scaffold は生成できない
+cd $WORK
+! exec stfw new bizdate 30 99990103
+stderr 'is not scenario-dir'
+
+# 階層違反: シナリオディレクトリで process scaffold は生成できない
+cd scenario/test
+! exec stfw new process 30 pre scripts
+stderr 'is not bizdate-dir'
