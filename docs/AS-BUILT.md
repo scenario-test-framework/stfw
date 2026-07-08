@@ -374,7 +374,7 @@ Arrange（clear / import）と Collect（export）の組込みプラグイン。
 - **MySQL import の制約**: `LOAD DATA LOCAL INFILE` は既定で `ESCAPED BY '\\'` のため、`\N`→NULL は正しく解釈される一方、RFC4180 CSV（バックスラッシュを特別扱いしない）中の**リテラルのバックスラッシュを含む値**は MySQL のエスケープ解釈で変化し得る。厳密なラウンドトリップはバックスラッシュを含まないデータで保証される（PostgreSQL の `\copy` はこの制約を受けない）。RFC4180 と LOAD DATA の本質的な非整合。
 - テーブルループは添字を**読み取り直後にインクリメント**し、`continue` でも無限ループしない（P2 の教訓）。
 - SQL 組み立て時、テーブル名は識別子クオート（MySQL=バッククオート / PostgreSQL=ダブルクオート）内でクオート文字を二重化してエスケープする。ファイルパスについては、PostgreSQL は `COPY ... TO STDOUT / FROM STDIN` をシェルリダイレクトで扱いパスを SQL に載せない（psql メタコマンド `\copy` のバックスラッシュ解釈を回避）。MySQL import は LOAD DATA のパスを SQL 文字列リテラルとしてバックスラッシュ（MySQL のエスケープ文字）→シングルクオートの順に二重化する（`'`・`\` を含むシナリオ名・テーブル名でも壊れない）。
-- プラグイン stdout/stderr は行バッファ方式の Masker を通すため、`gateway.RunScript` が各スクリプト完了時に Flush し、未改行の出力が後続ログより遅れて出力順が崩れないようにする。
+- プラグイン stdout/stderr は行バッファ方式の Masker を通すため、`gateway.RunScript` が各スクリプト完了時に Flush し、未改行の出力が後続ログより遅れて出力順が崩れないようにする。出力順序の保証は**各ストリーム内（stdout 内・stderr 内それぞれ）**まで。stdout と stderr の相対順序は、別ストリーム・別コピー goroutine のため（バッファの有無に関わらず）保証しない。
 
 **MySQL CSV 変換ヘルパ（`stfw plugin mysql-tsv-to-csv`、隠しコマンド）**
 
