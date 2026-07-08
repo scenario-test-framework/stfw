@@ -25,48 +25,50 @@ while :; do
   user_var="stfw_process_collectFile_targets_${i}_user"
   user="${!user_var:-}"
 
-  if ! hosts="$(stfw inventory list "${group}")"; then
-    echo "collectFile: inventory list failed for group: ${group}" >&2
-    rc=6
-    continue
-  fi
-  for host in ${hosts}; do
-    if ! password="$(stfw secret show "${host}" "${user}")"; then
-      echo "collectFile: secret not found: ${host}-${user}" >&2
-      rc=6
-      continue
-    fi
-
-    j=0
-    while :; do
-      path_var="stfw_process_collectFile_targets_${i}_paths_${j}"
-      pattern="${!path_var:-}"
-      [ -z "${pattern}" ] && break
-      j=$((j + 1))
-
-      files="$(sshpass -p "${password}" ssh "${ssh_opts[@]}" "${user}@${host}" \
-        "find / -regextype posix-extended -regex '${pattern}' -type f 2>/dev/null")"
-      ssh_rc=$?
-      # ssh 自体の失敗 (接続・認証エラー = 255) はエラー扱い。find の権限エラー
-      # (一部ディレクトリにアクセスできず exit 1) は正常出力として扱う。
-      if [ "${ssh_rc}" -eq 255 ]; then
-        echo "collectFile: ssh failed: ${user}@${host}" >&2
+  # inventory list の失敗は else 分岐で扱う (continue すると末尾の i 増分を
+  # 飛ばして同一 target を無限再試行してしまうため)。
+  if hosts="$(stfw inventory list "${group}")"; then
+    for host in ${hosts}; do
+      if ! password="$(stfw secret show "${host}" "${user}")"; then
+        echo "collectFile: secret not found: ${host}-${user}" >&2
         rc=6
         continue
       fi
-      # 空白を含むパスを壊さないよう 1 行ずつ処理する。ループ本体の ssh/scp が
-      # stdin を消費してループが途中終了しないよう、読み取りは FD 3 を使う。
-      while IFS= read -r f <&3; do
-        [ -z "${f}" ] && continue
-        destdir="${evidence_root}/${host}$(dirname "${f}")"
-        mkdir -p "${destdir}"
-        if ! sshpass -p "${password}" scp "${ssh_opts[@]}" "${user}@${host}:${f}" "${destdir}/"; then
-          echo "collectFile: scp failed: ${host}:${f}" >&2
+
+      j=0
+      while :; do
+        path_var="stfw_process_collectFile_targets_${i}_paths_${j}"
+        pattern="${!path_var:-}"
+        [ -z "${pattern}" ] && break
+        j=$((j + 1))
+
+        files="$(sshpass -p "${password}" ssh "${ssh_opts[@]}" "${user}@${host}" \
+          "find / -regextype posix-extended -regex '${pattern}' -type f 2>/dev/null")"
+        ssh_rc=$?
+        # ssh 自体の失敗 (接続・認証エラー = 255) はエラー扱い。find の権限エラー
+        # (一部ディレクトリにアクセスできず exit 1) は正常出力として扱う。
+        if [ "${ssh_rc}" -eq 255 ]; then
+          echo "collectFile: ssh failed: ${user}@${host}" >&2
           rc=6
+          continue
         fi
-      done 3<<< "${files}"
+        # 空白を含むパスを壊さないよう 1 行ずつ処理する。ループ本体の ssh/scp が
+        # stdin を消費してループが途中終了しないよう、読み取りは FD 3 を使う。
+        while IFS= read -r f <&3; do
+          [ -z "${f}" ] && continue
+          destdir="${evidence_root}/${host}$(dirname "${f}")"
+          mkdir -p "${destdir}"
+          if ! sshpass -p "${password}" scp "${ssh_opts[@]}" "${user}@${host}:${f}" "${destdir}/"; then
+            echo "collectFile: scp failed: ${host}:${f}" >&2
+            rc=6
+          fi
+        done 3<<< "${files}"
+      done
     done
-  done
+  else
+    echo "collectFile: inventory list failed for group: ${group}" >&2
+    rc=6
+  fi
   i=$((i + 1))
 done
 

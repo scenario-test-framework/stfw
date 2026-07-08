@@ -37,10 +37,13 @@ while :; do
   user_var="stfw_process_collectLog_targets_${i}_user"
   user="${!user_var:-}"
 
+  # inventory list 失敗時は hosts を空にして for ループを空回りさせ、末尾の
+  # i 増分を必ず通す (continue すると同一 target を無限再試行してしまう)。
+  hosts=""
   if ! hosts="$(stfw inventory list "${group}")"; then
     echo "collectLog: inventory list failed for group: ${group}" >&2
     rc=6
-    continue
+    hosts=""
   fi
   for host in ${hosts}; do
     if ! arch="$(stfw inventory arch "${host}")"; then
