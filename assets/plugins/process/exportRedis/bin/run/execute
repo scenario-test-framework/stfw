@@ -67,7 +67,14 @@ while :; do
   # 「成功時のみ再配置」。開始時に既存成果物を削除し、失敗・クラッシュ時に
   # 前回 run の古いエビデンスが残らないようにする (再実行での残留防止)。
   rm -f "${out}"
-  echo 'key,type,ttl,value' > "${tmp}"
+  # ヘッダ書き込み失敗 (書込不可等) を握りつぶすと、ヘッダ無し CSV を公開する
+  # おそれがあるため明示検査する。
+  if ! echo 'key,type,ttl,value' > "${tmp}"; then
+    echo "exportRedis: cannot write temp evidence: ${tmp}" >&2
+    rm -f "${tmp}"
+    rc=6
+    continue
+  fi
 
   # SCAN の返却順は不定なため、CSV 行順を安定させるためキーをソートする
   # (compare の安定性のため)。pipefail 有効で scan 失敗はパイプ全体の非 0 で検出。
@@ -128,7 +135,13 @@ while :; do
   done <<< "${keys}"
 
   if [ "${pattern_failed}" -eq 0 ]; then
-    mv "${tmp}" "${out}"
+    # 公開フェーズ (mv) 自体の失敗も握りつぶさない。開始時に out を削除済みのため、
+    # mv 失敗を見逃すと「成功報告なのにエビデンス消失」になる。
+    if ! mv "${tmp}" "${out}"; then
+      echo "exportRedis: failed to publish evidence: ${out}" >&2
+      rm -f "${tmp}"
+      rc=6
+    fi
   else
     echo "exportRedis: incomplete evidence for pattern ${match}; not publishing ${out}" >&2
     rm -f "${tmp}"
