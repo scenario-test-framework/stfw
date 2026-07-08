@@ -46,9 +46,11 @@ while :; do
   [ -z "${table}" ] && break
   i=$((i + 1))
 
+  # 識別子はバッククオート内のバッククオートを二重化してエスケープする。
+  t_esc="$(printf '%s' "${table}" | sed 's/`/``/g')"
   if ! MYSQL_PWD="${password}" mysql --host="${host}" --port="${port}" \
       --user="${user}" --database="${database}" \
-      --execute="TRUNCATE TABLE \`${table}\`"; then
+      --execute="TRUNCATE TABLE \`${t_esc}\`"; then
     echo "clearMysql: truncate failed: ${database}.${table}" >&2
     rc=6
   fi

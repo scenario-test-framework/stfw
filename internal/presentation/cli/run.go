@@ -26,8 +26,11 @@ func newRunCmd(a *app) *cobra.Command {
 			}
 			// プラグイン stdout/stderr を Masker 経由にして、登録済みシークレットを
 			// 出力から除去する (ロガーと同一のシークレットレジストリを共有)。
+			// 行バッファ方式のため、実行後に Flush して未改行の残りを出力する。
 			out := a.masker.Wrap(cmd.OutOrStdout())
 			errOut := a.masker.Wrap(cmd.ErrOrStderr())
+			defer func() { _ = out.Flush() }()
+			defer func() { _ = errOut.Flush() }()
 			err := runscenario.Run(a.log, out, errOut,
 				a.projDir, a.config, Version, args, dryRun, time.Now)
 			if err != nil {

@@ -25,6 +25,8 @@ cmp scenario/pg/_10_99990101/_30_grp_exportPostgres/evidence/pgdb/t1.csv t1.csv.
 exec cat ${WORK}/psql.log
 stdout 'TRUNCATE TABLE "t1"'
 stdout '\\copy "t1" FROM'
+# 識別子内のダブルクオートが二重化エスケープされている
+stdout 'TRUNCATE TABLE "t""x"'
 
 # export 失敗 (psql 非 0) は握りつぶさず exit 6
 env STFW_TEST_PSQL_FAIL=1
@@ -80,6 +82,7 @@ stfw:
       user: appuser
       tables:
         - t1
+        - 't"x'
 -- scenario/pg/_10_99990101/_20_grp_importPostgres/metadata.yml --
 description:
 -- scenario/pg/_10_99990101/_20_grp_importPostgres/config/config.yml --

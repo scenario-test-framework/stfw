@@ -56,7 +56,11 @@ while :; do
 
   out="${destdir}/${table}.csv"
   tmp="${out}.tmp.$$"
-  copy="\\copy (SELECT * FROM \"${table}\") TO '${tmp}' WITH (FORMAT csv, HEADER true, NULL '\\N')"
+  # 識別子はダブルクオート内のダブルクオートを二重化、ファイルパスは SQL 文字列
+  # リテラル内のシングルクオートを二重化してエスケープする。
+  t_esc="$(printf '%s' "${table}" | sed 's/"/""/g')"
+  tmp_esc="$(printf '%s' "${tmp}" | sed "s/'/''/g")"
+  copy="\\copy (SELECT * FROM \"${t_esc}\") TO '${tmp_esc}' WITH (FORMAT csv, HEADER true, NULL '\\N')"
   if PGPASSWORD="${password}" psql --host="${host}" --port="${port}" \
       --username="${user}" --dbname="${database}" \
       --set=ON_ERROR_STOP=1 --no-psqlrc --quiet --command="${copy}"; then

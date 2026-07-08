@@ -55,7 +55,11 @@ while :; do
     continue
   fi
 
-  load_sql="LOAD DATA LOCAL INFILE '${src}' INTO TABLE \`${table}\`"
+  # 識別子はバッククオート内のバッククオートを二重化、ファイルパスは SQL 文字列
+  # リテラル内のシングルクオートを二重化してエスケープする。
+  t_esc="$(printf '%s' "${table}" | sed 's/`/``/g')"
+  src_esc="$(printf '%s' "${src}" | sed "s/'/''/g")"
+  load_sql="LOAD DATA LOCAL INFILE '${src_esc}' INTO TABLE \`${t_esc}\`"
   load_sql="${load_sql} FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"'"
   load_sql="${load_sql} LINES TERMINATED BY '\n' IGNORE 1 LINES"
   if ! MYSQL_PWD="${password}" mysql --local-infile=1 --host="${host}" --port="${port}" \

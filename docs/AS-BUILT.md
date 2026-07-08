@@ -369,9 +369,11 @@ Arrange（clear / import）と Collect（export）の組込みプラグイン。
 | clearMysql | `TRUNCATE TABLE t` | — |
 | clearPostgres | `TRUNCATE TABLE t`（`ON_ERROR_STOP=1`） | — |
 
-- CSV は 1 行目ヘッダー・NULL は `\N`（空文字と区別、mysqldump 慣行）。export / import はラウンドトリップ可能。
+- CSV は 1 行目ヘッダー・NULL は `\N`（空文字と区別、mysqldump 慣行）。export / import は下記制約の範囲でラウンドトリップ可能。
 - 入力 CSV（import）は `{process}/data/{database}/{table}.csv`（テスト作者が用意・git 管理）。ソース不在・DB クライアント非 0 は exit 6。
+- **MySQL import の制約**: `LOAD DATA LOCAL INFILE` は既定で `ESCAPED BY '\\'` のため、`\N`→NULL は正しく解釈される一方、RFC4180 CSV（バックスラッシュを特別扱いしない）中の**リテラルのバックスラッシュを含む値**は MySQL のエスケープ解釈で変化し得る。厳密なラウンドトリップはバックスラッシュを含まないデータで保証される（PostgreSQL の `\copy` はこの制約を受けない）。RFC4180 と LOAD DATA の本質的な非整合。
 - テーブルループは添字を**読み取り直後にインクリメント**し、`continue` でも無限ループしない（P2 の教訓）。
+- SQL 組み立て時、テーブル名は識別子クオート（MySQL=バッククオート / PostgreSQL=ダブルクオート）内でクオート文字を二重化、ファイルパスは SQL 文字列リテラル内のシングルクオートを二重化してエスケープする（`'` を含むシナリオ名・テーブル名でも壊れない）。
 
 **MySQL CSV 変換ヘルパ（`stfw plugin mysql-tsv-to-csv`、隠しコマンド）**
 

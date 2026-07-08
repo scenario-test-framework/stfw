@@ -60,10 +60,12 @@ while :; do
 
   out="${destdir}/${table}.csv"
   tmp="${out}.tmp.$$"
+  # 識別子はバッククオートで囲み、内部のバッククオートを二重化してエスケープする。
+  t_esc="$(printf '%s' "${table}" | sed 's/`/``/g')"
   # pipefail 有効。mysql か変換ヘルパのいずれかが失敗すればパイプは非 0。
   if MYSQL_PWD="${password}" mysql --batch --host="${host}" --port="${port}" \
       --user="${user}" --database="${database}" \
-      --execute="SELECT * FROM \`${table}\`" | stfw plugin mysql-tsv-to-csv > "${tmp}"; then
+      --execute="SELECT * FROM \`${t_esc}\`" | stfw plugin mysql-tsv-to-csv > "${tmp}"; then
     mv "${tmp}" "${out}"
   else
     echo "exportMysql: export failed: ${database}.${table}" >&2

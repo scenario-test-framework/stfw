@@ -27,6 +27,8 @@ exec cat ${WORK}/mysql.log
 stdout 'TRUNCATE TABLE `t1`'
 stdout 'LOAD DATA LOCAL INFILE'
 stdout 'INTO TABLE `t1`'
+# 識別子内のバッククオートが二重化エスケープされている
+stdout 'TRUNCATE TABLE `t``x`'
 
 # export 失敗 (mysql 非 0) は握りつぶさず exit 6
 env STFW_TEST_MYSQL_FAIL=1
@@ -85,6 +87,7 @@ stfw:
       user: appuser
       tables:
         - t1
+        - "t`x"
 -- scenario/db/_10_99990101/_20_grp_importMysql/metadata.yml --
 description:
 -- scenario/db/_10_99990101/_20_grp_importMysql/config/config.yml --
