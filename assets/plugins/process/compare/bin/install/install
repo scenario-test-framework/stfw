@@ -4,6 +4,10 @@
 # に配置する。compare-files はローカルで expect/actual を比較するため、実行ホストの
 # arch 1 種のみ取得する (収集系プラグインのように送り分けはしない)。
 #
+# プロビジョニングモデルは collectLog (logfilter) と同一の「初回 install 優先」。
+# 既にキャッシュ済みなら再ダウンロードしない。compare_files_version を変更したときは
+# ${stfw_plugin_cache_dir}/compare-files/ を削除してから再 install すること。
+#
 # 取得・展開・配置に失敗した場合は非 0 (exit 6) を返す。
 set -uo pipefail
 
