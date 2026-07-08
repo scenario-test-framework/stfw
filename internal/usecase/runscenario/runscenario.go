@@ -57,7 +57,9 @@ func Run(log *slog.Logger, out, errOut io.Writer, projDir string, cfg *repositor
 	}
 	if len(missing) > 0 {
 		for _, m := range missing {
-			fmt.Fprintf(out, "error: process-plugin %s: required command not found: %s\n", m.ProcessType, m.Command)
+			v := scenario.Violation{Path: m.ProcessType, Level: scenario.ViolationError,
+				Message: fmt.Sprintf("required command not found: %s", m.Command)}
+			fmt.Fprintln(out, v.String())
 		}
 		return fmt.Errorf("missing required command(s) for %d plugin dependency(ies)", len(missing))
 	}
@@ -69,7 +71,9 @@ func Run(log *slog.Logger, out, errOut io.Writer, projDir string, cfg *repositor
 	}
 	if len(forbidden) > 0 {
 		for _, f := range forbidden {
-			fmt.Fprintf(out, "error: %s: config で接続情報を直書きしています (%s)\n", f.ProcessPath, f.Key)
+			v := scenario.Violation{Path: f.ProcessPath, Level: scenario.ViolationError,
+				Message: fmt.Sprintf("config で接続情報を直書きしています (%s)", f.Key)}
+			fmt.Fprintln(out, v.String())
 		}
 		return fmt.Errorf("forbidden connection config in %d place(s)", len(forbidden))
 	}

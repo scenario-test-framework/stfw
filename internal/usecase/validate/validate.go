@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 
+	"github.com/scenario-test-framework/stfw/internal/domain/scenario"
 	"github.com/scenario-test-framework/stfw/internal/repository"
 )
 
@@ -37,7 +38,9 @@ func Run(log *slog.Logger, out io.Writer, projDir string, names []string) error 
 		return err
 	}
 	for _, m := range missing {
-		fmt.Fprintf(out, "warn: process-plugin %s: required command not found: %s\n", m.ProcessType, m.Command)
+		v := scenario.Violation{Path: m.ProcessType, Level: scenario.ViolationWarn,
+			Message: fmt.Sprintf("required command not found: %s", m.Command)}
+		fmt.Fprintln(out, v.String())
 	}
 
 	// 接続情報 (host / password 等) の直書き禁止。設定は環境非依存の静的性質
@@ -47,7 +50,9 @@ func Run(log *slog.Logger, out io.Writer, projDir string, names []string) error 
 		return err
 	}
 	for _, f := range forbidden {
-		fmt.Fprintf(out, "error: %s: config で接続情報を直書きしています (%s)。inventory グループ名参照 + secret 参照を使ってください\n", f.ProcessPath, f.Key)
+		v := scenario.Violation{Path: f.ProcessPath, Level: scenario.ViolationError,
+			Message: fmt.Sprintf("config で接続情報を直書きしています (%s)。inventory グループ名参照 + secret 参照を使ってください", f.Key)}
+		fmt.Fprintln(out, v.String())
 	}
 
 	errCount, warns := violations.Count()

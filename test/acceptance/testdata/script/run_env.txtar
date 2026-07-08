@@ -6,6 +6,10 @@
 exec stfw run envtest
 cmp env_dump.txt env_golden.txt
 
+# stfw_bizdate_start_ts は実行時刻依存のためゴールデンでは START_TS にマスクするが、
+# 生値が RFC3339 (業務日付ノード node_start 時刻) 形式であることを別途固定する。
+grep '^stfw_bizdate_start_ts=\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}([-+]\d{2}:\d{2}|Z)' start_ts.txt
+
 -- stfw.yml --
 stfw:
   project_version: 0.1.0
@@ -29,6 +33,7 @@ printenv | grep -e '^STFW_' -e '^stfw_' -e '^run_' | LC_ALL=C sort |
       -e "s|${run_id}|RUN_ID|g" \
       -e "s|${STFW_VERSION}|VERSION|g" \
       -e "s|^stfw_bizdate_start_ts=.*|stfw_bizdate_start_ts=START_TS|" >"${STFW_PROJ_DIR}/env_dump.txt"
+printenv | grep '^stfw_bizdate_start_ts=' >"${STFW_PROJ_DIR}/start_ts.txt"
 exit 0
 -- env_golden.txt --
 STFW_PROJ_DIR=PROJ_DIR
