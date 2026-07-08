@@ -8,7 +8,7 @@ cmp env_dump.txt env_golden.txt
 
 # stfw_bizdate_start_ts は実行時刻依存のためゴールデンでは START_TS にマスクするが、
 # 生値が RFC3339 (業務日付ノード node_start 時刻) 形式であることを別途固定する。
-grep '^stfw_bizdate_start_ts=\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}([-+]\d{2}:\d{2}|Z)' start_ts.txt
+grep '(?m)^stfw_bizdate_start_ts=\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}([-+]\d{2}:\d{2}|Z)$' start_ts.txt
 
 -- stfw.yml --
 stfw:

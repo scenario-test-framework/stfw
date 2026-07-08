@@ -14,7 +14,10 @@ const (
 
 // Violation はディレクトリ規約違反 1 件。
 type Violation struct {
-	Path    string // プロジェクトルートからの相対パス
+	// Path は違反対象の識別子。ディレクトリ規約違反ではプロジェクトルートからの
+	// 相対パス、プラグイン依存違反 (requires) のようにディレクトリに紐づかない
+	// 違反ではプロセスタイプ名を入れる。
+	Path    string
 	Level   ViolationLevel
 	Message string
 }
