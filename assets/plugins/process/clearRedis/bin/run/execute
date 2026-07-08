@@ -1,0 +1,67 @@
+#!/bin/bash
+# clearRedis: Redis のキー (パターン一致) を削除する (Arrange の初期化)。
+#
+# 設定 (config.yml の stfw.process.clearRedis): host_group / port / db / user / key_patterns[].match
+# 処理: match ごとに SCAN で列挙したキーを DEL する。
+#
+# 接続情報は inventory/secret から解決し config に直書きしない。
+set -uo pipefail
+
+host_group="${stfw_process_clearRedis_host_group:-}"
+port="${stfw_process_clearRedis_port:-6379}"
+db="${stfw_process_clearRedis_db:-0}"
+user="${stfw_process_clearRedis_user:-}"
+rc=0
+
+if [ -z "${host_group}" ]; then
+  echo "clearRedis: host_group is required" >&2
+  exit 6
+fi
+
+if ! hosts="$(stfw inventory list "${host_group}")"; then
+  echo "clearRedis: inventory list failed for group: ${host_group}" >&2
+  exit 6
+fi
+# shellcheck disable=SC2086
+set -- ${hosts}
+host="${1:-}"
+if [ -z "${host}" ]; then
+  echo "clearRedis: no host resolved for group: ${host_group}" >&2
+  exit 6
+fi
+if [ "$#" -gt 1 ]; then
+  echo "clearRedis: group ${host_group} resolves to multiple hosts; using ${host}" >&2
+fi
+
+if ! password="$(stfw secret show "${host}" "${user}")"; then
+  echo "clearRedis: secret not found: ${host}-${user}" >&2
+  exit 6
+fi
+export REDISCLI_AUTH="${password}"
+
+redis_opts=(-h "${host}" -p "${port}" -n "${db}" --no-auth-warning)
+[ -n "${user}" ] && redis_opts+=(--user "${user}")
+
+i=0
+while :; do
+  match_var="stfw_process_clearRedis_key_patterns_${i}_match"
+  match="${!match_var:-}"
+  [ -z "${match}" ] && break
+  i=$((i + 1))
+
+  if ! keys="$(redis-cli "${redis_opts[@]}" --scan --pattern "${match}")"; then
+    echo "clearRedis: scan failed for pattern: ${match}" >&2
+    rc=6
+    continue
+  fi
+  # here-string のため while はサブシェルにならず rc がループ外へ伝播する。
+  while IFS= read -r key; do
+    [ -z "${key}" ] && continue
+    if ! redis-cli "${redis_opts[@]}" DEL "${key}" >/dev/null; then
+      echo "clearRedis: DEL failed for key: ${key}" >&2
+      rc=6
+    fi
+  done <<< "${keys}"
+done
+
+exit ${rc}

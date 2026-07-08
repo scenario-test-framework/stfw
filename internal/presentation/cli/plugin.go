@@ -2,6 +2,7 @@ package cli
 
 import (
 	"errors"
+	"io"
 
 	"github.com/spf13/cobra"
 
@@ -19,8 +20,57 @@ func newPluginCmd(a *app) *cobra.Command {
 		newPluginListCmd(a),
 		newPluginInstallCmd(a),
 		newPluginMysqlCSVCmd(a),
+		newPluginRedisEncodeCmd(a),
+		newPluginRedisDecodeCmd(a),
 	)
 	return cmd
+}
+
+// newPluginRedisEncodeCmd は組込み exportRedis が利用する内部ヘルパ。
+// redis-cli -2 --json の値 (stdin) を正規化し、CSV の 1 行 (key,type,ttl,value) を
+// stdout へ書き出す。エンドユーザー向けではないため隠しコマンドとする。
+func newPluginRedisEncodeCmd(a *app) *cobra.Command {
+	var key, typ, ttl string
+	c := &cobra.Command{
+		Use:    "redis-encode-row",
+		Short:  "encode a redis value into one CSV row (internal plugin helper)",
+		Hidden: true,
+		Args:   cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			raw, err := io.ReadAll(cmd.InOrStdin())
+			if err != nil {
+				a.log.Error(err.Error())
+				return &exitError{code: run.ExitError, err: err}
+			}
+			if err := repository.RedisEncodeRow(cmd.OutOrStdout(), key, typ, ttl, raw); err != nil {
+				a.log.Error(err.Error())
+				return &exitError{code: run.ExitError, err: err}
+			}
+			return nil
+		},
+	}
+	c.Flags().StringVar(&key, "key", "", "redis key")
+	c.Flags().StringVar(&typ, "type", "", "redis type (string/list/set/hash/zset)")
+	c.Flags().StringVar(&ttl, "ttl", "-1", "ttl seconds (-1 no expire)")
+	return c
+}
+
+// newPluginRedisDecodeCmd は組込み importRedis が利用する内部ヘルパ。
+// export 形式の CSV (stdin) を、キーを再現する redis-cli コマンド列 (stdout) へ変換する。
+func newPluginRedisDecodeCmd(a *app) *cobra.Command {
+	return &cobra.Command{
+		Use:    "redis-decode",
+		Short:  "decode export CSV into redis-cli commands (internal plugin helper)",
+		Hidden: true,
+		Args:   cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := repository.RedisDecode(cmd.InOrStdin(), cmd.OutOrStdout()); err != nil {
+				a.log.Error(err.Error())
+				return &exitError{code: run.ExitError, err: err}
+			}
+			return nil
+		},
+	}
 }
 
 // newPluginMysqlCSVCmd は組込み RDBMS プラグイン (exportMysql) が利用する

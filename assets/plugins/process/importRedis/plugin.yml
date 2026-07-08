@@ -1,0 +1,3 @@
+# importRedis: exportRedis 形式の CSV を Redis へインポートする組込みプラグイン。
+requires:
+  - redis-cli

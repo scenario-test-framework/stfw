@@ -1,0 +1,18 @@
+# importRedis の既定設定。プロジェクト側 config で上書きする。
+#
+# host_group   : 接続先 Redis ホストを解決する inventory グループ名 (末尾 group で許可)
+# port         : Redis ポート
+# db           : DB 番号 (0-15)
+# user         : ACL ユーザー (空なら AUTH をパスワードのみで行う)
+# key_patterns : name のみ使用。入力 CSV は {process}/data/{host}/{name}.csv
+#
+# 入力 CSV: exportRedis の出力形式 (ヘッダー key,type,ttl,value) とラウンドトリップ可能。
+# 接続情報 (ホスト・パスワード) を config に直書きしてはならない (禁止契約)。
+stfw:
+  process:
+    importRedis:
+      host_group: ""
+      port: "6379"
+      db: "0"
+      user: ""
+      key_patterns: []

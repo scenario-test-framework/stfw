@@ -1,0 +1,4 @@
+# exportRedis: Redis のキーをヘッダー付き CSV (key,type,ttl,value) でエクスポートする組込みプラグイン。
+# 値の取得は redis-cli -2 --json、正規化 + CSV 化は内部ヘルパ stfw plugin redis-encode-row。
+requires:
+  - redis-cli

@@ -104,6 +104,8 @@ BC 間の共有は ID とジャーナルイベントのみである。notify・H
 | `stfw plugin list` | なし | プロセスプラグイン名一覧（プロジェクト + 同梱の和集合・`_` 始まり除外・昇順） |
 | `stfw plugin install <type>` | type | プラグインの `bin/install/install` を実行。インストール済みは警告終了（exit 3） |
 | `stfw plugin mysql-tsv-to-csv` | なし（stdin→stdout） | 隠しコマンド。`mysql --batch` 出力を RFC4180 CSV へ変換する組込み RDBMS プラグイン用ヘルパ（§4.9） |
+| `stfw plugin redis-encode-row` | `--key/--type/--ttl`（stdin→stdout） | 隠しコマンド。redis 値を正規化し CSV 1 行へ変換する組込み Redis プラグイン用ヘルパ（§4.10） |
+| `stfw plugin redis-decode` | なし（stdin→stdout） | 隠しコマンド。export CSV を redis-cli コマンド列へ変換する組込み Redis プラグイン用ヘルパ（§4.10） |
 
 > 根拠: `internal/presentation/cli/*.go`（全コマンド定義）, `internal/domain/run/exitcode.go`, `internal/presentation/logger/logger.go`, `test/acceptance/testdata/script/{init,new,validate,status,report,inventory,secret,ssh_trust,plugin}.txtar`
 
@@ -388,6 +390,28 @@ Arrange（clear / import）と Collect（export）の組込みプラグイン。
 - プラグインの stdout / stderr は Masker 経由（`Masker.Wrap`。ロガー stderr と同一のシークレットレジストリを共有）でルーティングし、登録済みシークレットを `[secret]` へ置換する。個別シークレットの復号失敗（未移行の v0.2 形式等）は実行を止めずスキップする。
 
 > 根拠: `assets/plugins/process/{export,import,clear}{Mysql,Postgres}/`, `internal/repository/mysqlcsv.go`（`MySQLBatchTSVToCSV`）, `internal/presentation/logger/masker.go`（`secretRegistry` / `Wrap`）, `internal/usecase/secret/secret.go`（`RegisterAll`）, `internal/presentation/cli/{run,plugin}.go`, `test/acceptance/testdata/script/{rdbms_mysql,rdbms_postgres}.txtar`
+
+### 4.10 組込み KVS プラグイン（Redis: export / import / clear）
+
+KVS 系の Arrange / Collect プラグイン。`redis-cli` で TCP 直結し、接続情報は §4.7 の禁止契約に従い inventory / secret から解決する（config 直書き禁止）。RDBMS 系（§4.9）と同じ接続モデル（host_group→先頭ホスト、パスワードは secret `{host}-{user}`）。パスワードは `REDISCLI_AUTH` 環境変数で渡し、ACL ユーザーは `--user`、DB 番号は `-n`。
+
+**プラグイン一覧**（`assets/plugins/process/{export,import,clear}Redis`、requires: `redis-cli`）
+
+| タイプ | 処理 | 入出力 |
+|---|---|---|
+| exportRedis | `key_patterns[].match` ごとに `--scan` でキー列挙 → 各キーの type/ttl/値（`redis-cli -2 --json`）を `stfw plugin redis-encode-row` で正規化 + CSV 化 | `evidence/{host}/{name}.csv` |
+| importRedis | `{process}/data/{host}/{name}.csv` を `stfw plugin redis-decode` で redis-cli コマンド列へ変換し redis-cli 標準入力へ投入（各キーは DEL 後に再作成、ttl>0 は EXPIRE） | 入力 `{process}/data/{host}/{name}.csv` |
+| clearRedis | `key_patterns[].match` ごとに `--scan` で列挙したキーを DEL | — |
+
+**CSV 形式（`key,type,ttl,value`）と正規化**
+
+- 1 行目ヘッダー。`value` は type=string は生値、list/set/hash/zset は正規化 JSON（compare 安定性のため）。
+  - list: 順序保持の JSON 配列。set: 要素ソート済み配列。hash: field 昇順の JSON オブジェクト。zset: member 昇順の `[[member,score],...]`。
+- export/import はラウンドトリップ可能（import は type に応じて SET/RPUSH/SADD/HSET/ZADD を発行）。
+- 値の取得は `redis-cli -2 --json`（RESP2 のフラット配列 + JSON エスケープ）。正規化・CSV 化・逆変換は Go の `encoding/json` / `encoding/csv`（隠しコマンド `stfw plugin redis-encode-row` / `redis-decode`。後者は redis-cli のダブルクオート `\xNN` 形式でバイナリ安全にコマンド生成）。
+- **既知の制約**: 対象は UTF-8 テキスト値（バイナリ値は対象外）。`--scan` 出力は改行区切りのため、改行を含むキーは非対応。
+
+> 根拠: `assets/plugins/process/{export,import,clear}Redis/`, `internal/repository/rediscsv.go`（`RedisEncodeRow` / `RedisDecode` / `redisQuote`）, `internal/presentation/cli/plugin.go`（`redis-encode-row` / `redis-decode`）, `test/acceptance/testdata/script/rdbms_redis.txtar`
 
 ---
 
