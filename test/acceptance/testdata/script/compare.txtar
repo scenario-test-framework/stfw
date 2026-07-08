@@ -47,9 +47,12 @@ env STFW_TEST_CF_FAIL=0
 execcode 6 stfw run cmpng
 stderr 'mismatch detected'
 
-# --- エラーケース: expect が参照する収集 process の evidence が無い → exit 6 ---
+# --- エラーケース: expect が参照する収集 process の evidence が無い → exit 6。
+#     準備の先頭で result/ を掃除するため、早期失敗でも前回 run の古い比較結果は残らない ---
+exists scenario/cmperr/_10_99990101/_10_asrt_compare/result/CompareSummary.csv
 execcode 6 stfw run cmperr
 stderr 'evidence not found'
+! exists scenario/cmperr/_10_99990101/_10_asrt_compare/result/CompareSummary.csv
 
 # --- 空 evidence: evidence にファイルが無くても actual/{name} は作られ、
 #     expect のファイルは LeftOnly として mismatch になる ---
@@ -133,6 +136,9 @@ stfw:
 -- scenario/cmperr/_10_99990101/_10_asrt_compare/expect/_90_missing_scripts/host1/data.txt --
 hello
 world
+-- scenario/cmperr/_10_99990101/_10_asrt_compare/result/CompareSummary.csv --
+Status,Left,Right
+STALE,old,run
 -- scenario/cmpempty/metadata.yml --
 description:
 -- scenario/cmpempty/_10_99990101/metadata.yml --

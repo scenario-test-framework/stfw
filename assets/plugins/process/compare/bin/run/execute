@@ -58,8 +58,10 @@ if [ "${#entries[@]}" -eq 0 ]; then
   exit 6
 fi
 
-# actual/ を作り直し、各収集系 process の evidence/ 配下を file-level symlink で再現する。
-rm -rf "${actual_dir}"
+# 比較準備の先頭で actual/ と result/ を掃除する。以降の早期 exit (evidence 不在・
+# find 失敗・ln 失敗) で失敗しても、前回 run の古い比較結果が残らないようにする
+# (失敗時に古い成果物を今回の結果と誤認させない)。
+rm -rf "${actual_dir}" "${result_dir}"
 mkdir -p "${actual_dir}"
 for entry in "${entries[@]}"; do
   name="$(basename "${entry}")"
@@ -89,9 +91,6 @@ for entry in "${entries[@]}"; do
     fi
   done <<< "${filelist}"
 done
-
-# 前回の比較結果を掃除 (compare-files も outputDir を初期化するが明示的に消す)。
-rm -rf "${result_dir}"
 
 # 比較実行。cwd はプロセスディレクトリ (実行契約)。左=期待値 expect / 右=実績値 actual。
 "${bin}" -od "${result_dir}" "${expect_dir}" "${actual_dir}"
