@@ -66,7 +66,9 @@ while :; do
   tmp="${out}.tmp.$$"
   echo 'key,type,ttl,value' > "${tmp}"
 
-  if ! keys="$(redis-cli "${redis_opts[@]}" --scan --pattern "${match}")"; then
+  # SCAN の返却順は不定なため、CSV 行順を安定させるためキーをソートする
+  # (compare の安定性のため)。pipefail 有効で scan 失敗はパイプ全体の非 0 で検出。
+  if ! keys="$(redis-cli "${redis_opts[@]}" --scan --pattern "${match}" | sort)"; then
     echo "exportRedis: scan failed for pattern: ${match}" >&2
     rm -f "${tmp}"
     rc=6
@@ -77,22 +79,35 @@ while :; do
   # rc がループ外へ伝播する)。ループ内の redis-cli は stdin を読まない。
   while IFS= read -r key; do
     [ -z "${key}" ] && continue
-    type="$(redis-cli "${redis_opts[@]}" TYPE "${key}")"
+    if ! type="$(redis-cli "${redis_opts[@]}" TYPE "${key}")"; then
+      echo "exportRedis: TYPE failed for key ${key}" >&2
+      rc=6
+      continue
+    fi
     [ "${type}" = "none" ] && continue
-    ttl="$(redis-cli "${redis_opts[@]}" TTL "${key}")"
+    if ! ttl="$(redis-cli "${redis_opts[@]}" TTL "${key}")"; then
+      echo "exportRedis: TTL failed for key ${key}" >&2
+      rc=6
+      continue
+    fi
 
     case "${type}" in
-      string) val="$(redis-cli "${redis_opts[@]}" -2 --json GET "${key}")" ;;
-      list) val="$(redis-cli "${redis_opts[@]}" -2 --json LRANGE "${key}" 0 -1)" ;;
-      set) val="$(redis-cli "${redis_opts[@]}" -2 --json SMEMBERS "${key}")" ;;
-      hash) val="$(redis-cli "${redis_opts[@]}" -2 --json HGETALL "${key}")" ;;
-      zset) val="$(redis-cli "${redis_opts[@]}" -2 --json ZRANGE "${key}" 0 -1 WITHSCORES)" ;;
+      string) vcmd=(GET "${key}") ;;
+      list) vcmd=(LRANGE "${key}" 0 -1) ;;
+      set) vcmd=(SMEMBERS "${key}") ;;
+      hash) vcmd=(HGETALL "${key}") ;;
+      zset) vcmd=(ZRANGE "${key}" 0 -1 WITHSCORES) ;;
       *)
         echo "exportRedis: unsupported type ${type} for key ${key}" >&2
         rc=6
         continue
         ;;
     esac
+    if ! val="$(redis-cli "${redis_opts[@]}" -2 --json "${vcmd[@]}")"; then
+      echo "exportRedis: value fetch failed for key ${key}" >&2
+      rc=6
+      continue
+    fi
 
     if ! printf '%s' "${val}" | stfw plugin redis-encode-row \
         --key "${key}" --type "${type}" --ttl "${ttl}" >> "${tmp}"; then

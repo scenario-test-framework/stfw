@@ -43,6 +43,7 @@ fi
 export REDISCLI_AUTH="${password}"
 
 redis_opts=(-h "${host}" -p "${port}" -n "${db}" --no-auth-warning -e)
+[ -n "${user}" ] && redis_opts+=(--user "${user}")
 
 i=0
 while :; do

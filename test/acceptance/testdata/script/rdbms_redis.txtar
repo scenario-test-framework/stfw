@@ -26,6 +26,8 @@ exec cat ${WORK}/redis.log
 stdout 'DEL demo:h'
 stdout 'SET "u:1" "alice"'
 stdout 'DEL "u:1"'
+# importRedis も ACL --user を渡している
+stdout 'IMPORT user=appuser'
 
 # export 失敗 (redis-cli 非 0) は握りつぶさず exit 6
 env STFW_TEST_REDIS_FAIL=1
@@ -36,6 +38,10 @@ env STFW_TEST_REDIS_FAIL=0
 # import のソース CSV 不在は exit 6
 execcode 6 stfw run rimp
 stderr 'source csv not found'
+
+# per-key の redis-cli 失敗 (TTL 取得不可) を握りつぶさず exit 6
+execcode 6 stfw run rttlerr
+stderr 'TTL failed'
 
 # inventory list の失敗も握りつぶさず exit 6
 cp badstfw.yml stfw.yml
@@ -86,6 +92,10 @@ zset
 -1
 -- redisdata/demo:z.json --
 ["m2","2","m1","1"]
+-- redisdata/bad:1.type --
+string
+-- redisdata/bad:1.json --
+"x"
 -- demo.csv.golden --
 key,type,ttl,value
 demo:h,hash,100,"{""f1"":""v1"",""f2"":""v2""}"
@@ -161,16 +171,33 @@ stfw:
       user: appuser
       key_patterns:
         - name: missing
+-- scenario/rttlerr/metadata.yml --
+description:
+-- scenario/rttlerr/_10_99990101/metadata.yml --
+description:
+-- scenario/rttlerr/_10_99990101/_10_grp_exportRedis/metadata.yml --
+description:
+-- scenario/rttlerr/_10_99990101/_10_grp_exportRedis/config/config.yml --
+stfw:
+  process:
+    exportRedis:
+      host_group: kv
+      user: appuser
+      key_patterns:
+        - name: bad
+          match: 'bad:*'
 -- fakebin/redis-cli --
 #!/bin/bash
 # fake redis-cli: シードした keyspace を返し、DEL / import コマンドをログする。
 scan=0
 pattern='*'
+usr=""
 cmd=""
 args=()
 while [ $# -gt 0 ]; do
   case "$1" in
-    -h | -p | -n | --user) shift 2 ;;
+    -h | -p | -n) shift 2 ;;
+    --user) usr="$2"; shift 2 ;;
     --no-auth-warning | -2 | -3 | -e | --json | --raw | --no-raw) shift ;;
     --scan) scan=1; shift ;;
     --pattern) pattern="$2"; shift 2 ;;
@@ -187,6 +214,7 @@ if [ "${STFW_TEST_REDIS_FAIL:-0}" = "1" ]; then
 fi
 
 if [ "$scan" = "1" ]; then
+  # 返却順は実装側のソートを検証するため、あえてソートしない (readdir 順)。
   for f in "${STFW_TEST_REDIS}"/*.type; do
     [ -e "$f" ] || continue
     k="$(basename "$f" .type)"
@@ -194,16 +222,16 @@ if [ "$scan" = "1" ]; then
     case "$k" in
       $pattern) echo "$k" ;;
     esac
-  done | sort
+  done
   exit 0
 fi
 
 case "$cmd" in
-  TYPE) cat "${STFW_TEST_REDIS}/${args[0]}.type" ;;
-  TTL) cat "${STFW_TEST_REDIS}/${args[0]}.ttl" ;;
-  GET | LRANGE | SMEMBERS | HGETALL | ZRANGE) cat "${STFW_TEST_REDIS}/${args[0]}.json" ;;
+  TYPE) cat "${STFW_TEST_REDIS}/${args[0]}.type" || exit 1 ;;
+  TTL) cat "${STFW_TEST_REDIS}/${args[0]}.ttl" || exit 1 ;; # .ttl 不在時は非 0
+  GET | LRANGE | SMEMBERS | HGETALL | ZRANGE) cat "${STFW_TEST_REDIS}/${args[0]}.json" || exit 1 ;;
   DEL) echo "DEL ${args[0]}" >> "${STFW_TEST_REDIS_LOG}" ;;
-  "") cat >> "${STFW_TEST_REDIS_LOG}" ;;
+  "") echo "IMPORT user=${usr}" >> "${STFW_TEST_REDIS_LOG}"; cat >> "${STFW_TEST_REDIS_LOG}" ;;
   *) echo "redis: unsupported cmd $cmd" >&2; exit 1 ;;
 esac
 exit 0
