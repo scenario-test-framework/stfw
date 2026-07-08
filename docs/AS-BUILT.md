@@ -1,0 +1,568 @@
+# stfw v1.0 As-Built ドキュメント（実装契約仕様書）
+
+本書は stfw v1.0（Go 実装・ブランチ `feature/v1-go-rearch`）の **実装から起こした技術仕様書** です。
+すべての記述は実コード・テスト・ゴールデンファイルを根拠とし、各節末尾に「根拠」としてファイルパスを記載します。
+
+- 読者: stfw を利用するテスト担当者 / stfw を保守する開発者
+- 位置付け: 実装契約（互換境界・スキーマ・規約）の正確な定義の集約。利用手順は [README.md](../README.md)、v0.2 からの移行は [docs/MIGRATION.md](MIGRATION.md) を参照
+
+---
+
+## 1. システム概要とアーキテクチャ
+
+### 1.1 概要
+
+stfw は業務日付をまたぐシナリオテストをディレクトリ規約で記述し、単一バイナリで自動実行する CLI である。
+
+| 項目 | 内容 |
+|---|---|
+| 実装言語 | Go 1.26（`go.mod`: `go 1.26.4`） |
+| 配布形態 | 単一バイナリ（実行エンジン内包・常駐サービスなし・外部データストアなし） |
+| 主要依存 | cobra（CLI）, yaml.v3（設定）, filippo.io/age（暗号化）, OpenTelemetry SDK（OTLP）, smallstep/pkcs7（旧形式 secret 復号）, go-internal/testscript（受け入れテスト） |
+| 静的資産 | プロジェクトテンプレート・同梱プラグイン・デフォルト設定・HTML テンプレートを `go:embed` でバイナリに同梱（`assets/assets.go`） |
+| 永続化 | プロジェクトディレクトリ配下のファイルのみ（stfw.yml / journal.jsonl / age 暗号化ファイル / 静的 HTML） |
+| 実行モデル | 逐次実行のみ（1 実行 = 1 プロセス）。エラー時は後続の兄弟ノードを実行せず停止 |
+
+### 1.2 レイヤー構成（5 層モジュラモノリス）
+
+```mermaid
+graph TD
+P["presentation<br/>(cli / logger)"] --> U["usecase<br/>(initialize / scaffold / validate / runscenario /<br/>status / report / inventory / secret / sshtrust / plugin)"]
+U --> D["domain<br/>(scenario / run / notify / project — 標準ライブラリのみ)"]
+U --> R["repository<br/>(config / journal / scenariotree / plugin / hooks /<br/>secret / inventory / report / scaffold)"]
+R --> D
+R --> G["gateway<br/>(scriptexec / otlptrace / sshkeyscan / htmlwriter)"]
+```
+
+| レイヤー | 実パッケージ | 責務 |
+|---|---|---|
+| presentation | `internal/presentation/cli`, `internal/presentation/logger` | cobra によるコマンド・フラグ定義、終了コードへの変換、slog + マスキング Writer のセットアップ |
+| usecase | `internal/usecase/{initialize,scaffold,validate,runscenario,status,report,inventory,secret,sshtrust,plugin}` | ビジネスフロー制御。`runscenario` が実行オーケストレーション（ツリー走査 → スクリプト実行 → ジャーナル追記 → 投影）を担う |
+| domain | `internal/domain/{scenario,run,notify,project}` | 依存ゼロの純粋ロジック（値オブジェクト・状態遷移・イベント定義）。他レイヤー・外部ライブラリに依存しない |
+| repository | `internal/repository/*` | ファイルアクセス抽象（ドメインモデル ⇔ ファイル表現の変換） |
+| gateway | `internal/gateway/*` | Driven 側 I/O（外部プロセス起動・OTLP 送信・ssh-keyscan・HTML 書き出し） |
+
+レイヤー間はインターフェースを介さず直接依存する（IF なし・一方向依存のみ）。
+
+### 1.3 domain の BC（境界づけられたコンテキスト）分割
+
+| BC | パッケージ | 分類 | 内容 |
+|---|---|---|---|
+| scenario（シナリオ構造管理） | `internal/domain/scenario` | Core | ディレクトリ命名規約の値オブジェクト（Bizdate / Seq / Group / ScenarioName）、階層判定、走査規則を内包する ScenarioTree、規約違反 Violation |
+| run（実行管理） | `internal/domain/run` | Core | RunID / NodeID 導出、ジャーナルイベント定義、状態遷移（NodeStatus / StepStatus）、Run 集約（Apply / Replay）、終了コード |
+| notify（通知管理） | `internal/domain/notify` | Supporting | ジャーナルイベント → OTLP スパン記述への投影（Projector / Span）。OTel SDK には依存しない |
+| project（プロジェクト環境管理） | `internal/domain/project` | Supporting | プロジェクト識別（stfw.yml）、init / keygen / secret 保存の可否判定、inventory のホスト選択、secret ファイル名導出 |
+
+BC 間の共有は ID とジャーナルイベントのみである。notify・HTML レポートは run が発行するジャーナルイベントの投影であり、独自の状態を持たない。
+この構成は `docs/arch/latest/arch-design.md` のレイヤー依存図・コンテキストマップと一致する（相違点は本書末尾ではなく保守者向け完了報告に列挙）。
+
+> 根拠: `internal/` 配下パッケージ構成全体, `assets/assets.go`, `go.mod`, `docs/arch/latest/arch-design.md`（レイヤー依存図・BC 定義）
+
+---
+
+## 2. CLI リファレンス
+
+### 2.1 共通仕様
+
+| 項目 | 仕様 |
+|---|---|
+| バージョン | `stfw --version`。ビルド時に `-ldflags -X ...cli.Version=` で注入（未注入時 `1.0.0-dev`） |
+| グローバルフラグ | `-l, --log-level <error\|warn\|info\|debug\|trace>`（未指定時は stfw.yml の `stfw.loglevel`、不明値は info） |
+| ログ出力 | slog TextHandler を **stderr** へ出力（stdout はコマンド出力専用）。マスキング Writer（§9.4）を必ず経由する |
+| プロジェクトディレクトリ解決 | ① 環境変数 `STFW_PROJ_DIR` → ② カレントから上位への `stfw.yml` 探索 → ③ カレントディレクトリ（未初期化とみなす） |
+
+### 2.2 終了コード
+
+| コード | 定数 | 発生条件 |
+|---|---|---|
+| 0 | ExitSuccess | 正常終了。validate の警告のみの場合も 0 |
+| 3 | ExitWarn | `stfw plugin install` でインストール済みプラグインを再インストールした場合のみ（v0.2 互換） |
+| 6 | ExitError | 上記以外の全エラー（validate のエラー違反・run の失敗・引数パースエラーを含む） |
+
+この 0 / 3 / 6 の体系はプラグイン実行契約の終了コード（§4.6）と同一の定義（`run.ExitCode`）を共有する。
+
+### 2.3 コマンド一覧
+
+| コマンド | 引数・フラグ | 動作 |
+|---|---|---|
+| `stfw init` | なし | 同梱テンプレートをプロジェクトディレクトリへ展開（sample シナリオ・フック雛形・inventory・stfw.yml・.gitignore）。`stfw.yml` が既に存在する場合はエラー（再初期化禁止） |
+| `stfw new scenario <name>` | name | `{proj}/scenario/{name}/` を作成し `metadata.yml` を生成（冪等）。`scenario/` ディレクトリと stfw.yml の存在が前提 |
+| `stfw new bizdate <seq> <bizdate>` | seq, bizdate（YYYYMMDD） | カレントがシナリオディレクトリであることを要求。`_{seq}_{bizdate}/metadata.yml` を生成（冪等） |
+| `stfw new process <seq> <group> <type>` | seq, group, type | カレントが業務日付ディレクトリであることを要求。プラグインを解決し `_{seq}_{group}_{type}/` を**削除して作り直し**、プラグイン `template/` を展開 + `metadata.yml` 生成 |
+| `stfw validate [scenario...]` | 省略時は全シナリオ | ディレクトリ規約・プラグイン解決可否・`config/config.yml` 存在を静的検証。エラー違反があれば exit 6、警告のみは exit 0 |
+| `stfw run [-d, --dry-run] <scenario...>` | 1 つ以上のシナリオ名 | 内蔵ランナーで実行（§4, §5）。実行前に validate 相当の静的検証を自動実行。dry-run は execute / post_execute をスキップ |
+| `stfw status [run_id]` | 省略時は最新 run | ジャーナルをリプレイして階層ツリーとステータスを表示 |
+| `stfw report [run_id] [-o, --out <dir>]` | 省略時は最新 run / `.stfw/reports` | ジャーナルから HTML レポート（index.html + runs/{run_id}.html）を再生成 |
+| `stfw inventory list [group]` | 省略時は `all` | グループのホスト一覧を改行区切り出力（昇順・重複排除。未定義グループは空出力） |
+| `stfw inventory exists <group>` | group | グループの存在を `true` / `false` で出力 |
+| `stfw secret keygen [-f, --force]` | | age (X25519) キーペア生成。既存キーは `--force` 必須。受信者公開鍵（`age1...`）を stdout 出力 |
+| `stfw secret set [-f, --force] <host> <user> [password]` | password 省略時: 端末なら非エコー対話入力、パイプなら stdin 1 行 | age 暗号化して `config/passwd/{host}-{user}` へ保存。既存エントリは `--force` 必須 |
+| `stfw secret show <host> <user>` | | 復号して stdout へ表示（意図的な表示のためマスキング登録しない） |
+| `stfw secret migrate` | なし | v0.2 形式（openssl S/MIME）の secret を age へ一括変換（§9.2） |
+| `stfw ssh trust <host\|group>` | inventory グループ名 or 単一ホスト | SSH サーバキーを `~/.ssh/known_hosts` へ登録（§9.6） |
+| `stfw plugin list` | なし | プロセスプラグイン名一覧（プロジェクト + 同梱の和集合・`_` 始まり除外・昇順） |
+| `stfw plugin install <type>` | type | プラグインの `bin/install/install` を実行。インストール済みは警告終了（exit 3） |
+
+> 根拠: `internal/presentation/cli/*.go`（全コマンド定義）, `internal/domain/run/exitcode.go`, `internal/presentation/logger/logger.go`, `test/acceptance/testdata/script/{init,new,validate,status,report,inventory,secret,ssh_trust,plugin}.txtar`
+
+---
+
+## 3. ディレクトリ規約（互換境界 1）
+
+### 3.1 階層構造
+
+```
+{proj}/                                  # stfw.yml の存在がプロジェクトルートの識別条件
+└── scenario/                            # シナリオルート（固定名）
+    └── {scenario_name}/                 # シナリオ（深さ 2）
+        └── _{seq}_{bizdate}/            # 業務日付（深さ 3）
+            └── _{seq}_{group}_{type}/   # プロセス（深さ 4）
+                ├── config/config.yml    # プロセス設定（必須。validate がエラー検出）
+                ├── metadata.yml
+                └── scripts/             # scripts タイプのステップ配置先
+```
+
+階層判定は「プロジェクトルートからの相対深さ」で行う（scenario ルート = `scenario` そのもの、シナリオ = 深さ 2、業務日付 = 深さ 3、プロセス = 深さ 4）。
+
+### 3.2 値オブジェクトの検証規則
+
+| 要素 | 形式 | 検証規則（生成時に強制） |
+|---|---|---|
+| scenario_name | 任意文字列 | 空・`.`・`..`・パス区切り（`/` `\`）を禁止 |
+| seq | 数字列 | 半角数字のみ（1 文字以上）。先頭ゼロは保持（内部表現は文字列） |
+| bizdate | `YYYYMMDD` | 8 桁の半角数字 **かつ実在する日付**（`time.Parse("20060102")` が通ること）。v0.2 は桁数・数字のみの検査だったが v1.0 で実在日付検証を追加 |
+| group | 任意文字列 | 空・`_`・パス区切りを禁止（`_` 区切りパースの保護） |
+| process_type | 任意文字列 | 空・`_`・パス区切りを禁止 |
+
+### 3.3 ディレクトリ名のパース規則
+
+| 階層 | 形式 | パース |
+|---|---|---|
+| 業務日付 | `_{seq}_{bizdate}` | `_` で分割して 3 要素・先頭要素が空であること。seq / bizdate は上記の値オブジェクト検証を通す |
+| プロセス | `_{seq}_{group}_{type}` | `_` で分割して 4 要素・先頭要素が空であること。seq / group / type を検証 |
+
+v0.2 は `cut -d '_'` で切り出すのみだったが、v1.0 はパース後の値オブジェクト検証まで行う。
+
+### 3.4 走査規則（実行対象と実行順）
+
+- **`_` 始まりのディレクトリのみ** を実行対象とする（業務日付・プロセス階層に適用）
+- 実行順は **ディレクトリ名の昇順**（Go の文字列比較 = バイト順）
+- シナリオの実行順: `stfw run` で指定した順（重複除去）。指定なし（validate 等）は名前昇順
+- scripts のステップ: `scripts/` **直下のファイルのみ**（サブディレクトリは対象外・symlink はファイル実体なら対象）を名前昇順
+
+### 3.5 validate の検出項目
+
+| レベル | 検出内容 |
+|---|---|
+| error（exit 6） | 業務日付・プロセスディレクトリ名の形式違反 / プロセスタイプのプラグイン未解決（`process-plugin: {type} is not installed`）/ `config/config.yml` 不存在 |
+| warn（exit 0） | シナリオ配下に残存する `*.dig` ファイル（v1.0 では不要・削除推奨） |
+
+出力形式は 1 違反 1 行: `[{level}] {相対パス}: {メッセージ}`。同じ検証が `stfw run` の開始前にも自動実行され、エラー違反があれば run は開始されない。
+
+> 根拠: `internal/domain/scenario/{bizdate,seq,group,name,dirname,hierarchy,tree,violation}.go`, `internal/repository/scenariotree.go`, `internal/usecase/validate/validate.go`, `internal/usecase/runscenario/runscenario.go`（run 前検証）, `test/acceptance/testdata/script/validate.txtar`
+
+---
+
+## 4. プラグイン実行契約（互換境界 2）
+
+### 4.1 契約の骨子
+
+- 入力: 環境変数（§4.5）。プロセスの `env` は `os.Environ()` に契約変数（キー昇順）を追記したもの
+- 出力: リターンコード（0 = Success / 非 0 = Error。3 = Warn は体系上の予約だが、**ステップ・フェーズの成否判定は「0 か否か」**であり 3 も Error として扱われる）
+- 実装言語: 任意（実行可能ファイルを直接 exec する。shebang 解釈は OS に委ねる）
+
+### 4.2 プロセス 5 フェーズ
+
+プロセス 1 件の実行は次の順で進む:
+
+```
+setup（階層フック） → pre_execute → execute → post_execute → teardown（階層フック）
+```
+
+| 規則 | 内容 |
+|---|---|
+| dry-run | `execute` / `post_execute` をスキップ（`pre_execute`・setup / teardown フック・ステップの計画列挙は行う） |
+| setup 失敗 | プロセスを Error とし、**teardown も実行しない**（v0.2 互換） |
+| フェーズ失敗 | 非 0 の時点で後続フェーズを実行せず Error |
+| teardown 失敗 | プロセスの結果に影響しない（警告ログのみ） |
+| teardown への追加 env | `stfw_run_status`（`Success` / `Error`）と `stfw_process_retcode`（`0` / `6`） |
+
+プロジェクト独自プラグイン（type ≠ scripts）の場合:
+
+- エントリポイント: `{plugin}/bin/run/{pre_execute,execute,post_execute}`（作業ディレクトリは **プロセスディレクトリ**）
+- 実行前提: `{plugin}/bin/install/is_installed` を実行し **stdout が `true`**（exit 0）であること。満たさない場合はプロセス Error
+- プラグイン解決順: `{proj}/plugins/process/{type}` → 同梱 `assets/plugins/process/{type}`（プロジェクト優先）
+- 同梱プラグインは実行前に `.stfw/plugins/process/{type}/` へ展開（毎回削除して再展開。shebang `#!` 始まりのファイルには 0755 を付与）
+
+### 4.3 組込み scripts タイプ（Go ネイティブ実行）
+
+`scripts` タイプは同梱プラグイン解決時に外部スクリプトを呼ばず Go ネイティブで実行する（v0.2 scripts プラグインの移植）:
+
+1. **計画列挙**: `scripts/` 直下のファイル名を昇順で列挙し `steps_enumerated` イベントで全件 Pending 登録（dry-run でも行う。0 件なら列挙イベントなし）
+2. **setup フック** 実行（失敗時は teardown なしで Error）
+3. **pre_execute 相当**: `scripts/` 直下の実行権限がないファイルへ `+0755` を付与
+4. **execute**（dry-run 時スキップ）: ステップを昇順に逐次実行。作業ディレクトリは `scripts/`。exit 0 → `Success`、非 0 → `Error`（実行不能もエラー扱い・exit_code 6 で記録）。**エラー発生後の後続ステップは実行せず `Blocked` として記録**（Blocked 伝播）
+5. **post_execute 相当**: 何もしない（v0.2 も exit 0 のみ）
+6. **teardown フック** 実行（結果へ影響しない）
+
+プロジェクトに `plugins/process/scripts/` を置いた場合はプロジェクト側が優先解決され、exec 契約（§4.2）で実行される（ネイティブ実行は同梱解決時のみ）。
+
+### 4.4 階層フック
+
+| 項目 | 仕様 |
+|---|---|
+| 配置 | `{proj}/plugins/{run\|scenario\|bizdate\|process}/_common/{setup\|teardown}/` 直下のファイル（昇順・symlink follow） |
+| 実行タイミング | 各階層ノードの開始直後（setup）と終了直前（teardown）。process 階層は §4.2 / §4.3 の位置 |
+| 作業ディレクトリ | フックスクリプトの配置ディレクトリ |
+| setup 失敗 | 当該階層を Error とし子を実行しない |
+| teardown | run / scenario / bizdate 階層では **エラー時も必ず実行**（v0.2 の `_error` ハンドラ相当）。`stfw_run_status` を注入。teardown 失敗は当該階層を Error にする（process 階層のみ結果に影響しない） |
+| 未定義 | 正常（フックなしで続行） |
+
+実行順の全体像（正常系ゴールデン）:
+
+```
+run setup → scenario setup → bizdate setup → process setup
+  → (steps) → process teardown → bizdate teardown → scenario teardown → run teardown
+```
+
+### 4.5 公開環境変数の完全な一覧
+
+env 契約ゴールデンテスト（`test/acceptance/testdata/script/run_env.txtar` の `env_golden.txt`）で固定されている全変数:
+
+| 変数 | 値・意味 |
+|---|---|
+| `STFW_PROJ_DIR` | プロジェクトルートの絶対パス |
+| `STFW_PROJ_DIR_CONFIG` | `{proj}/config` |
+| `STFW_PROJ_DIR_DATA` | `{proj}/.stfw`（内部データディレクトリ） |
+| `STFW_PROJ_DIR_PLUGIN` | `{proj}/plugins` |
+| `STFW_VERSION` | stfw のバージョン文字列 |
+| `run_id` | 実行 ID（`_{yyyymmddhhmmss}_{pid}`） |
+| `run_mode` | `--run` / `--dry-run` |
+| `stfw_scenario_dir` | シナリオディレクトリ絶対パス（scenario 階層以下で注入） |
+| `stfw_scenario_name` | シナリオ名 |
+| `stfw_bizdate_dir` | 業務日付ディレクトリ絶対パス（bizdate 階層以下で注入） |
+| `stfw_bizdate_dirname` | 業務日付ディレクトリ名（`_{seq}_{bizdate}`） |
+| `stfw_bizdate_seq` | 業務日付の連番 |
+| `stfw_bizdate` | 業務日付（YYYYMMDD） |
+| `stfw_process_dir` | プロセスディレクトリ絶対パス（process 階層で注入） |
+| `stfw_process_dirname` | プロセスディレクトリ名（`_{seq}_{group}_{type}`） |
+| `stfw_process_seq` | プロセスの連番 |
+| `stfw_process_group` | プロセスのグループ名 |
+| `stfw_process_type` | プロセスタイプ（プラグイン名） |
+| `stfw_*`（設定フラット化） | stfw.yml + プラグイン設定チェーンのフラット化結果（§8）。例: `stfw_loglevel`, `stfw_timezone`, `stfw_project_version`, `stfw_process_scripts_some_key` |
+
+teardown フックのみに追加注入される変数:
+
+| 変数 | 値・意味 |
+|---|---|
+| `stfw_run_status` | 当該階層の確定ステータス（`Success` / `Error`）。run / scenario / bizdate / process の teardown で注入 |
+| `stfw_process_retcode` | process teardown のみ。`0`（Success）/ `6`（Error） |
+
+各階層の env は親階層の env を複製して階層コンテキストを追記したものであり、上位階層のフック（例: run setup）には下位の `stfw_scenario_*` 等は存在しない。`STFW_HOME` は廃止（単一バイナリ化のため代替なし）。
+
+### 4.6 終了コード体系（契約側）
+
+| コード | 意味 | ランナーの扱い |
+|---|---|---|
+| 0 | SUCCESS | Success |
+| 3 | WARN | **Error 扱い**（成否判定は 0 か否か。0 以外はすべて失敗として Blocked 伝播の起点になる） |
+| 6 | ERROR | Error |
+
+> 根拠: `internal/usecase/runscenario/{runscenario,process,env}.go`, `internal/gateway/scriptexec.go`, `internal/repository/{hooks,plugin}.go`, `assets/plugins/process/scripts/`（同梱 scripts プラグイン）, `test/acceptance/testdata/script/{run_env,run_success,run_error,run_dryrun,run_plugin}.txtar`
+
+---
+
+## 5. 実行ジャーナル
+
+### 5.1 配置とファイル形式
+
+| 項目 | 仕様 |
+|---|---|
+| パス | `.stfw/runs/{run_id}/journal.jsonl` |
+| 形式 | 追記専用 JSONL（1 イベント = 1 行）。イベントごとに `fsync`（実行中でもリプレイ可能） |
+| 作成 | run ディレクトリを `os.Mkdir`、ファイルを `O_CREATE\|O_EXCL`（0644）で新規作成。既存 run_id と衝突した場合は採番時刻を +1 秒ずつずらして最大 10 回まで再採番 |
+| 不変性 | イベントの訂正・削除は行わない。再実行は常に新しい run_id の別実行 |
+
+### 5.2 run_id / NodeID の導出規則
+
+| ID | 規則 |
+|---|---|
+| run_id | `_{yyyymmddhhmmss}_{pid}`（採番時刻 + プロセス ID）。パターン `^_\d{14}_\d+$`。v0.2 の `run_spec.uniq_id` と互換 |
+| NodeID | run_id にツリーのパスセグメントを `+` で連結: `{run_id}+run[+{scenario}[+{bizdate_dirname}[+{process_dirname}]]]`。深さは run=1 / scenario=2 / bizdate=3 / process=4 セグメント（run_id を除く）。セグメントに `+` `^` `/` `\` と空文字は使用不可 |
+| parent_id | NodeID の最後の `+` 以降を除いた文字列。run 階層の親は run_id 自身 |
+
+v0.2 の webhook_id 導出規則と同一（余分な `}` を付与していた v0.2 のバグは修正済み。digdag 廃止により `^sub` セグメントは含まれない）。
+
+### 5.3 イベントスキーマ
+
+イベント共通フィールド:
+
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `event` | string | イベント種別（下表の 4 種） |
+| `ts` | string | イベント時刻。ISO 8601 / 実行ホストのローカルタイムゾーン（`2006-01-02T15:04:05Z07:00`） |
+| `node_id` | string | 対象ノードの NodeID |
+
+種別ごとのフィールド（`omitempty` のため無関係のフィールドは行に現れない）:
+
+| event | 追加フィールド | 内容 |
+|---|---|---|
+| `node_start` | `parent_id`, `node_type`（`run\|scenario\|bizdate\|process`）, `attrs` | 階層の実行開始（Started）。attrs は階層別: run = `run_id` / `run_mode`（`--run` / `--dry-run`）/ `params`（指定シナリオ名の空白連結）、scenario = `name`、bizdate = `dirname` / `seq` / `bizdate`、process = `dirname` / `seq` / `group` / `process_type` |
+| `steps_enumerated` | `steps`（string 配列・実行順） | scripts プロセスのステップ全件を Pending 登録。Started な process ノードに 1 度だけ記録できる。空リスト・重複ステップ名は不正 |
+| `step_end`（Success / Error） | `step`, `status`, `exit_code`（int）, `start_ts`, `end_ts` | ステップの実行終了。start_ts / end_ts は実実行時間 |
+| `step_end`（Blocked） | `step`, `status`（=`Blocked`） | 先行エラーによる未実行。exit_code / start_ts / end_ts を持たない |
+| `node_end` | `status`（`Success` / `Error`） | 階層の実行終了 |
+
+### 5.4 状態遷移
+
+| 状態機械 | 遷移 |
+|---|---|
+| NodeStatus（階層: run / scenario / bizdate / process） | `Started → Success \| Error` のみ。終了状態からの再遷移は不正 |
+| StepStatus（scripts のステップ） | `Pending → Success \| Error \| Blocked` のみ |
+
+### 5.5 リプレイ時の再検証
+
+`stfw status` / `stfw report` / 実行中の投影は、すべて同一の `Run.Apply` を通してイベントを適用する。生成（実行）経路とリプレイ（復元）経路が同じ検証を共有するため、外部から編集された不正なジャーナルはリプレイ時に検出されエラーになる（`journal replay: journal line {n}: ...`）。検証内容:
+
+- NodeID の形式・run 所属・種別と深さの対応
+- node_start: 未開始ノードであること / parent_id が導出値と一致 / 親ノードが Started であること（run を除く）
+- steps_enumerated: Started な process ノードに 1 度だけ
+- step_end: 列挙済みステップの Pending からの正当な遷移
+- node_end: Started からの正当な遷移
+
+`ListRunIDs` は `.stfw/runs/` 直下の run_id 形式のディレクトリを昇順で返し、最新 run は昇順の末尾（= 採番時刻が最も新しいもの）。
+
+> 根拠: `internal/domain/run/{event,run,steps,status,runid,nodeid}.go`, `internal/repository/journal.go`, `internal/usecase/status/status.go`, `test/acceptance/testdata/script/{run_success,run_error,run_dryrun}.txtar` の `journal_golden.jsonl`
+
+---
+
+## 6. OTLP トレースエクスポート
+
+### 6.1 エクスポート設定の解決順
+
+| 優先 | 設定 | 挙動 |
+|---|---|---|
+| 1 | 環境変数 `OTEL_EXPORTER_OTLP_ENDPOINT` または `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | OTel SDK（otlptracehttp）の標準解決に委ねる（stfw はオプションを指定しない） |
+| 2 | stfw.yml の `stfw.otel.endpoint` | `WithEndpointURL` として使用。パス無し URL は `/v1/traces` が補完される |
+| 3 | どちらも未設定 | **TracerProvider を組み立てず一切送信しない** |
+
+プロトコルは OTLP/HTTP（`application/x-protobuf`）。リソース属性は `service.name=stfw`, `service.version={バージョン}`。
+
+### 6.2 スパンマッピング
+
+1 run = 1 トレース。ルート（run）の `node_end` でスパンツリー全体を確定し、開始順（親が先）でエクスポートする。step スパンは親 process スパンの直後に並ぶ。スパンの開始・終了時刻はジャーナルイベントの時刻と一致する。
+
+| 階層 | スパン名 | スパン属性 | スパンステータス |
+|---|---|---|---|
+| run | `stfw run` | `stfw.run_id`, `stfw.node.type`=`run`, `stfw.node.id`, `stfw.run.mode`（`run` / `dry-run` — `--` 接頭辞を除去して正規化） | Success → Ok / Error → Error |
+| scenario | シナリオ名 | `stfw.run_id`, `stfw.node.type`=`scenario`, `stfw.node.id` | 同上 |
+| bizdate | ディレクトリ名 | `stfw.run_id`, `stfw.node.type`=`bizdate`, `stfw.node.id`, `stfw.bizdate`, `stfw.seq` | 同上 |
+| process | ディレクトリ名 | `stfw.run_id`, `stfw.node.type`=`process`, `stfw.node.id`, `stfw.seq`, `stfw.group`, `stfw.process.type` | 同上 |
+| step（Success / Error） | スクリプト名 | `stfw.run_id`, `stfw.node.type`=`step`, `stfw.node.id`（`{process_node_id}+{step名}`）, `stfw.step.status`, `stfw.step.exit_code`（int64） | Success → Ok / Error → Error（メッセージ: `step {名} failed with exit_code {n}`） |
+| step（Blocked） | スクリプト名 | 同上（`stfw.step.status`=`Blocked`。exit_code なし） | **Unset**（未実行のため。開始 = 終了 = イベント時刻の点として記録） |
+
+Error スパンのステータスメッセージ（階層）: `{node_type} {name} finished with status Error`。
+未終了（node_end 未記録）のノードはスパンにしない。Pending の列挙（steps_enumerated）はスパンにしない。
+
+### 6.3 失敗時の扱い
+
+- 投影・送信の失敗は **警告ログのみで実行結果へ影響しない**（exporter のセットアップ失敗時は無効化して続行）
+- run 終了時に `ForceFlush` + `Shutdown` を **10 秒タイムアウト** で待つ（送信先が到達不能でもそれ以上待たない）。エラー時（run 失敗時）も flush する
+
+> 根拠: `internal/usecase/runscenario/otel.go`, `internal/domain/notify/{projector,span}.go`, `internal/gateway/otlptrace.go`, `internal/usecase/runscenario/otel_test.go`, `internal/domain/notify/projector_test.go`, `test/acceptance/testdata/script/run_otel.txtar`
+
+---
+
+## 7. HTML レポート
+
+### 7.1 生成タイミングと出力構成
+
+| 項目 | 仕様 |
+|---|---|
+| 実行中の増分生成 | run の `node_start` / process の `node_end` / run の `node_end` のたびに再生成（reporter がジャーナルイベントに連動）。生成失敗は警告ログのみで実行に影響しない |
+| オンデマンド生成 | `stfw report [run_id] [--out dir]`（ジャーナルからの投影を再実行） |
+| 出力先 | 既定 `.stfw/reports/`（`--out` で任意ディレクトリ） |
+| 出力ファイル | `index.html`（run 一覧・新しい run が先頭 = run_id 降順）+ `runs/{run_id}.html`(run 詳細: サマリ + 階層ツリー表 + ステップ行) |
+
+### 7.2 表示仕様
+
+- run 詳細: status / mode / params / start / end / processing time（`HH:MM:SS`。24 時間超は時をそのまま加算）+ ノード表（インデント = 12 + 深さ×24 px）。未実行ステップ（Pending / Blocked）は時刻欄が空
+- run 一覧: ジャーナルを読めない・run 階層イベントの無い run は `Unknown` として表示
+- 実行中判定: run 階層の `node_end` 未記録なら `Started`（InProgress）
+
+### 7.3 meta refresh・自己完結・原子的書き込み
+
+| 項目 | 仕様 |
+|---|---|
+| meta refresh | 実行中の run 詳細ページ、および実行中 run を含む index に `<meta http-equiv="refresh" content="5">` を挿入。終了後の再生成で外れる |
+| 自己完結 | inline CSS のみの静的 HTML（外部リソース・JS なし）。テンプレートはバイナリ同梱（`assets/report/*.tmpl`） |
+| 原子的書き込み | 同一ディレクトリに一時ファイルを書いてから `rename` で置き換え（nginx 等の同時配信中でも壊れたページを見せない） |
+| パーミッション | 公開前に **0644 へ chmod**（別ユーザーの配信プロセスが読めるようにする） |
+
+> 根拠: `internal/usecase/runscenario/reporter.go`, `internal/repository/report.go`, `internal/gateway/htmlwriter.go`, `assets/report/{index,run}.html.tmpl`, `internal/domain/run/duration.go`, `test/acceptance/testdata/script/report.txtar`
+
+---
+
+## 8. 設定（stfw.yml）
+
+### 8.1 上書きチェーン
+
+| 対象 | 順序（後勝ち） |
+|---|---|
+| プロジェクト設定 | 同梱デフォルト（`assets/config/stfw.yml`）→ プロジェクト `{proj}/stfw.yml`（無ければデフォルトのみで動作） |
+| プラグイン設定（プロセス実行時に追加注入） | プラグイン `{plugin}/config.yml` → プロジェクト `{proj}/config/plugins/process/{type}/config.yml` → プロセス `{process_dir}/config/config.yml` |
+
+### 8.2 env フラット化規則（v0.2 export_yaml 互換）
+
+- map はキーを `_` で連結: `stfw.loglevel` → `stfw_loglevel`
+- list は添字を付与: `stfw.sample.list[0]` → `stfw_sample_list_0`
+- 値中の `${VAR}` は **環境変数で展開**（未定義は空文字。bash の `source` と同挙動）
+- null 値は空文字
+- フラット化結果の全キーが実行時 env として全スクリプトへ公開される
+
+### 8.3 キー一覧
+
+同梱デフォルト（`assets/config/stfw.yml`）:
+
+| キー | デフォルト | 実装が直接参照するか |
+|---|---|---|
+| `stfw.loglevel` | `info` | ○（ログレベル。`--log-level` が優先） |
+| `stfw.timezone` | `Asia/Tokyo` | ×（env 公開のみ。ジャーナル・レポートの時刻はプロセスのローカルタイムゾーン） |
+
+プロジェクトテンプレート（`stfw init` が生成する `stfw.yml`）が追加で持つキー:
+
+| キー | テンプレート値 | 実装が直接参照するか |
+|---|---|---|
+| `stfw.project_version` | `0.1.0` | ×（env 公開のみ） |
+| `stfw.inventory` | `staging.yml` | ○（`stfw inventory` / `ssh trust` が読む inventory ファイル名） |
+| `stfw.otel.endpoint` | コメントアウト | ○（OTLP 送信先。§6.1） |
+| `stfw.sample.*` | サンプル | ×（フラット化のデモ） |
+
+上記以外の任意のキーも定義でき、フラット化されて env として公開される。
+
+### 8.4 廃止キー警告
+
+`stfw_server_` で始まるキー（v0.2 の `stfw.server.*`）が存在する場合、読み込み時に警告を 1 回出力する:
+`stfw.server.* は v1.0 で廃止されました (実行エンジン内包化により digdag server は不要です)`。設定値は実行に影響しない。
+v0.2 の `stfw.webhooks.*` は警告なしで読み飛ばされる（env としてフラット化公開はされる）。
+
+> 根拠: `internal/repository/config.go`, `assets/config/stfw.yml`, `assets/template/stfw.yml`, `internal/repository/plugin.go`（ProcessConfigEnv）, `test/acceptance/testdata/script/{run_env,run_plugin}.txtar`
+
+---
+
+## 9. secret / inventory / ssh trust
+
+### 9.1 secret（age 形式）
+
+| 項目 | 仕様 |
+|---|---|
+| 暗号方式 | age（X25519）。保存は ASCII armor 形式（`-----BEGIN AGE ENCRYPTED FILE-----`）+ 末尾改行 |
+| キーペア | `config/encrypt/key.txt`（秘密鍵・0600・age-keygen 互換レイアウト: コメント 2 行 + 鍵 1 行）/ `config/encrypt/key.txt.pub`（受信者公開鍵・0644） |
+| secret ファイル | `config/passwd/{host}-{user}`（0600）。`host` / `user` 中の `:` は `_` へ置換。空・パス区切り・`.` `..` は拒否 |
+| 再生成・上書き抑止 | keygen は既存 `key.txt` があれば `--force` 必須。set は既存エントリがあれば `--force` 必須（v0.2 互換） |
+| 空パスワード | 拒否（`password must not be empty`） |
+
+### 9.2 旧形式（v0.2）からの migrate
+
+| 項目 | 仕様 |
+|---|---|
+| 旧形式判定 | ファイル先頭が `-----BEGIN PKCS7-----`（openssl `smime -encrypt -outform PEM` の出力） |
+| 復号 | 旧 RSA キーペア `config/encrypt/encrypt_key`（X.509 証明書）+ `config/encrypt/decrypt_key`（PKCS#8。PKCS#1 にもフォールバック）で S/MIME CMS EnvelopedData を復号 |
+| 変換 | 復号値の末尾改行を除去（v0.2 の `echo \|` 由来）→ age で再暗号化。変換元は `{name}.bak` へ退避。`.bak` は一覧・以降の処理から除外 |
+| 前提 | 事前に `stfw secret keygen` 済みであること。age 形式のファイルはスキップ |
+| 旧形式の直接読込 | `secret show` 等は復号せずエラー（`run \`stfw secret migrate\` first` を案内） |
+
+### 9.3 マスキング仕様
+
+- 全ログ出力（stderr）は Masker（io.Writer ラッパ）を経由し、登録済みシークレット文字列を `[secret]` へ置換する
+- 初期登録: 環境変数 `PASSWORD` / `TOKEN` の値（設定されている場合。v0.2 互換）
+- 追加登録: `secret set` の入力値、`secret migrate` の復号値
+- `secret show` の出力は意図的な表示のため登録しない
+
+### 9.4 inventory
+
+| 項目 | 仕様 |
+|---|---|
+| 配置 | `config/inventory/{stfw.inventory で指定したファイル名}`（テンプレート既定: `staging.yml`） |
+| 形式（v0.2 互換） | `stfw_inventory:` 直下に `- {group}:` → ホスト（IP / ホスト名）のリスト |
+| 同名グループ | ホストをマージ |
+| `all` | 全グループ横断の予約グループ名 |
+| 出力規則 | ホストは昇順・重複排除・空要素除外（v0.2 の `sort \| uniq` 互換） |
+| exists 判定 | ホスト取得結果の有無で判定（定義済みでも空のグループは `false`） |
+
+```yaml
+stfw_inventory:
+  - web:
+    - 127.0.0.1
+    - localhost
+  - ap:
+    - 127.0.0.1
+```
+
+### 9.5 ssh trust
+
+| 手順 | 内容 |
+|---|---|
+| 1. 対象解決 | 引数が inventory の存在するグループならグループ内全ホスト、そうでなければ単一ホスト（inventory が読めない場合も単一ホスト扱い） |
+| 2. 登録済み判定 | `~/.ssh/known_hosts` の行にホスト文字列が **部分一致** で含まれればスキップ（正常終了・v0.2 互換） |
+| 3. 旧キー削除 | `ssh-keygen -R <host>`（出力破棄） |
+| 4. 再登録 | `ssh-keyscan <host>` の stdout を `~/.ssh/known_hosts` へ追記（ディレクトリ 0700 / ファイル 0600 で作成） |
+
+> 根拠: `internal/domain/project/{secret,inventory}.go`, `internal/repository/{secret,inventory}.go`, `internal/usecase/{secret/secret.go,sshtrust/sshtrust.go}`, `internal/gateway/sshkeyscan.go`, `internal/presentation/logger/masker.go`, `test/acceptance/testdata/script/{secret,secret_migrate,ssh_trust,inventory}.txtar`
+
+---
+
+## 10. 配布と実行環境
+
+### 10.1 バイナリ配布（GoReleaser）
+
+| 項目 | 仕様 |
+|---|---|
+| 対応プラットフォーム | linux / darwin × amd64 / arm64、windows / amd64（windows/arm64 は除外） |
+| ビルド | `CGO_ENABLED=0`, `-trimpath`, `-ldflags "-s -w -X ...cli.Version={{.Version}}"` |
+| アーカイブ | `stfw_{version}_{os}_{arch}.tar.gz`（windows は zip）。LICENSE / README.md / docs/MIGRATION.md を同梱 |
+| チェックサム | `checksums.txt` |
+| リリース先 | GitHub Releases（`scenario-test-framework/stfw`） |
+
+### 10.2 Docker image
+
+| 項目 | 仕様 |
+|---|---|
+| ベース | ビルド: `golang:1.26` → 実行: `debian:bookworm-slim` |
+| 追加パッケージ | bash, curl, openssh-client, ca-certificates（プラグイン契約が任意言語スクリプト実行のため distroless にしない） |
+| ユーザー | `stfw`（uid 1000）。`/work/.stfw/reports` を事前作成し所有権を付与 |
+| 実行 | `WORKDIR /work`, `ENTRYPOINT ["stfw"]` |
+| 配布 | `ghcr.io/scenario-test-framework/stfw`（タグ: `latest` + semver。linux/amd64 + linux/arm64） |
+
+### 10.3 compose.yaml（HTML レポート配信つき）
+
+| サービス | 役割 |
+|---|---|
+| `stfw` | CLI 実行用（`profiles: ["cli"]` で常駐対象外。`docker compose run --rm stfw ...`）。カレントを `/work` に、named volume `reports` を `/work/.stfw/reports` にマウント |
+| `reports-init` | one-shot で `reports` volume を `chown 1000:1000`（nginx が先に起動しても stfw が書けるようにする。nginx は `service_completed_successfully` に依存） |
+| `nginx` | `nginx:1-alpine`。`reports` volume を `/reports` に **読み取り専用（:ro）** マウントし 8080→80 で配信（`root /reports; index index.html; autoindex on`。設定は compose の `configs` インライン定義） |
+
+### 10.4 GitHub Actions（3 ワークフロー）
+
+| ワークフロー | トリガー | 内容 |
+|---|---|---|
+| `ci.yml` | pull_request | golangci-lint + `go build ./...` + `go test ./...` |
+| `build.yml` | push（master） | `go vet` + `go test` + GoReleaser snapshot（成果物を 7 日保持の artifact 化）+ Docker build（push なし） |
+| `release.yml` | tag `v*` | `go test` + GoReleaser release（GitHub Releases）+ Docker multi-arch build & push（ghcr.io へ semver + latest） |
+
+> 根拠: `.goreleaser.yaml`, `Dockerfile`, `compose.yaml`, `.github/workflows/{ci,build,release}.yml`
+
+---
+
+## 11. v0.2 からの主な変更
+
+詳細は [docs/MIGRATION.md](MIGRATION.md) を参照。要点のみ:
+
+- **全面再実装**（Bash + digdag → Go 単一バイナリ）。維持される互換境界は (1) ディレクトリ規約（§3）と (2) プラグイン実行契約（env + リターンコード 0/3/6、§4）
+- **webhook 通知の廃止** → OTLP トレースエクスポートへ置換（§6。属性マッピング表は MIGRATION.md 参照）
+- **dig 生成の廃止** → `stfw validate` の静的検証へ昇格。`stfw server` / digdag 系コマンドの廃止
+- コマンド体系の整理（`scenario -i` → `new scenario` 等。対応表は MIGRATION.md）
+- secret の保存形式を openssl S/MIME → age (X25519) へ変更（`stfw secret migrate` で一括変換、§9.2）
+- `STFW_HOME` の廃止、bizdate の実在日付検証の追加、run_id 採番規則は互換維持
+
+> 根拠: `docs/MIGRATION.md`, `README.md`
