@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/scenario-test-framework/stfw/internal/domain/run"
+	"github.com/scenario-test-framework/stfw/internal/repository"
 	"github.com/scenario-test-framework/stfw/internal/usecase/plugin"
 )
 
@@ -17,8 +18,28 @@ func newPluginCmd(a *app) *cobra.Command {
 	cmd.AddCommand(
 		newPluginListCmd(a),
 		newPluginInstallCmd(a),
+		newPluginMysqlCSVCmd(a),
 	)
 	return cmd
+}
+
+// newPluginMysqlCSVCmd は組込み RDBMS プラグイン (exportMysql) が利用する
+// 内部ヘルパ。`mysql --batch` のタブ区切り出力を stdin で受け、RFC 4180 準拠の
+// CSV を stdout へ書き出す。エンドユーザー向けではないため隠しコマンドとする。
+func newPluginMysqlCSVCmd(a *app) *cobra.Command {
+	return &cobra.Command{
+		Use:    "mysql-tsv-to-csv",
+		Short:  "convert `mysql --batch` output to RFC4180 CSV (internal plugin helper)",
+		Hidden: true,
+		Args:   cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := repository.MySQLBatchTSVToCSV(cmd.InOrStdin(), cmd.OutOrStdout()); err != nil {
+				a.log.Error(err.Error())
+				return &exitError{code: run.ExitError, err: err}
+			}
+			return nil
+		},
+	}
 }
 
 func newPluginListCmd(a *app) *cobra.Command {

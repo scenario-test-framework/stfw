@@ -1,0 +1,68 @@
+#!/bin/bash
+# importMysql: ヘッダー付き CSV を MySQL のテーブルへインポートする (Arrange)。
+#
+# 設定 (config.yml の stfw.process.importMysql): host_group / port / database / user / tables
+# 入力: ${stfw_process_dir}/data/{database}/{table}.csv (exportMysql 出力形式)
+# 処理: LOAD DATA LOCAL INFILE で CSV を投入する (ヘッダー 1 行スキップ、NULL は \N)。
+#
+# 接続情報 (ホスト/パスワード) は inventory / secret から解決し config に直書きしない。
+set -uo pipefail
+
+data_root="${stfw_process_dir}/data"
+host_group="${stfw_process_importMysql_host_group:-}"
+port="${stfw_process_importMysql_port:-3306}"
+database="${stfw_process_importMysql_database:-}"
+user="${stfw_process_importMysql_user:-}"
+rc=0
+
+if [ -z "${host_group}" ] || [ -z "${database}" ] || [ -z "${user}" ]; then
+  echo "importMysql: host_group / database / user are required" >&2
+  exit 6
+fi
+
+if ! hosts="$(stfw inventory list "${host_group}")"; then
+  echo "importMysql: inventory list failed for group: ${host_group}" >&2
+  exit 6
+fi
+# RDBMS は単一 DB サーバを対象とする。複数解決時は先頭ホストを使い警告する。
+# shellcheck disable=SC2086
+set -- ${hosts}
+host="${1:-}"
+if [ -z "${host}" ]; then
+  echo "importMysql: no host resolved for group: ${host_group}" >&2
+  exit 6
+fi
+if [ "$#" -gt 1 ]; then
+  echo "importMysql: group ${host_group} resolves to multiple hosts; using ${host}" >&2
+fi
+
+if ! password="$(stfw secret show "${host}" "${user}")"; then
+  echo "importMysql: secret not found: ${host}-${user}" >&2
+  exit 6
+fi
+
+i=0
+while :; do
+  t_var="stfw_process_importMysql_tables_${i}"
+  table="${!t_var:-}"
+  [ -z "${table}" ] && break
+  i=$((i + 1))
+
+  src="${data_root}/${database}/${table}.csv"
+  if [ ! -f "${src}" ]; then
+    echo "importMysql: source csv not found: ${src}" >&2
+    rc=6
+    continue
+  fi
+
+  load_sql="LOAD DATA LOCAL INFILE '${src}' INTO TABLE \`${table}\`"
+  load_sql="${load_sql} FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"'"
+  load_sql="${load_sql} LINES TERMINATED BY '\n' IGNORE 1 LINES"
+  if ! MYSQL_PWD="${password}" mysql --local-infile=1 --host="${host}" --port="${port}" \
+      --user="${user}" --database="${database}" --execute="${load_sql}"; then
+    echo "importMysql: import failed: ${database}.${table}" >&2
+    rc=6
+  fi
+done
+
+exit ${rc}

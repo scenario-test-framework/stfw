@@ -1,0 +1,4 @@
+# exportPostgres: PostgreSQL のテーブルをヘッダー付き CSV でエクスポートする組込みプラグイン。
+# psql の \copy が RFC4180 CSV をネイティブ出力するため変換ヘルパは不要。
+requires:
+  - psql

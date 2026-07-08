@@ -1,0 +1,3 @@
+# importPostgres: ヘッダー付き CSV を PostgreSQL のテーブルへインポートする組込みプラグイン。
+requires:
+  - psql

@@ -1,0 +1,75 @@
+#!/bin/bash
+# exportMysql: MySQL のテーブルをヘッダー付き CSV でエクスポートする。
+#
+# 設定 (config.yml の stfw.process.exportMysql):
+#   host_group : 接続先 DB ホストを解決する inventory グループ名
+#   port       : MySQL ポート
+#   database   : 対象データベース名
+#   user       : 接続ユーザー (secret {host}-{user} でパスワード解決)
+#   tables     : エクスポート対象テーブル名のリスト
+#
+# 処理: mysql --batch で SELECT した結果 (タブ区切り) を stfw の内部ヘルパ
+#   `stfw plugin mysql-tsv-to-csv` で RFC4180 CSV へ変換して出力する。
+# 出力: ${stfw_process_dir}/evidence/{database}/{table}.csv (エビデンス規約)
+#
+# 接続情報 (ホスト/パスワード) は inventory / secret から解決し config に直書きしない。
+set -uo pipefail
+
+evidence_root="${stfw_process_dir}/evidence"
+host_group="${stfw_process_exportMysql_host_group:-}"
+port="${stfw_process_exportMysql_port:-3306}"
+database="${stfw_process_exportMysql_database:-}"
+user="${stfw_process_exportMysql_user:-}"
+rc=0
+
+if [ -z "${host_group}" ] || [ -z "${database}" ] || [ -z "${user}" ]; then
+  echo "exportMysql: host_group / database / user are required" >&2
+  exit 6
+fi
+
+if ! hosts="$(stfw inventory list "${host_group}")"; then
+  echo "exportMysql: inventory list failed for group: ${host_group}" >&2
+  exit 6
+fi
+# RDBMS は単一 DB サーバを対象とする。複数解決時は先頭ホストを使い警告する。
+# shellcheck disable=SC2086
+set -- ${hosts}
+host="${1:-}"
+if [ -z "${host}" ]; then
+  echo "exportMysql: no host resolved for group: ${host_group}" >&2
+  exit 6
+fi
+if [ "$#" -gt 1 ]; then
+  echo "exportMysql: group ${host_group} resolves to multiple hosts; using ${host}" >&2
+fi
+
+if ! password="$(stfw secret show "${host}" "${user}")"; then
+  echo "exportMysql: secret not found: ${host}-${user}" >&2
+  exit 6
+fi
+
+destdir="${evidence_root}/${database}"
+mkdir -p "${destdir}"
+
+i=0
+while :; do
+  t_var="stfw_process_exportMysql_tables_${i}"
+  table="${!t_var:-}"
+  [ -z "${table}" ] && break
+  i=$((i + 1))
+
+  out="${destdir}/${table}.csv"
+  tmp="${out}.tmp.$$"
+  # pipefail 有効。mysql か変換ヘルパのいずれかが失敗すればパイプは非 0。
+  if MYSQL_PWD="${password}" mysql --batch --host="${host}" --port="${port}" \
+      --user="${user}" --database="${database}" \
+      --execute="SELECT * FROM \`${table}\`" | stfw plugin mysql-tsv-to-csv > "${tmp}"; then
+    mv "${tmp}" "${out}"
+  else
+    echo "exportMysql: export failed: ${database}.${table}" >&2
+    rm -f "${tmp}"
+    rc=6
+  fi
+done
+
+exit ${rc}

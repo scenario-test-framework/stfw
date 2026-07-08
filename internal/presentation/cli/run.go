@@ -7,6 +7,7 @@ import (
 
 	"github.com/scenario-test-framework/stfw/internal/domain/run"
 	"github.com/scenario-test-framework/stfw/internal/usecase/runscenario"
+	"github.com/scenario-test-framework/stfw/internal/usecase/secret"
 )
 
 func newRunCmd(a *app) *cobra.Command {
@@ -18,7 +19,16 @@ func newRunCmd(a *app) *cobra.Command {
 			"--dry-run は execute / post_execute をスキップする (setup / teardown と計画列挙は行う)。",
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			err := runscenario.Run(a.log, cmd.OutOrStdout(), cmd.ErrOrStderr(),
+			// プラグインが `stfw secret show` で取得したパスワードを万一出力へ
+			// 漏らしてもマスクされるよう、実行前に全シークレットを Masker へ登録する。
+			if err := secret.RegisterAll(a.log, a.projDir, a.masker.Register); err != nil {
+				a.log.Warn("failed to register secrets for masking", "err", err.Error())
+			}
+			// プラグイン stdout/stderr を Masker 経由にして、登録済みシークレットを
+			// 出力から除去する (ロガーと同一のシークレットレジストリを共有)。
+			out := a.masker.Wrap(cmd.OutOrStdout())
+			errOut := a.masker.Wrap(cmd.ErrOrStderr())
+			err := runscenario.Run(a.log, out, errOut,
 				a.projDir, a.config, Version, args, dryRun, time.Now)
 			if err != nil {
 				a.log.Error(err.Error())

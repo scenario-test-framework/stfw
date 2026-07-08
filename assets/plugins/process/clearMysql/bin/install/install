@@ -1,0 +1,3 @@
+#!/bin/bash
+# clearMysql は mysql クライアントの存在のみが要件で、プロビジョニングは不要。
+exit 0

@@ -1,0 +1,71 @@
+#!/bin/bash
+# exportPostgres: PostgreSQL のテーブルをヘッダー付き CSV でエクスポートする。
+#
+# 設定 (config.yml の stfw.process.exportPostgres):
+#   host_group / port / database / user / tables
+#
+# 処理: psql の \copy (クライアント側ファイル出力) で RFC4180 CSV を直接書き出す。
+#   NULL は '\N' で表現し空文字と区別する (SPEC-013-01)。
+# 出力: ${stfw_process_dir}/evidence/{database}/{table}.csv (エビデンス規約)
+#
+# 接続情報 (ホスト/パスワード) は inventory / secret から解決し config に直書きしない。
+set -uo pipefail
+
+evidence_root="${stfw_process_dir}/evidence"
+host_group="${stfw_process_exportPostgres_host_group:-}"
+port="${stfw_process_exportPostgres_port:-5432}"
+database="${stfw_process_exportPostgres_database:-}"
+user="${stfw_process_exportPostgres_user:-}"
+rc=0
+
+if [ -z "${host_group}" ] || [ -z "${database}" ] || [ -z "${user}" ]; then
+  echo "exportPostgres: host_group / database / user are required" >&2
+  exit 6
+fi
+
+if ! hosts="$(stfw inventory list "${host_group}")"; then
+  echo "exportPostgres: inventory list failed for group: ${host_group}" >&2
+  exit 6
+fi
+# RDBMS は単一 DB サーバを対象とする。複数解決時は先頭ホストを使い警告する。
+# shellcheck disable=SC2086
+set -- ${hosts}
+host="${1:-}"
+if [ -z "${host}" ]; then
+  echo "exportPostgres: no host resolved for group: ${host_group}" >&2
+  exit 6
+fi
+if [ "$#" -gt 1 ]; then
+  echo "exportPostgres: group ${host_group} resolves to multiple hosts; using ${host}" >&2
+fi
+
+if ! password="$(stfw secret show "${host}" "${user}")"; then
+  echo "exportPostgres: secret not found: ${host}-${user}" >&2
+  exit 6
+fi
+
+destdir="${evidence_root}/${database}"
+mkdir -p "${destdir}"
+
+i=0
+while :; do
+  t_var="stfw_process_exportPostgres_tables_${i}"
+  table="${!t_var:-}"
+  [ -z "${table}" ] && break
+  i=$((i + 1))
+
+  out="${destdir}/${table}.csv"
+  tmp="${out}.tmp.$$"
+  copy="\\copy (SELECT * FROM \"${table}\") TO '${tmp}' WITH (FORMAT csv, HEADER true, NULL '\\N')"
+  if PGPASSWORD="${password}" psql --host="${host}" --port="${port}" \
+      --username="${user}" --dbname="${database}" \
+      --set=ON_ERROR_STOP=1 --no-psqlrc --quiet --command="${copy}"; then
+    mv "${tmp}" "${out}"
+  else
+    echo "exportPostgres: export failed: ${database}.${table}" >&2
+    rm -f "${tmp}"
+    rc=6
+  fi
+done
+
+exit ${rc}

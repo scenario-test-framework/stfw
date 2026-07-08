@@ -1,0 +1,4 @@
+#!/bin/bash
+# エビデンスルートを作成する (エビデンスディレクトリ規約)。
+set -uo pipefail
+mkdir -p "${stfw_process_dir}/evidence"

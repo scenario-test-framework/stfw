@@ -1,0 +1,17 @@
+# clearPostgres の既定設定。プロジェクト側 config で上書きする。
+#
+# host_group : 接続先 DB ホストを解決する inventory グループ名 (末尾 group で許可)
+# port       : PostgreSQL ポート
+# database   : 対象データベース名
+# user       : 接続ユーザー (パスワードは secret {host}-{user} で解決)
+# tables     : truncate 対象テーブル名のリスト
+#
+# 接続情報 (ホスト・パスワード) を config に直書きしてはならない (禁止契約)。
+stfw:
+  process:
+    clearPostgres:
+      host_group: ""
+      port: "5432"
+      database: ""
+      user: ""
+      tables: []

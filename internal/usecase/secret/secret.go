@@ -70,6 +70,36 @@ func Show(out io.Writer, projDir, host, user string) error {
 	return nil
 }
 
+// RegisterAll は config/passwd/ 配下の全シークレットを復号し、その値を
+// register (Masker への登録) へ渡す。stfw run の開始時に呼び、プラグインが
+// `stfw secret show` で取得したパスワードを万一 stdout/stderr へ漏らしても
+// マスクされるようにする (プラグインは別プロセスのため、実行側で事前登録する)。
+//
+// 個別シークレットの復号失敗 (未移行の v0.2 形式等) は実行を止めず、
+// ログに記録してスキップする。age キー未生成時は登録対象なしとして何もしない。
+func RegisterAll(log *slog.Logger, projDir string, register func(secret string)) error {
+	if !repository.AgeKeyExists(projDir) {
+		return nil
+	}
+	names, err := repository.ListSecretNames(projDir)
+	if err != nil {
+		return fmt.Errorf("register secrets: %w", err)
+	}
+	registered := 0
+	for _, name := range names {
+		plain, err := repository.LoadSecret(projDir, name)
+		if err != nil {
+			// 未移行の v0.2 形式などは復号できない。実行は継続する。
+			log.Debug("skip secret registration (decrypt failed)", "file", name, "err", err.Error())
+			continue
+		}
+		register(plain)
+		registered++
+	}
+	log.Debug("secrets registered for masking", "registered", registered, "total", len(names))
+	return nil
+}
+
 // Migrate は config/passwd/ 配下の v0.2 形式 (S/MIME PEM) ファイルを
 // 旧 RSA キーペアで復号し、age で再暗号化する。変換元は {name}.bak へ退避する。
 // 復号値は register (Masker への登録) を経由させ、ログへの漏洩を防ぐ。

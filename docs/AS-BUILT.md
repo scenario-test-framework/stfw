@@ -103,6 +103,7 @@ BC 間の共有は ID とジャーナルイベントのみである。notify・H
 | `stfw ssh trust <host\|group>` | inventory グループ名 or 単一ホスト | SSH サーバキーを `~/.ssh/known_hosts` へ登録（§9.6） |
 | `stfw plugin list` | なし | プロセスプラグイン名一覧（プロジェクト + 同梱の和集合・`_` 始まり除外・昇順） |
 | `stfw plugin install <type>` | type | プラグインの `bin/install/install` を実行。インストール済みは警告終了（exit 3） |
+| `stfw plugin mysql-tsv-to-csv` | なし（stdin→stdout） | 隠しコマンド。`mysql --batch` 出力を RFC4180 CSV へ変換する組込み RDBMS プラグイン用ヘルパ（§4.9） |
 
 > 根拠: `internal/presentation/cli/*.go`（全コマンド定義）, `internal/domain/run/exitcode.go`, `internal/presentation/logger/logger.go`, `test/acceptance/testdata/script/{init,new,validate,status,report,inventory,secret,ssh_trust,plugin}.txtar`
 
@@ -302,7 +303,7 @@ teardown フックのみに追加注入される変数:
 
 `evidence/` / `actual/` / `result/` はプロジェクトテンプレートの `.gitignore` で除外する（`expect/` のみ git 管理）。パス構築・検証は `internal/domain/evidence`（絶対パス再現時のトラバーサルは常に `evidence/{host}/` 配下に収まる）が担う。
 
-> 実装状況: 本節はプラグイン契約の**基盤**（P1）を記述する。収集系プラグイン本体（collectFile / collectLog）は §4.8（P2）で実装済み。データストア系（export / import / clear）・compare・invoke は後続マイルストーン（P3〜P6）で実装する。secret の値解決結果を Masker へ登録する経路は、消費側プラグイン（データストア系）と env 露出契約を確定する P3 で実装する。
+> 実装状況: 本節はプラグイン契約の**基盤**（P1）を記述する。収集系プラグイン本体（collectFile / collectLog）は §4.8（P2）、RDBMS 系（export / import / clear × MySQL / PostgreSQL）と secret 値の Masker 登録経路は §4.9（P3）で実装済み。compare・invoke は後続マイルストーン（P4〜P6）で実装する。
 
 > 根拠: `internal/usecase/runscenario/{runscenario,process,env}.go`, `internal/gateway/{scriptexec,lookpath}.go`, `internal/repository/{hooks,plugin,pluginmeta,evidence,config}.go`, `internal/domain/evidence/evidence.go`, `assets/plugins/process/scripts/`（同梱 scripts プラグイン）, `assets/template/.gitignore`, `test/acceptance/testdata/script/{run_env,run_success,run_error,run_dryrun,run_plugin,plugin_contract}.txtar`
 
@@ -341,6 +342,49 @@ inventory は後方互換で**文字列ホスト**と**構造化エントリ（`
 - `install` / `is_installed` にはプラグイン設定（config.yml + プロジェクト上書き。プロセス非依存の `PluginConfigEnv`）も公開され、`logfilter_version` / `logfilter_arches` 等を参照できる。
 
 > 根拠: `assets/plugins/process/{collectFile,collectLog}/`, `internal/repository/{inventory,plugin}.go`（inventory arch / `PluginCacheDir` / `PluginConfigEnv`）, `internal/usecase/plugin/plugin.go`（`InitAll` / `provisionEnv`）, `internal/usecase/inventory/inventory.go`（`Arch`）, `internal/presentation/cli/{init,inventory}.go`, `test/acceptance/testdata/script/{collect_file,collect_log,plugin_init}.txtar`
+
+### 4.9 組込み RDBMS プラグイン（export / import / clear × MySQL / PostgreSQL）と secret マスキング
+
+Arrange（clear / import）と Collect（export）の組込みプラグイン。DB クライアント（`mysql` / `psql`）で TCP 直結し、接続情報は §4.7 の禁止契約に従い inventory / secret から解決する（config 直書き禁止）。SSH は使わない。
+
+**接続モデル**
+
+| 要素 | 解決元 | 備考 |
+|---|---|---|
+| ホスト | config `host_group` → `stfw inventory list {host_group}` の**先頭ホスト** | RDBMS は単一 DB サーバ対象。複数解決時は先頭を使い stderr へ警告 |
+| ポート | config `port`（MySQL 既定 3306 / PostgreSQL 既定 5432） | |
+| データベース | config `database` | |
+| ユーザー | config `user` | |
+| パスワード | `stfw secret show {host} {user}` | `MYSQL_PWD` / `PGPASSWORD` 環境変数でクライアントへ渡す（コマンドライン非露出） |
+| テーブル | config `tables[]` | 各テーブルを添字ループで処理 |
+
+**プラグイン一覧**（`assets/plugins/process/{export,import,clear}{Mysql,Postgres}`、requires: MySQL=`mysql` / PostgreSQL=`psql`）
+
+| タイプ | 処理 | 入出力 |
+|---|---|---|
+| exportMysql | `mysql --batch` で `SELECT * FROM t` → `stfw plugin mysql-tsv-to-csv` で RFC4180 CSV 変換 | `evidence/{database}/{table}.csv` |
+| exportPostgres | `psql \copy (SELECT * FROM t) TO ... WITH (FORMAT csv, HEADER, NULL '\N')`（ネイティブ RFC4180） | `evidence/{database}/{table}.csv` |
+| importMysql | `LOAD DATA LOCAL INFILE ... FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' IGNORE 1 LINES` | 入力 `{process}/data/{database}/{table}.csv` |
+| importPostgres | `psql \copy t FROM ... WITH (FORMAT csv, HEADER, NULL '\N')` | 入力 `{process}/data/{database}/{table}.csv` |
+| clearMysql | `TRUNCATE TABLE t` | — |
+| clearPostgres | `TRUNCATE TABLE t`（`ON_ERROR_STOP=1`） | — |
+
+- CSV は 1 行目ヘッダー・NULL は `\N`（空文字と区別、mysqldump 慣行）。export / import はラウンドトリップ可能。
+- 入力 CSV（import）は `{process}/data/{database}/{table}.csv`（テスト作者が用意・git 管理）。ソース不在・DB クライアント非 0 は exit 6。
+- テーブルループは添字を**読み取り直後にインクリメント**し、`continue` でも無限ループしない（P2 の教訓）。
+
+**MySQL CSV 変換ヘルパ（`stfw plugin mysql-tsv-to-csv`、隠しコマンド）**
+
+- `mysql --batch` のタブ区切り出力（エスケープ `\n` `\t` `\0` `\\`、SQL NULL は文字列 `NULL`、行区切り LF）を stdin で受け、Go の `encoding/csv` で RFC4180 CSV へ変換して stdout へ出力する。
+- NULL 判定: データ行のフィールドが完全一致 `NULL` なら `\N` を出力。ヘッダー行は NULL 判定せず un-escape のみ。
+- 既知の制約（mysql クライアント出力の本質的な非可逆性。`client/mysql.cc` の `safe_put_field` で確認）: SQL NULL と文字列 `"NULL"` は `--batch` 出力上区別できず、両者を NULL（`\N`）として扱う。PostgreSQL は `\copy` がネイティブに区別するためこの制約はない。
+
+**secret 値の Masker 登録経路（P1 で先送りした事項）**
+
+- `stfw run` は実行前に `secret.RegisterAll` で config/passwd 配下の全シークレットを復号し Masker へ登録する（プラグインは別プロセスのため、`stfw secret show` で得たパスワードを実行側で事前登録する）。
+- プラグインの stdout / stderr は Masker 経由（`Masker.Wrap`。ロガー stderr と同一のシークレットレジストリを共有）でルーティングし、登録済みシークレットを `[secret]` へ置換する。個別シークレットの復号失敗（未移行の v0.2 形式等）は実行を止めずスキップする。
+
+> 根拠: `assets/plugins/process/{export,import,clear}{Mysql,Postgres}/`, `internal/repository/mysqlcsv.go`（`MySQLBatchTSVToCSV`）, `internal/presentation/logger/masker.go`（`secretRegistry` / `Wrap`）, `internal/usecase/secret/secret.go`（`RegisterAll`）, `internal/presentation/cli/{run,plugin}.go`, `test/acceptance/testdata/script/{rdbms_mysql,rdbms_postgres}.txtar`
 
 ---
 
