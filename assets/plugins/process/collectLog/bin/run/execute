@@ -37,8 +37,17 @@ while :; do
   user_var="stfw_process_collectLog_targets_${i}_user"
   user="${!user_var:-}"
 
-  for host in $(stfw inventory list "${group}"); do
-    arch="$(stfw inventory arch "${host}")"
+  if ! hosts="$(stfw inventory list "${group}")"; then
+    echo "collectLog: inventory list failed for group: ${group}" >&2
+    rc=6
+    continue
+  fi
+  for host in ${hosts}; do
+    if ! arch="$(stfw inventory arch "${host}")"; then
+      echo "collectLog: failed to resolve arch for host: ${host}" >&2
+      rc=6
+      continue
+    fi
     if [ -z "${arch}" ]; then
       echo "collectLog: arch is not set for host in inventory: ${host}" >&2
       rc=6

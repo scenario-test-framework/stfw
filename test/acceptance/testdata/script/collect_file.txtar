@@ -30,11 +30,22 @@ env STFW_TEST_SSH_FAIL=1
 execcode 6 stfw run demo
 stderr 'ssh failed'
 
+# inventory list の失敗 (inventory ファイル不在) も握りつぶさず失敗させる
+env STFW_TEST_SSH_FAIL=0
+cp badstfw.yml stfw.yml
+execcode 6 stfw run demo
+stderr 'inventory list failed'
+
 -- stfw.yml --
 stfw:
   project_version: 0.1.0
   loglevel: "info"
   inventory: staging.yml
+-- badstfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  inventory: missing.yml
 -- config/inventory/staging.yml --
 stfw_inventory:
   - web:

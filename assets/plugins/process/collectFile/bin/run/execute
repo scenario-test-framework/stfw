@@ -25,7 +25,12 @@ while :; do
   user_var="stfw_process_collectFile_targets_${i}_user"
   user="${!user_var:-}"
 
-  for host in $(stfw inventory list "${group}"); do
+  if ! hosts="$(stfw inventory list "${group}")"; then
+    echo "collectFile: inventory list failed for group: ${group}" >&2
+    rc=6
+    continue
+  fi
+  for host in ${hosts}; do
     if ! password="$(stfw secret show "${host}" "${user}")"; then
       echo "collectFile: secret not found: ${host}-${user}" >&2
       rc=6
