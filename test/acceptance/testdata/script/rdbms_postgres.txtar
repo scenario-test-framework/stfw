@@ -24,7 +24,7 @@ cmp scenario/pg/_10_99990101/_30_grp_exportPostgres/evidence/pgdb/t1.csv t1.csv.
 # clear / import が期待した SQL / \copy を発行している
 exec cat ${WORK}/psql.log
 stdout 'TRUNCATE TABLE "t1"'
-stdout '\\copy "t1" FROM'
+stdout 'COPY "t1" FROM STDIN'
 # 識別子内のダブルクオートが二重化エスケープされている
 stdout 'TRUNCATE TABLE "t""x"'
 
@@ -156,19 +156,22 @@ fi
 # マスキング検証用にあえてパスワードを stderr へ出す
 echo "psql connect pw=${PGPASSWORD:-}" >&2
 case "$cmd" in
-  '\copy ('*)
-    # export: \copy (SELECT * FROM "t") TO 'path' WITH (...)
+  'COPY ('*)
+    # export: COPY (SELECT * FROM "t") TO STDOUT WITH (...) → シードを stdout へ
     table="$(printf '%s' "$cmd" | grep -oE 'FROM "[^"]+"' | head -n1 | sed -E 's/FROM "([^"]+)"/\1/')"
-    to="$(printf '%s' "$cmd" | sed -E "s/.* TO '([^']+)'.*/\1/")"
     f="${STFW_TEST_PGDB}/${db}/${table}.csv"
     if [ -f "$f" ]; then
-      cp "$f" "$to"
+      cat "$f"
     else
       echo "psql: no such table ${table}" >&2
       exit 1
     fi
     ;;
-  '\copy '*) echo "$cmd" >> "${STFW_TEST_PSQL_LOG}" ;;
+  'COPY '*)
+    # import: COPY "t" FROM STDIN WITH (...) → stdin を消費してログ
+    cat > /dev/null
+    echo "$cmd" >> "${STFW_TEST_PSQL_LOG}"
+    ;;
   'TRUNCATE TABLE'*) echo "$cmd" >> "${STFW_TEST_PSQL_LOG}" ;;
   *)
     echo "psql: unsupported command: $cmd" >&2

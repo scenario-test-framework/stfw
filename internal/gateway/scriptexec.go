@@ -20,7 +20,13 @@ func RunScript(workDir, script string, env []string, stdout, stderr io.Writer) (
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 
-	if err := cmd.Run(); err != nil {
+	err := cmd.Run()
+	// stdout/stderr が行バッファ方式の Masker 等の場合、スクリプト完了時点で
+	// 未改行の残りを出力させ、後続ログとの出力順が崩れないようにする。
+	flushWriter(stdout)
+	flushWriter(stderr)
+
+	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
 			return exitErr.ExitCode(), nil
@@ -28,4 +34,11 @@ func RunScript(workDir, script string, env []string, stdout, stderr io.Writer) (
 		return -1, fmt.Errorf("script exec: %s: %w", script, err)
 	}
 	return 0, nil
+}
+
+// flushWriter は w が Flush() を持つ場合に呼ぶ (行バッファ方式の Masker 等)。
+func flushWriter(w io.Writer) {
+	if f, ok := w.(interface{ Flush() error }); ok {
+		_ = f.Flush()
+	}
 }

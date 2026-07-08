@@ -55,14 +55,14 @@ while :; do
     continue
   fi
 
-  # 識別子はダブルクオート内のダブルクオートを二重化、ファイルパスは SQL 文字列
-  # リテラル内のシングルクオートを二重化してエスケープする。
+  # 識別子はダブルクオート内のダブルクオートを二重化してエスケープする。
+  # 入力ファイルパスは SQL に載せず、COPY ... FROM STDIN をシェルリダイレクトで
+  # 与える (psql メタコマンド \copy のパス解釈=バックスラッシュ等を回避)。
   t_esc="$(printf '%s' "${table}" | sed 's/"/""/g')"
-  src_esc="$(printf '%s' "${src}" | sed "s/'/''/g")"
-  copy="\\copy \"${t_esc}\" FROM '${src_esc}' WITH (FORMAT csv, HEADER true, NULL '\\N')"
+  copy="COPY \"${t_esc}\" FROM STDIN WITH (FORMAT csv, HEADER true, NULL '\\N')"
   if ! PGPASSWORD="${password}" psql --host="${host}" --port="${port}" \
       --username="${user}" --dbname="${database}" \
-      --set=ON_ERROR_STOP=1 --no-psqlrc --quiet --command="${copy}"; then
+      --set=ON_ERROR_STOP=1 --no-psqlrc --quiet --command="${copy}" < "${src}"; then
     echo "importPostgres: import failed: ${database}.${table}" >&2
     rc=6
   fi

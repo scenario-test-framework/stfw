@@ -363,9 +363,9 @@ Arrange（clear / import）と Collect（export）の組込みプラグイン。
 | タイプ | 処理 | 入出力 |
 |---|---|---|
 | exportMysql | `mysql --batch` で `SELECT * FROM t` → `stfw plugin mysql-tsv-to-csv` で RFC4180 CSV 変換 | `evidence/{database}/{table}.csv` |
-| exportPostgres | `psql \copy (SELECT * FROM t) TO ... WITH (FORMAT csv, HEADER, NULL '\N')`（ネイティブ RFC4180） | `evidence/{database}/{table}.csv` |
+| exportPostgres | `psql COPY (SELECT * FROM t) TO STDOUT WITH (FORMAT csv, HEADER, NULL '\N')` をシェルリダイレクトで受ける（ネイティブ RFC4180） | `evidence/{database}/{table}.csv` |
 | importMysql | `LOAD DATA LOCAL INFILE ... FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' IGNORE 1 LINES` | 入力 `{process}/data/{database}/{table}.csv` |
-| importPostgres | `psql \copy t FROM ... WITH (FORMAT csv, HEADER, NULL '\N')` | 入力 `{process}/data/{database}/{table}.csv` |
+| importPostgres | `psql COPY t FROM STDIN WITH (FORMAT csv, HEADER, NULL '\N')` をシェルリダイレクトで与える | 入力 `{process}/data/{database}/{table}.csv` |
 | clearMysql | `TRUNCATE TABLE t` | — |
 | clearPostgres | `TRUNCATE TABLE t`（`ON_ERROR_STOP=1`） | — |
 
@@ -373,7 +373,8 @@ Arrange（clear / import）と Collect（export）の組込みプラグイン。
 - 入力 CSV（import）は `{process}/data/{database}/{table}.csv`（テスト作者が用意・git 管理）。ソース不在・DB クライアント非 0 は exit 6。
 - **MySQL import の制約**: `LOAD DATA LOCAL INFILE` は既定で `ESCAPED BY '\\'` のため、`\N`→NULL は正しく解釈される一方、RFC4180 CSV（バックスラッシュを特別扱いしない）中の**リテラルのバックスラッシュを含む値**は MySQL のエスケープ解釈で変化し得る。厳密なラウンドトリップはバックスラッシュを含まないデータで保証される（PostgreSQL の `\copy` はこの制約を受けない）。RFC4180 と LOAD DATA の本質的な非整合。
 - テーブルループは添字を**読み取り直後にインクリメント**し、`continue` でも無限ループしない（P2 の教訓）。
-- SQL 組み立て時、テーブル名は識別子クオート（MySQL=バッククオート / PostgreSQL=ダブルクオート）内でクオート文字を二重化、ファイルパスは SQL 文字列リテラル内のシングルクオートを二重化してエスケープする（`'` を含むシナリオ名・テーブル名でも壊れない）。
+- SQL 組み立て時、テーブル名は識別子クオート（MySQL=バッククオート / PostgreSQL=ダブルクオート）内でクオート文字を二重化してエスケープする。ファイルパスについては、PostgreSQL は `COPY ... TO STDOUT / FROM STDIN` をシェルリダイレクトで扱いパスを SQL に載せない（psql メタコマンド `\copy` のバックスラッシュ解釈を回避）。MySQL import は LOAD DATA のパスを SQL 文字列リテラルとしてバックスラッシュ（MySQL のエスケープ文字）→シングルクオートの順に二重化する（`'`・`\` を含むシナリオ名・テーブル名でも壊れない）。
+- プラグイン stdout/stderr は行バッファ方式の Masker を通すため、`gateway.RunScript` が各スクリプト完了時に Flush し、未改行の出力が後続ログより遅れて出力順が崩れないようにする。
 
 **MySQL CSV 変換ヘルパ（`stfw plugin mysql-tsv-to-csv`、隠しコマンド）**
 

@@ -29,6 +29,8 @@ stdout 'LOAD DATA LOCAL INFILE'
 stdout 'INTO TABLE `t1`'
 # 識別子内のバッククオートが二重化エスケープされている
 stdout 'TRUNCATE TABLE `t``x`'
+# ファイルパス内のバックスラッシュが SQL 文字列として二重化されている (identifier 側は単一のまま)
+stdout 't\\\\x\.csv'
 
 # export 失敗 (mysql 非 0) は握りつぶさず exit 6
 env STFW_TEST_MYSQL_FAIL=1
@@ -99,9 +101,13 @@ stfw:
       user: appuser
       tables:
         - t1
+        - 't\x'
 -- scenario/db/_10_99990101/_20_grp_importMysql/data/testdb/t1.csv --
 id,name,note
 1,Alice,hello
+-- scenario/db/_10_99990101/_20_grp_importMysql/data/testdb/t\x.csv --
+id,name,note
+9,Zoe,world
 -- scenario/db/_10_99990101/_30_grp_exportMysql/metadata.yml --
 description:
 -- scenario/db/_10_99990101/_30_grp_exportMysql/config/config.yml --

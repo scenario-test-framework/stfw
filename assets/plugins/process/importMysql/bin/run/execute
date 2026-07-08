@@ -55,10 +55,11 @@ while :; do
     continue
   fi
 
-  # 識別子はバッククオート内のバッククオートを二重化、ファイルパスは SQL 文字列
-  # リテラル内のシングルクオートを二重化してエスケープする。
+  # 識別子はバッククオート内のバッククオートを二重化。ファイルパスは SQL 文字列
+  # リテラルとして、バックスラッシュ (MySQL のエスケープ文字) を先に二重化してから
+  # シングルクオートを二重化する。
   t_esc="$(printf '%s' "${table}" | sed 's/`/``/g')"
-  src_esc="$(printf '%s' "${src}" | sed "s/'/''/g")"
+  src_esc="$(printf '%s' "${src}" | sed -e 's/\\/\\\\/g' -e "s/'/''/g")"
   load_sql="LOAD DATA LOCAL INFILE '${src_esc}' INTO TABLE \`${t_esc}\`"
   load_sql="${load_sql} FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"'"
   load_sql="${load_sql} LINES TERMINATED BY '\n' IGNORE 1 LINES"
