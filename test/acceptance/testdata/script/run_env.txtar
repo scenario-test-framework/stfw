@@ -27,7 +27,8 @@ stfw:
 printenv | grep -e '^STFW_' -e '^stfw_' -e '^run_' | LC_ALL=C sort |
   sed -e "s|${STFW_PROJ_DIR}|PROJ_DIR|g" \
       -e "s|${run_id}|RUN_ID|g" \
-      -e "s|${STFW_VERSION}|VERSION|g" >"${STFW_PROJ_DIR}/env_dump.txt"
+      -e "s|${STFW_VERSION}|VERSION|g" \
+      -e "s|^stfw_bizdate_start_ts=.*|stfw_bizdate_start_ts=START_TS|" >"${STFW_PROJ_DIR}/env_dump.txt"
 exit 0
 -- env_golden.txt --
 STFW_PROJ_DIR=PROJ_DIR
@@ -41,6 +42,7 @@ stfw_bizdate=99990101
 stfw_bizdate_dir=PROJ_DIR/scenario/envtest/_10_99990101
 stfw_bizdate_dirname=_10_99990101
 stfw_bizdate_seq=10
+stfw_bizdate_start_ts=START_TS
 stfw_loglevel=info
 stfw_process_dir=PROJ_DIR/scenario/envtest/_10_99990101/_10_pre_scripts
 stfw_process_dirname=_10_pre_scripts

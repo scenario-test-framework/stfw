@@ -1,0 +1,89 @@
+# STEP: プラグイン契約基盤 (plugin.yml requires / 接続情報の直書き禁止)
+# - requires: 前提コマンド欠落を validate は警告 (exit 0) / run は実行前ゲートで error
+# - 接続情報 (host / password 等) の config 直書きは validate・run 双方で error
+
+# --- requires: 前提コマンド欠落 ---
+# validate は実行環境依存のため警告に留める (exit 0)
+exec stfw validate needs
+stdout 'required command not found: stfw_missing_cmd_xyz'
+
+# run は実行前ゲートで fail-fast (exit != 0)。ジャーナルは作成しない
+! exec stfw run needs
+stdout 'required command not found: stfw_missing_cmd_xyz'
+stderr 'missing required command'
+! exists .stfw/runs
+
+# --- 接続情報の直書き禁止 ---
+# 設定は環境非依存の静的性質のため validate は error (exit 6)
+! exec stfw validate conns
+stdout '接続情報を直書き'
+stdout 'password'
+stderr 'validation failed'
+
+# run も実行前ゲートで error
+! exec stfw run conns
+stdout '接続情報を直書き'
+stderr 'forbidden connection config'
+
+# host_group (末尾が group) は接続情報直書きに該当しない
+exec stfw validate okgroup
+! stdout '接続情報を直書き'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  timezone: "Asia/Tokyo"
+-- plugins/process/needcmd/plugin.yml --
+requires:
+  - stfw_missing_cmd_xyz
+-- plugins/process/needcmd/config.yml --
+stfw:
+  process:
+    needcmd:
+      key: v
+-- plugins/process/conns/config.yml --
+stfw:
+  process:
+    conns:
+      host_group: db
+      password: secret123
+-- plugins/process/okgroup/config.yml --
+stfw:
+  process:
+    okgroup:
+      host_group: db
+      user: app
+-- scenario/needs/metadata.yml --
+description:
+-- scenario/needs/_10_99990101/metadata.yml --
+description:
+-- scenario/needs/_10_99990101/_10_grp_needcmd/metadata.yml --
+description:
+-- scenario/needs/_10_99990101/_10_grp_needcmd/config/config.yml --
+stfw:
+  process:
+    needcmd:
+      x: y
+-- scenario/conns/metadata.yml --
+description:
+-- scenario/conns/_10_99990101/metadata.yml --
+description:
+-- scenario/conns/_10_99990101/_10_grp_conns/metadata.yml --
+description:
+-- scenario/conns/_10_99990101/_10_grp_conns/config/config.yml --
+stfw:
+  process:
+    conns:
+      x: y
+-- scenario/okgroup/metadata.yml --
+description:
+-- scenario/okgroup/_10_99990101/metadata.yml --
+description:
+-- scenario/okgroup/_10_99990101/_10_grp_okgroup/metadata.yml --
+description:
+-- scenario/okgroup/_10_99990101/_10_grp_okgroup/config/config.yml --
+stfw:
+  process:
+    okgroup:
+      x: y

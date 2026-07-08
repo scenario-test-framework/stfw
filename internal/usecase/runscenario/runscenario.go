@@ -48,6 +48,32 @@ func Run(log *slog.Logger, out, errOut io.Writer, projDir string, cfg *repositor
 		return fmt.Errorf("validation failed: %d error(s), %d warning(s)", errs, warns)
 	}
 
+	// プラグインのランタイム依存 (plugin.yml requires) の実行前ゲート。
+	// 実行環境に前提コマンドが無ければプラグインは必ず失敗するため、
+	// 実行を開始せず fail-fast する (validate では警告に留めるのと対の扱い)。
+	missing, err := repository.CheckPluginRequires(projDir, tree.ProcessTypes())
+	if err != nil {
+		return err
+	}
+	if len(missing) > 0 {
+		for _, m := range missing {
+			fmt.Fprintf(out, "error: process-plugin %s: required command not found: %s\n", m.ProcessType, m.Command)
+		}
+		return fmt.Errorf("missing required command(s) for %d plugin dependency(ies)", len(missing))
+	}
+
+	// 接続情報の直書き禁止 (グループ名参照の徹底) を実行前に静的検証する。
+	forbidden, err := repository.CheckForbiddenConnConfig(projDir, tree.ScenarioViews())
+	if err != nil {
+		return err
+	}
+	if len(forbidden) > 0 {
+		for _, f := range forbidden {
+			fmt.Fprintf(out, "error: %s: config で接続情報を直書きしています (%s)\n", f.ProcessPath, f.Key)
+		}
+		return fmt.Errorf("forbidden connection config in %d place(s)", len(forbidden))
+	}
+
 	// run_id 採番 + ジャーナル作成。同一秒・同一プロセスの再実行 (テスト等) で
 	// run_id が衝突した場合は採番時刻をずらして再採番する。
 	runID := run.NewRunID(now(), os.Getpid())
@@ -223,7 +249,8 @@ func (r *runner) runBizdate(parent run.NodeID, scenarioDir string, view scenario
 		"seq":     view.Seq,
 		"bizdate": view.Bizdate,
 	}
-	if err := r.emit(run.NewNodeStartEvent(r.now(), nodeID, run.NodeTypeBizdate, attrs)); err != nil {
+	startTS := r.now()
+	if err := r.emit(run.NewNodeStartEvent(startTS, nodeID, run.NodeTypeBizdate, attrs)); err != nil {
 		return "", err
 	}
 
@@ -233,6 +260,10 @@ func (r *runner) runBizdate(parent run.NodeID, scenarioDir string, view scenario
 	env["stfw_bizdate_dirname"] = view.DirName
 	env["stfw_bizdate_seq"] = view.Seq
 	env["stfw_bizdate"] = view.Bizdate
+	// stfw_bizdate_start_ts は業務日付ノードの node_start 時刻 (RFC3339)。
+	// 収集系プラグインが「この業務日付の実行開始以降に発生したログ」を
+	// 絞り込む基準として使う (プラグイン env 契約の一部)。
+	env["stfw_bizdate_start_ts"] = startTS.Format(time.RFC3339)
 
 	status := run.NodeSuccess
 	if !r.runHooks(run.NodeTypeBizdate, "setup", env) {

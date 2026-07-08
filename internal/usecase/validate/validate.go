@@ -29,9 +29,32 @@ func Run(log *slog.Logger, out io.Writer, projDir string, names []string) error 
 		fmt.Fprintln(out, v.String())
 	}
 
-	errors, warns := violations.Count()
-	if errors > 0 {
-		return fmt.Errorf("validation failed: %d error(s), %d warning(s)", errors, warns)
+	// プラグインのランタイム依存 (plugin.yml requires) の存在チェック。
+	// validate は実行環境と異なるマシンで走り得るため警告に留める
+	// (実行前ゲートは run 側で error として扱う)。
+	missing, err := repository.CheckPluginRequires(projDir, tree.ProcessTypes())
+	if err != nil {
+		return err
+	}
+	for _, m := range missing {
+		fmt.Fprintf(out, "warn: process-plugin %s: required command not found: %s\n", m.ProcessType, m.Command)
+	}
+
+	// 接続情報 (host / password 等) の直書き禁止。設定は環境非依存の静的性質
+	// のため error 扱い (グループ名参照の徹底)。
+	forbidden, err := repository.CheckForbiddenConnConfig(projDir, tree.ScenarioViews())
+	if err != nil {
+		return err
+	}
+	for _, f := range forbidden {
+		fmt.Fprintf(out, "error: %s: config で接続情報を直書きしています (%s)。inventory グループ名参照 + secret 参照を使ってください\n", f.ProcessPath, f.Key)
+	}
+
+	errCount, warns := violations.Count()
+	errCount += len(forbidden)
+	warns += len(missing)
+	if errCount > 0 {
+		return fmt.Errorf("validation failed: %d error(s), %d warning(s)", errCount, warns)
 	}
 	log.Info("validation passed", "scenarios", len(tree.Scenarios()), "warnings", warns)
 	return nil
