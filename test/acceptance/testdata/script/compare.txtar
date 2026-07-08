@@ -1,0 +1,158 @@
+# STEP: compare プラグイン (期待値 expect と収集エビデンス actual を compare-files で突合)
+# curl(DL) はモックし、フェイク compare_files で比較を再現する。
+# 収集系プロセスの代役として scripts プロセスが evidence を生成する。
+#
+# 検証内容:
+#   - install が実行ホストの os_arch 版 compare_files をキャッシュする
+#   - compare が actual/ を evidence への file-level symlink で組み立てる
+#   - 一致 → Success、差分 (exit 3) → exit 6、evidence 不在 → exit 6
+
+env PATH=${WORK}/fakebin:${PATH}
+chmod 755 fakebin/curl
+chmod 755 fakebin/fakecomparefiles
+
+# compare-files リリース tarball のフィクスチャを作る (root 直下に compare_files バイナリ)
+mkdir cfsrc
+cp fakebin/fakecomparefiles cfsrc/compare_files
+chmod 755 cfsrc/compare_files
+exec tar czf cf.tar.gz -C cfsrc compare_files
+env STFW_TEST_CF_TARBALL=${WORK}/cf.tar.gz
+
+# プロビジョニング (curl はモック)。実行ホストの os_arch 版がキャッシュされ is_installed=true
+exec stfw plugin install compare
+
+# --- 一致ケース: evidence と expect が一致 → compare Success ---
+exec stfw run cmp
+stdout 'run_id: _'
+
+# actual/ が evidence への file-level symlink として組み立てられている
+exists scenario/cmp/_10_99990101/_20_asrt_compare/actual/_10_col_scripts/host1/data.txt
+# symlink 先 (evidence 実体) の内容が読める
+exec cat scenario/cmp/_10_99990101/_20_asrt_compare/actual/_10_col_scripts/host1/data.txt
+stdout 'hello'
+# 比較結果が result/ へ出力される
+exists scenario/cmp/_10_99990101/_20_asrt_compare/result/CompareSummary.csv
+exec cat scenario/cmp/_10_99990101/_20_asrt_compare/result/CompareSummary.csv
+stdout 'OK,'
+
+# --- 差分ケース: expect が evidence と異なる → compare-files exit 3 → プラグイン exit 6 ---
+execcode 6 stfw run cmpng
+stderr 'mismatch detected'
+
+# --- エラーケース: expect が参照する収集 process の evidence が無い → exit 6 ---
+execcode 6 stfw run cmperr
+stderr 'evidence not found'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+-- scenario/cmp/metadata.yml --
+description:
+-- scenario/cmp/_10_99990101/metadata.yml --
+description:
+-- scenario/cmp/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/cmp/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/cmp/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1"
+printf 'hello\nworld\n' > "${stfw_process_dir}/evidence/host1/data.txt"
+exit 0
+-- scenario/cmp/_10_99990101/_20_asrt_compare/metadata.yml --
+description:
+-- scenario/cmp/_10_99990101/_20_asrt_compare/config/config.yml --
+stfw:
+  process:
+    compare:
+      compare_files_version: v2.2.0
+-- scenario/cmp/_10_99990101/_20_asrt_compare/expect/_10_col_scripts/host1/data.txt --
+hello
+world
+-- scenario/cmpng/metadata.yml --
+description:
+-- scenario/cmpng/_10_99990101/metadata.yml --
+description:
+-- scenario/cmpng/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/cmpng/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/cmpng/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1"
+printf 'hello\nworld\n' > "${stfw_process_dir}/evidence/host1/data.txt"
+exit 0
+-- scenario/cmpng/_10_99990101/_20_asrt_compare/metadata.yml --
+description:
+-- scenario/cmpng/_10_99990101/_20_asrt_compare/config/config.yml --
+stfw:
+  process:
+    compare:
+      compare_files_version: v2.2.0
+-- scenario/cmpng/_10_99990101/_20_asrt_compare/expect/_10_col_scripts/host1/data.txt --
+hello
+DIFFERENT
+-- scenario/cmperr/metadata.yml --
+description:
+-- scenario/cmperr/_10_99990101/metadata.yml --
+description:
+-- scenario/cmperr/_10_99990101/_10_asrt_compare/metadata.yml --
+description:
+-- scenario/cmperr/_10_99990101/_10_asrt_compare/config/config.yml --
+stfw:
+  process:
+    compare:
+      compare_files_version: v2.2.0
+-- scenario/cmperr/_10_99990101/_10_asrt_compare/expect/_90_missing_scripts/host1/data.txt --
+hello
+world
+-- fakebin/curl --
+#!/bin/bash
+# curl -fsSL <url> -o <out> をフィクスチャ tarball のコピーで再現
+out=""
+while [ $# -gt 0 ]; do
+  case "$1" in -o) out="$2"; shift 2;; *) shift;; esac
+done
+cp "${STFW_TEST_CF_TARBALL}" "${out}"
+exit 0
+-- fakebin/fakecomparefiles --
+#!/bin/bash
+# fake compare_files: 左(expect)配下の各ファイルを右(actual)と突合し
+# CompareSummary.csv を出力する。0=全一致 / 3=差分 / 6=引数エラー。symlink は追従。
+out="result"
+args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -od | --outputDir) out="$2"; shift 2 ;;
+    -config | --configFile | -layout | --overwriteLayoutDir) shift 2 ;;
+    -*) shift ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+left="${args[0]:-}"
+right="${args[1]:-}"
+if [ -z "${left}" ] || [ -z "${right}" ]; then
+  echo "fake compare_files: need LEFT RIGHT" >&2
+  exit 6
+fi
+mkdir -p "${out}"
+summary="${out}/CompareSummary.csv"
+echo "Status,Left,Right" > "${summary}"
+rc=0
+while IFS= read -r f; do
+  rel="${f#"${left}/"}"
+  r="${right}/${rel}"
+  if [ ! -e "${r}" ]; then
+    echo "LeftOnly,${f},${r}" >> "${summary}"; rc=3
+  elif ! diff -q "${f}" "${r}" > /dev/null 2>&1; then
+    echo "NG,${f},${r}" >> "${summary}"; rc=3
+  else
+    echo "OK,${f},${r}" >> "${summary}"
+  fi
+done < <(find "${left}" -type f)
+exit ${rc}
