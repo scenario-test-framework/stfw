@@ -2,6 +2,9 @@
 # collectLog のプロビジョニング: logfilter バイナリを複数 arch 分ダウンロードして
 # 永続キャッシュ (${stfw_plugin_cache_dir}/logfilter/{os_arch}/logfilter) に配置する。
 # 収集先ホストの arch (inventory の arch) に応じて実行時に送り分ける。
+#
+# 要求した arch のいずれかで取得・展開・配置に失敗した場合は非 0 (exit 6) を返す
+# (成功した arch はキャッシュに残す)。
 set -uo pipefail
 
 for cmd in curl tar; do
@@ -16,6 +19,7 @@ arches="${stfw_process_collectLog_logfilter_arches:-linux_amd64 linux_arm64 darw
 # ダウンロード元は既定で GitHub Releases。テスト等で差し替え可能にする。
 base="${stfw_logfilter_download_base:-https://github.com/scenario-test-framework/logfilter/releases/download/${version}}"
 dest_root="${stfw_plugin_cache_dir}/logfilter"
+rc=0
 
 for arch in ${arches}; do
   dest="${dest_root}/${arch}"
@@ -25,20 +29,33 @@ for arch in ${arches}; do
   mkdir -p "${dest}"
   tarball="logfilter_${version}_${arch}.tar.gz"
   tmp="$(mktemp -d)"
+
   if ! curl -fsSL "${base}/${tarball}" -o "${tmp}/${tarball}"; then
     echo "collectLog install: download failed: ${base}/${tarball}" >&2
     rm -rf "${tmp}"
+    rc=6
     continue
   fi
-  tar xzf "${tmp}/${tarball}" -C "${tmp}"
+  if ! tar xzf "${tmp}/${tarball}" -C "${tmp}"; then
+    echo "collectLog install: extract failed: ${tarball}" >&2
+    rm -rf "${tmp}"
+    rc=6
+    continue
+  fi
   bin="$(find "${tmp}" -type f -name logfilter | head -1)"
-  if [ -n "${bin}" ]; then
-    cp "${bin}" "${dest}/logfilter"
-    chmod 755 "${dest}/logfilter"
-  else
+  if [ -z "${bin}" ]; then
     echo "collectLog install: logfilter binary not found in ${tarball}" >&2
+    rm -rf "${tmp}"
+    rc=6
+    continue
+  fi
+  if ! cp "${bin}" "${dest}/logfilter" || ! chmod 755 "${dest}/logfilter"; then
+    echo "collectLog install: failed to place logfilter for ${arch}" >&2
+    rm -rf "${tmp}"
+    rc=6
+    continue
   fi
   rm -rf "${tmp}"
 done
 
-exit 0
+exit ${rc}

@@ -89,8 +89,9 @@ func LoadInventory(projDir, fileName string) (map[string][]string, error) {
 }
 
 // LoadInventoryHostArch はホスト名 → arch のマップを返す。
-// arch 未指定のホストは含めない。同一ホストに複数 arch が定義された場合は
-// 後勝ち (通常は同一ホストの arch は一意)。
+// arch 未指定のホストは含めない。同一ホストが複数グループに属していても
+// arch が一致していれば許容するが、異なる arch が定義された場合は設定の
+// 不整合としてエラーにする (map 走査順に依存しない決定的な結果にするため)。
 func LoadInventoryHostArch(projDir, fileName string) (map[string]string, error) {
 	entries, err := loadInventoryEntries(projDir, fileName)
 	if err != nil {
@@ -99,9 +100,13 @@ func LoadInventoryHostArch(projDir, fileName string) (map[string]string, error) 
 	hostArch := map[string]string{}
 	for _, hosts := range entries {
 		for _, h := range hosts {
-			if h.Name != "" && h.Arch != "" {
-				hostArch[h.Name] = h.Arch
+			if h.Name == "" || h.Arch == "" {
+				continue
 			}
+			if prev, ok := hostArch[h.Name]; ok && prev != h.Arch {
+				return nil, fmt.Errorf("inventory: host %q has conflicting arch: %q vs %q", h.Name, prev, h.Arch)
+			}
+			hostArch[h.Name] = h.Arch
 		}
 	}
 	return hostArch, nil

@@ -105,3 +105,41 @@ func TestLoadInventoryStructuredEntries(t *testing.T) {
 		t.Errorf("LoadInventoryHostArch = %v, want %v", hostArch, want)
 	}
 }
+
+// TestLoadInventoryHostArchConflict は同一ホストに異なる arch が定義された場合に
+// (map 走査順に依存しない) 決定的なエラーになることを固定する。
+func TestLoadInventoryHostArchConflict(t *testing.T) {
+	projDir := t.TempDir()
+	writeInventory(t, projDir, "staging.yml", `stfw_inventory:
+  - a:
+    - host: dup.example
+      arch: linux_amd64
+  - b:
+    - host: dup.example
+      arch: linux_arm64
+`)
+	if _, err := LoadInventoryHostArch(projDir, "staging.yml"); err == nil {
+		t.Fatal("arch 競合はエラーになるべき")
+	}
+}
+
+// TestLoadInventoryHostArchSameArchAcrossGroups は同一ホストが複数グループに
+// 属していても arch が一致していれば許容することを固定する。
+func TestLoadInventoryHostArchSameArchAcrossGroups(t *testing.T) {
+	projDir := t.TempDir()
+	writeInventory(t, projDir, "staging.yml", `stfw_inventory:
+  - a:
+    - host: shared.example
+      arch: linux_amd64
+  - b:
+    - host: shared.example
+      arch: linux_amd64
+`)
+	hostArch, err := LoadInventoryHostArch(projDir, "staging.yml")
+	if err != nil {
+		t.Fatalf("同一 arch の重複は許容されるべき: %v", err)
+	}
+	if hostArch["shared.example"] != "linux_amd64" {
+		t.Errorf("arch = %q, want linux_amd64", hostArch["shared.example"])
+	}
+}

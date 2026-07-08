@@ -35,6 +35,11 @@ exec cat scenario/demo/_10_99990101/_10_grp_collectLog/evidence/web01/var/log/ap
 stdout 'filtered by logfilter'
 stdout 'app started'
 
+# 複数ファイルでもループが途中終了しない (ループ内 ssh が stdin を消費しない = FD 3 固定)
+exists scenario/demo/_10_99990101/_10_grp_collectLog/evidence/web01/var/log/app/app2.log
+exec cat scenario/demo/_10_99990101/_10_grp_collectLog/evidence/web01/var/log/app/app2.log
+stdout 'second log'
+
 -- stfw.yml --
 stfw:
   project_version: 0.1.0
@@ -62,8 +67,11 @@ stfw:
             - /var/log/app/.*\.log
 -- remote/web01/manifest --
 /var/log/app/app.log
+/var/log/app/app2.log
 -- remote/web01/var/log/app/app.log --
 app started
+-- remote/web01/var/log/app/app2.log --
+second log line
 -- fakebin/fakelogfilter --
 #!/bin/bash
 # 実体は使われない (モック ssh が logfilter 実行を再現する)。存在確認用。

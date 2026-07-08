@@ -19,8 +19,16 @@ exists scenario/demo/_10_99990101/_10_grp_collectFile/evidence/web01/var/log/app
 exec cat scenario/demo/_10_99990101/_10_grp_collectFile/evidence/web01/var/log/app/access.log
 stdout 'hello from remote access.log'
 
+# 空白を含むパスも壊れず収集される (word-splitting 修正の固定)
+exists 'scenario/demo/_10_99990101/_10_grp_collectFile/evidence/web01/var/log/app/with space.log'
+
 # パターンに合致しないファイルは収集されない
 ! exists scenario/demo/_10_99990101/_10_grp_collectFile/evidence/web01/var/log/app/other.txt
+
+# ssh 失敗 (接続・認証エラー = 255) は握りつぶさず collect を失敗させる
+env STFW_TEST_SSH_FAIL=1
+execcode 6 stfw run demo
+stderr 'ssh failed'
 
 -- stfw.yml --
 stfw:
@@ -48,9 +56,12 @@ stfw:
             - /var/log/app/.*\.log
 -- remote/web01/manifest --
 /var/log/app/access.log
+/var/log/app/with space.log
 /var/log/app/other.txt
 -- remote/web01/var/log/app/access.log --
 hello from remote access.log
+-- remote/web01/var/log/app/with space.log --
+spaced path content
 -- remote/web01/var/log/app/other.txt --
 should not be collected
 -- fakebin/sshpass --
@@ -61,6 +72,7 @@ exec "$@"
 -- fakebin/ssh --
 #!/bin/bash
 # ssh <opts> user@host "find / ... -regex 'PAT' ..." を擬似リモートの manifest で再現
+if [ "${STFW_TEST_SSH_FAIL:-}" = "1" ]; then exit 255; fi
 host=""
 for a in "$@"; do case "$a" in *@*) host="${a#*@}";; esac; done
 cmd="${@: -1}"

@@ -1,6 +1,7 @@
 #!/bin/bash
-# 収集時の前提コマンドが揃い、logfilter バイナリが 1 つ以上キャッシュ済みなら
-# インストール済みとみなす。
+# 収集時の前提コマンドが揃い、要求した全 arch の logfilter がキャッシュ済みなら
+# インストール済みとみなす。一部 arch でも欠けていれば false を返し、
+# stfw plugin install collectLog で補修できるようにする。
 for cmd in ssh scp sshpass; do
   if ! command -v "${cmd}" >/dev/null 2>&1; then
     echo "${cmd} is not installed."
@@ -8,9 +9,13 @@ for cmd in ssh scp sshpass; do
   fi
 done
 
-if find "${stfw_plugin_cache_dir}/logfilter" -type f -name logfilter 2>/dev/null | grep -q .; then
-  echo "true"
-  exit 0
-fi
-echo "logfilter is not provisioned (run \`stfw plugin install collectLog\`)."
-exit 1
+arches="${stfw_process_collectLog_logfilter_arches:-linux_amd64 linux_arm64 darwin_arm64}"
+for arch in ${arches}; do
+  if [ ! -x "${stfw_plugin_cache_dir}/logfilter/${arch}/logfilter" ]; then
+    echo "logfilter for ${arch} is not provisioned (run \`stfw plugin install collectLog\`)."
+    exit 1
+  fi
+done
+
+echo "true"
+exit 0

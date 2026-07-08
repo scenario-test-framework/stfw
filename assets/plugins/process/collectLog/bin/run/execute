@@ -73,7 +73,18 @@ while :; do
 
       files="$(sshpass -p "${password}" ssh "${ssh_opts[@]}" "${user}@${host}" \
         "find / -regextype posix-extended -regex '${pattern}' -type f 2>/dev/null")"
-      for f in ${files}; do
+      ssh_rc=$?
+      # ssh 自体の失敗 (接続・認証エラー = 255) はエラー扱い。find の権限エラー
+      # (一部ディレクトリにアクセスできず exit 1) は正常出力として扱う。
+      if [ "${ssh_rc}" -eq 255 ]; then
+        echo "collectLog: ssh failed: ${user}@${host}" >&2
+        rc=6
+        continue
+      fi
+      # 空白を含むパスを壊さないよう 1 行ずつ処理する。ループ本体の ssh/scp が
+      # stdin を消費してループが途中終了しないよう、読み取りは FD 3 を使う。
+      while IFS= read -r f <&3; do
+        [ -z "${f}" ] && continue
         remote_out="/tmp/stfw_lf_out_$$"
         if [ -n "${from}" ]; then
           lf_cmd="${remote_lf} -f -tf '${from}' '${f}' '${remote_out}'"
@@ -92,7 +103,7 @@ while :; do
           rc=6
         fi
         sshpass -p "${password}" ssh "${ssh_opts[@]}" "${user}@${host}" "rm -f ${remote_out}"
-      done
+      done 3<<< "${files}"
     done
 
     # 転送した logfilter バイナリを削除
