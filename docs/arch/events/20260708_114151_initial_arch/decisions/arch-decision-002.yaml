@@ -1,0 +1,28 @@
+schema_version: "1.0"
+artifact_type: "decision_record"
+skill_type: "architecture"
+artifact_id: "arch-decision-002"
+title: "BC 設計: RDRA 4 コンテキストをそのまま BC 化し、モジュラモノリスで構成"
+status: "approved"
+generated_at: "2026-07-08T11:41:51"
+context: |
+  BC 分割は言語境界・チーム境界の判断を含む。stfw では RDRA 情報モデルのコンテキスト列
+  （シナリオ構造管理 / 実行管理 / 通知管理 / プロジェクト環境管理）が既に言語境界を表現しており、
+  実装（internal/domain/{scenario,run,notify,project}）もこの 4 分割で確定している。
+decision: |
+  RDRA の 4 コンテキストを 4 つの BC として採用し、BC : tier 対応形態はモジュラモノリス
+  （1 つの Go バイナリ内で BC = domain 配下のパッケージ）とする。
+  team_ownership は単一チームのため null（未指定）のまま進める。
+  根拠: 単一チーム・NFR A（可用性）Lv1・BUC 8 フローの小〜中規模 CLI であり、
+  独立サービス分割（マイクロサービス）は運用負荷に見合わない。
+consequences:
+  positive:
+    - "BC 境界がパッケージ境界として実装レベルで強制され、認識負荷が低い"
+    - "単一バイナリ配布・サーバレスの as-is 制約と整合する"
+  negative:
+    - "BC 単位の独立デプロイはできない（CLI のため実害なし）"
+alternatives_considered:
+  - name: "1 BC に統合（モノリス・境界なし）"
+    reason_rejected: "シナリオ記述の語彙（規約）と実行時の語彙（run_id / ステータス）が明確に異なり、境界を消すと言語の混濁が起きる"
+  - name: "マイクロサービス（BC = 独立サービス）"
+    reason_rejected: "サーバレス CLI という製品特性・可用性 Lv1・単一チームに対して過剰"

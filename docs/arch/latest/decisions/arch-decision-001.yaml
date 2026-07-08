@@ -1,0 +1,31 @@
+schema_version: "1.0"
+artifact_type: "decision_record"
+skill_type: "architecture"
+artifact_id: "arch-decision-001"
+title: "サブドメイン分類: scenario・run を Core、notify・project を Supporting、汎用技術は Generic 扱い"
+status: "approved"
+generated_at: "2026-07-08T11:41:51"
+context: |
+  Core / Supporting / Generic の分類は「何が競争優位の源泉か」という経営・プロダクト判断を含み、
+  RDRA から自動推論できない。stfw は v1.0 リアーキテクティングの承認済み計画で
+  投資配分が既に確定しているため、本イベントではその確定事項を as-is として採用する。
+decision: |
+  - シナリオ構造管理（SD-001）= Core: 規約ベース記述（ディレクトリ構造そのものが実行定義）が
+    手書きの実行手順書を不要にする stfw の中核価値。命名規約・ツリー構造を VO / 型で深くモデリング。
+  - 実行管理（SD-002）= Core: 逐次実行・エラー時停止・Blocked 伝播・実行ジャーナルが
+    内蔵実行エンジンの本体。状態遷移を型で強制。
+  - 通知管理（SD-003）= Supporting: ジャーナルイベントの投影に徹し good enough で実装。
+  - プロジェクト環境管理（SD-004）= Supporting: 標準的実装。
+  - 暗号化・SSH・HTML 生成・OTLP 送信は Generic 能力として独立サブドメイン化せず、
+    外部ライブラリ（age / ssh / html/template / OpenTelemetry SDK）採用で自作回避。
+consequences:
+  positive:
+    - "モデリング投資が競争優位の源泉（scenario / run）に集中する"
+    - "Generic 能力の自作回避により保守面積が減る"
+  negative:
+    - "Supporting 領域（project）の実装品質は good enough に留まり、将来の要求増で再設計が必要になる可能性がある"
+alternatives_considered:
+  - name: "実行管理のみを Core とする（シナリオ構造管理は Supporting）"
+    reason_rejected: "規約ベース記述こそが差別化要因であり、実行エンジンと不可分。両方を Core とする計画承認済みの判断を維持"
+  - name: "Generic 能力を独立サブドメインとして定義する"
+    reason_rejected: "BUC との対応が無くライブラリ選定の問題に帰着するため、投資方針への注記で十分"

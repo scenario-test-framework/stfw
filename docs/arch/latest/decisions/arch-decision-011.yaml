@@ -1,0 +1,40 @@
+schema_version: "1.0"
+artifact_type: "decision_record"
+skill_type: "architecture"
+artifact_id: "arch-decision-011"
+title: "初期構築の確認推奨項目 5 件をユーザー確認で確定（全項目 Option A = 推奨案採用）"
+status: "approved"
+generated_at: "2026-07-08T12:12:50"
+context: |
+  初期構築イベント 20260708_114151_initial_arch は AskUserQuestion 不可の実行環境で生成されたため、
+  confidence: low の項目および RDRA 側の不整合を「確認推奨項目 5 件」としてユーザーに返却していた。
+  集約境界（AG-002 / AG-003）は実装（ScenarioTree ファーストクラスコレクション / トランザクション
+  スクリプト）と DDD 集約の抽象度が異なるため、またストレージ分類（E-019）と team_ownership は
+  RDRA から自動推論できないドメイン判断・体制判断を含むため、ユーザー確認が必要だった。
+decision: |
+  ユーザーが全 5 項目を推奨案（Option A）で確定した:
+  1. システム概要.json の旧アーキテクチャ記述の齟齬は、RDRA 変更イベント
+     rdra:20260708_120928_update_system_overview で解消済み。docs/todo.md の DIST-001 を
+     解決済みへ更新する（arch-design.yaml への変更なし）。
+  2. AG-002（シナリオ集約）は仮説のまま dist-spec へ引き継ぐ。内容は現状値維持、
+     confidence を user へ更新。最終確定は dist-spec or ddd-tactical-implementation で行う。
+  3. AG-003（プロジェクト集約）も同様に仮説のまま引き継ぐ。confidence を user へ更新。
+  4. E-019（OTel トレース）のストレージ分類は cache を確定（メモリ上でスパンを構築し OTLP
+     受信先へ送信、ローカル永続化なし。正は実行ジャーナル）。confidence を user へ更新。
+  5. 全 BC（BC-001〜BC-004）の team_ownership は null のまま現状値維持
+     （単一チーム開発のため所有チーム定義は不要）。
+consequences:
+  positive:
+    - "confidence: low の残項目が解消され、後続スキル（dist-infrastructure / dist-design / dist-spec）が確定値として参照できる"
+    - "confidence: user により以後の差分更新でユーザー確定値が上書きから保護される"
+    - "DIST-001 がクローズされ、RDRA とアーキテクチャ設計の入力整合が回復した"
+  negative:
+    - "AG-002 / AG-003 は戦略段階の仮説であり、最終確定は dist-spec or ddd-tactical-implementation で行う必要がある（user はあくまで『仮説のまま引き継ぐ』という扱いの確定）"
+    - "team_ownership = null のため、将来チーム分割が発生した場合は BC 所有の再定義イベントが必要になる"
+alternatives_considered:
+  - name: "AG-002 / AG-003 を本イベントで集約として確定（invariants・トランザクション境界まで定義）"
+    reason_rejected: "戦術設計の詳細情報（リポジトリ境界・整合性要件）が揃うのは dist-spec 以降であり、戦略段階での確定は過剰決定になるため"
+  - name: "E-019 OTel トレースを file 分類へ変更（ジャーナルと同様の永続化とみなす）"
+    reason_rejected: "スパンはメモリ上で構築し OTLP 送信するのみでローカル永続化を持たず、正は実行ジャーナル（E-020）にあるため cache が実態に一致する"
+  - name: "BC ごとに team_ownership を仮置き（例: 全 BC = core チーム）"
+    reason_rejected: "単一チーム開発では所有チームの区別に意味がなく、実体のない値を置くと将来の体制設計を誤誘導するため"

@@ -1,0 +1,28 @@
+schema_version: "1.0"
+artifact_type: "decision_record"
+skill_type: "architecture"
+artifact_id: "arch-decision-004"
+title: "集約境界仮説: Run 集約は確定、シナリオ / プロジェクトは仮説（low）に留める"
+status: "approved"
+generated_at: "2026-07-08T11:41:51"
+context: |
+  集約境界は戦略段階では仮説であり、最終確定は dist-spec または ddd-tactical-implementation
+  の責務。ただし stfw は v1.0 実装済みで、Run 集約（非公開フィールド + ポインタレシーバ、
+  ジャーナル = Run のイベントストリーム、リプレイ時の再検証）は承認済み計画で確定している。
+decision: |
+  - AG-001（Run 集約）: root = 実行（run）、member = 実行コンテキスト・実行ジャーナル。
+    confidence: user（承認済み計画・実装で確定）。不変条件: run 前静的検証の通過・
+    エラー時 Blocked 伝播・run_id 一意採番・終了状態から再遷移なし・リプレイ時再検証。
+  - AG-002（シナリオ集約）・AG-003（プロジェクト集約）: confidence: low の仮説。
+    実装は ScenarioTree（ファーストクラスコレクション）と Supporting のトランザクション
+    スクリプトであり、トランザクション境界を持つ集約とするかは後続スキルで確定する。
+consequences:
+  positive:
+    - "実装済みの確定事項（Run 集約）と未確定の仮説（scenario / project）が明確に区別される"
+  negative:
+    - "AG-002 / AG-003 は戦略段階の仮説であり、最終確定は dist-spec or ddd-tactical-implementation で行う（本イベントでは確定しない）"
+alternatives_considered:
+  - name: "全 BC に集約を確定として定義する"
+    reason_rejected: "Supporting 領域はトランザクションスクリプト許容（承認済み計画）であり、集約の強制はモデリング過剰"
+  - name: "集約仮説を出力しない（AG-001 のみ記録）"
+    reason_rejected: "後続スキル（dist-spec）への引き継ぎ材料として、不変条件つきの仮説提示に価値がある"

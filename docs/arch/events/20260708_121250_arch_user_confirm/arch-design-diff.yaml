@@ -1,0 +1,45 @@
+meta:
+  event_id: "20260708_121250_arch_user_confirm"
+  trigger_event: "arch:20260708_114151_initial_arch"
+  created_at: "2026-07-08T12:12:50"
+domain_architecture:
+  aggregate_hypotheses:
+    - id: "AG-002"
+      bounded_context_id: "BC-001"
+      root_entity_id: "E-009"
+      member_entity_ids:
+        - "E-010"
+        - "E-011"
+        - "E-012"
+        - "E-014"
+      invariants:
+        - "業務日付（bizdate）は YYYYMMDD の 8 桁数字であること"
+        - "業務日付・プロセスの連番（seq）は数値のみであること"
+        - "プロセスのグループ名に「_」を含めないこと"
+        - "「_」始まりのディレクトリのみを実行対象とし、名前昇順に実行順を決定すること"
+        - "シナリオ・業務日付・プロセスの各ディレクトリは scenario ルートからの深さと stfw.yml の存在で階層判定すること"
+      note: "仮説。実装ではファーストクラスコレクション ScenarioTree として表現されており、トランザクション境界を持つ集約かは未確定。最終確定は dist-spec or ddd-tactical-implementation で行う。ユーザー確認済み（2026-07-08）: 仮説のまま dist-spec へ引き継ぐことを確定"
+      source_model: "情報: シナリオ, 業務日付, プロセス, 条件: 業務日付フォーマット, 連番フォーマット, グループ名制約, 階層ディレクトリ判定"
+      confidence: "user"
+    - id: "AG-003"
+      bounded_context_id: "BC-004"
+      root_entity_id: "E-002"
+      member_entity_ids:
+        - "E-003"
+        - "E-004"
+        - "E-005"
+        - "E-006"
+        - "E-008"
+      invariants:
+        - "stfw.yml が既に存在するディレクトリでは再初期化（stfw init）をエラーとすること"
+        - "同一ホスト×ユーザーの資格情報の重複登録は不可とすること"
+        - "暗号化キーペアが存在する場合の再生成は --force 指定時のみとすること"
+      note: "仮説。project 配下はトランザクションスクリプト許容（Supporting）のため、集約として強整合を持たせるかは未確定。最終確定は dist-spec or ddd-tactical-implementation で行う。ユーザー確認済み（2026-07-08）: 仮説のまま dist-spec へ引き継ぐことを確定"
+      source_model: "情報: プロジェクト, 条件: プロジェクト再初期化禁止, パスワード重複登録禁止, 暗号化キー再生成の抑止"
+      confidence: "user"
+data_architecture:
+  storage_mapping:
+    - entity_id: "E-019"
+      storage_type: "cache"
+      reason: "メモリ上でスパンを構築し OTLP 受信先へ送信する（ローカル永続化なし。正は実行ジャーナル）。ユーザー確認済み（2026-07-08）: cache 分類を確定"
+      confidence: "user"

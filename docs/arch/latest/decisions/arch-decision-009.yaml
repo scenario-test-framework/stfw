@@ -1,0 +1,30 @@
+schema_version: "1.0"
+artifact_type: "decision_record"
+skill_type: "architecture"
+artifact_id: "arch-decision-009"
+title: "レイヤリング戦略: 5 層・IF なし直接依存・domain 依存ゼロ"
+status: "approved"
+generated_at: "2026-07-08T11:41:51"
+context: |
+  状態遷移モデル 2 種・条件 29 件とドメインロジックが厚く、5 層（presentation / usecase /
+  domain / repository / gateway）の選定条件に合致する。旧 app_arch.puml の
+  「repository / gateway を domain が持つ」構造は Bash にパッケージ概念が無いための妥協であり、
+  Go への移植で依存方向を正す必要があった。
+decision: |
+  tier-cli は 5 層構成とし、依存方向を presentation → usecase → domain / repository、
+  repository → domain / gateway に固定する。domain はどこにも依存しない（依存ゼロ）。
+  レイヤー間はインターフェースを介さない直接依存（IF なし）で開始し、外部依存の乗り換え・
+  チーム分割が必要になった時点で該当箇所のみ凹型（IF 導入）に移行する。
+  BC 跨ぎの共有は ID とイベントのみとし、モジュラモノリス内の境界を実装レベルで維持する。
+  tier-plugin は契約層 + 外部ツール実行層の 2 層とする（ビジネスルールは本体側にあるため）。
+consequences:
+  positive:
+    - "ドメインロジックのテストが外部依存なしで書ける"
+    - "IF 削減により初期実装・変更のコストが低い"
+  negative:
+    - "gateway の mock 化が必要になった場合は IF の後付け導入が必要"
+alternatives_considered:
+  - name: "最初から凹型（全レイヤー IF 導入）"
+    reason_rejected: "単一チーム・安定した外部依存（ファイル / OTLP / SSH）に対して IF の維持コストが利益を上回る"
+  - name: "3 層（handler → usecase → gateway）"
+    reason_rejected: "状態遷移・命名規約等のドメインロジックが厚く、domain / repository の分離が必要"

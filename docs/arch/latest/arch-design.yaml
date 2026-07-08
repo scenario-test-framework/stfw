@@ -1,0 +1,1703 @@
+version: "1.0"
+event_id: "20260708_121250_arch_user_confirm"
+created_at: "2026-07-08T12:12:50"
+source: "初期構築イベント 20260708_114151_initial_arch の確認推奨項目 5 件に対するユーザー回答の反映（全項目 Option A = 推奨案で確定。trigger_event: arch:20260708_114151_initial_arch）"
+trigger_event: "arch:20260708_114151_initial_arch"
+
+technology_context:
+  languages:
+    - "Go（CLI 本体）"
+    - "任意言語スクリプト（プラグイン・ステップ: シェルスクリプト等）"
+  frameworks:
+    - "cobra（CLI フレームワーク）"
+    - "log/slog（構造化ログ）"
+    - "yaml.v3（設定パース）"
+    - "html/template + go:embed（静的 HTML レポート・テンプレート同梱）"
+    - "filippo.io/age（X25519 資格情報暗号化）"
+    - "OpenTelemetry SDK（OTLP トレースエクスポート）"
+    - "testscript（受け入れテスト）"
+  constraints:
+    - "Go 単一バイナリ（サーバレス・常駐サービスなし・実行エンジン内包・逐次実行）"
+    - "外部データストアなし（プロジェクトディレクトリ配下のファイルベース永続化）"
+    - "互換境界 3 つの維持: ディレクトリ規約 / プラグイン env 契約（stfw_* + 終了コード 0/3/6）/ エビデンスディレクトリ規約"
+    - "追加ランタイム不要（JVM / Python 2 / Ruby 依存の廃止）"
+    - "v1.0 は逐次実行のみ（将来 --parallel の余地をランナー分離で残す）"
+
+domain_architecture:
+  subdomains:
+    - id: "SD-001"
+      name: "シナリオ構造管理"
+      type: "core"
+      investment_policy: "最優先で深いモデリングと継続的リファクタリングに投資。命名規約・ツリー構造を値オブジェクト・型で深くモデリング"
+      related_buc_ids:
+        - "テストシナリオ作成フロー"
+        - "シナリオ静的検証フロー"
+      reason: "規約ベースのシナリオ記述（ディレクトリ構造そのものが実行定義）が stfw の競争優位の源泉。手書きの実行手順書を不要にする中核価値"
+      source_model: "BUC: テストシナリオ作成フロー, シナリオ静的検証フロー, 情報: シナリオ, 条件: 実行対象ディレクトリ規則"
+      confidence: "user"
+    - id: "SD-002"
+      name: "実行管理"
+      type: "core"
+      investment_policy: "最優先で深いモデリングと継続的リファクタリングに投資。状態遷移を型で強制し、ジャーナルを Run のイベントストリームとして扱う"
+      related_buc_ids:
+        - "シナリオ一括自動実行フロー"
+      reason: "逐次実行・エラー時停止・Blocked 伝播・実行ジャーナルが内蔵実行エンジンの本体であり、実行順序保証と再現性という中核価値を担う"
+      source_model: "BUC: シナリオ一括自動実行フロー, 情報: 実行（run）, 実行ジャーナル（journal.jsonl）, 状態モデル「階層実行ステータス」"
+      confidence: "user"
+    - id: "SD-003"
+      name: "通知管理"
+      type: "supporting"
+      investment_policy: "good enough な品質で安定運用。ジャーナルイベントの投影（OTel トレース・HTML レポート）に徹し、独自の状態を持たない"
+      related_buc_ids:
+        - "実行結果監視・確認フロー"
+      reason: "実行状況の可視化は中核業務を支援するが差別化要因ではない。OTLP 標準への準拠により既存オブザーバビリティ基盤へ委譲する"
+      source_model: "BUC: 実行結果監視・確認フロー, 情報: OTel トレース（スパンツリー）, HTML レポート"
+      confidence: "user"
+    - id: "SD-004"
+      name: "プロジェクト環境管理"
+      type: "supporting"
+      investment_policy: "標準的なフレームワーク・ライブラリで実装。暗号化・SSH・HTML 生成等の Generic 能力は外部ライブラリ採用で自作回避"
+      related_buc_ids:
+        - "stfw導入フロー"
+        - "プロジェクト初期化フロー"
+        - "接続情報管理フロー"
+        - "プロセスプラグイン拡張フロー"
+      reason: "プロジェクト初期化・設定・inventory・secret・プラグイン管理は中核業務の前提を支える支援領域。差別化要因ではない"
+      source_model: "BUC: stfw導入フロー, プロジェクト初期化フロー, 接続情報管理フロー, プロセスプラグイン拡張フロー, 情報: プロジェクト"
+      confidence: "user"
+  bounded_contexts:
+    - id: "BC-001"
+      name: "scenario（シナリオ構造管理コンテキスト）"
+      ubiquitous_language:
+        - term: "シナリオ"
+          definition: "業務日付をまたぐ一連の業務処理を記述するテストの最上位単位。scenario/{name} ディレクトリで識別され、ディレクトリ構造そのものが実行定義となる"
+        - term: "業務日付（bizdate）"
+          definition: "シナリオ内でテストを日付単位に区切って進行させる単位。_{seq}_{bizdate} 形式・YYYYMMDD の 8 桁数字"
+        - term: "プロセス"
+          definition: "業務日付内のまとまった処理単位。_{seq}_{group}_{process_type} 形式でプロセスタイプ（プラグイン）と結びつく"
+        - term: "ステップ"
+          definition: "プロセス内 scripts/ 直下の実行可能ファイル。ファイル名昇順が実行順"
+      related_subdomain_id: "SD-001"
+      owned_entity_ids:
+        - "E-009"
+        - "E-010"
+        - "E-011"
+        - "E-012"
+        - "E-013"
+        - "E-014"
+        - "E-023"
+      owned_buc_ids:
+        - "テストシナリオ作成フロー"
+        - "シナリオ静的検証フロー"
+      team_ownership: null
+      reason: "情報.tsv のコンテキスト「シナリオ構造管理」に対応。シナリオ記述の語彙（規約・階層）が実行時の語彙（run_id・ステータス）と独立"
+      source_model: "情報: シナリオ, 業務日付, プロセス, スクリプト（ステップ）, 実装: internal/domain/scenario"
+      confidence: "user"
+    - id: "BC-002"
+      name: "run（実行管理コンテキスト）"
+      ubiquitous_language:
+        - term: "実行（run）"
+          definition: "stfw run で採番される run_id（_{YYYYMMDDHHMMSS}_{PID}）を ID とする一括自動実行の単位。再実行は常に新しい run_id の別実行"
+        - term: "実行ジャーナル"
+          definition: "実行結果の唯一のソース。各階層・ステップの開始・終了をイベント時刻つきで記録する追記専用 JSONL"
+        - term: "Blocked"
+          definition: "先行ステップのエラーにより未実行のままスキップされたステップの終了状態。エラー時停止ポリシーの担保"
+      related_subdomain_id: "SD-002"
+      owned_entity_ids:
+        - "E-015"
+        - "E-016"
+        - "E-017"
+        - "E-020"
+        - "E-024"
+        - "E-025"
+      owned_buc_ids:
+        - "シナリオ一括自動実行フロー"
+      team_ownership: null
+      reason: "情報.tsv のコンテキスト「実行管理」に対応。実行時の状態遷移（階層実行ステータス）とジャーナルが独立した語彙体系を持つ"
+      source_model: "情報: 実行（run）, 実行ジャーナル（journal.jsonl）, 状態モデル「階層実行ステータス」, 実装: internal/domain/run"
+      confidence: "user"
+    - id: "BC-003"
+      name: "notify（通知管理コンテキスト）"
+      ubiquitous_language:
+        - term: "スパンツリー"
+          definition: "run をルート、scenario / bizdate / process を子、step を末端とする OTLP トレースの階層構造。実行ジャーナルのイベントの投影"
+        - term: "投影（プロジェクション）"
+          definition: "実行ジャーナルのイベントを唯一の入力として OTel トレース・HTML レポートを導出する読み取りモデル生成"
+      related_subdomain_id: "SD-003"
+      owned_entity_ids:
+        - "E-018"
+        - "E-019"
+        - "E-021"
+      owned_buc_ids:
+        - "実行結果監視・確認フロー"
+      team_ownership: null
+      reason: "情報.tsv のコンテキスト「通知管理」に対応。実行結果を外部（オブザーバビリティ基盤・ブラウザ）の語彙（スパン・レポート）に翻訳する境界"
+      source_model: "情報: OTel トレース（スパンツリー）, HTML レポート, ステップ実行結果, 実装: internal/domain/notify"
+      confidence: "user"
+    - id: "BC-004"
+      name: "project（プロジェクト環境管理コンテキスト）"
+      ubiquitous_language:
+        - term: "プロジェクト"
+          definition: "stfw init で開始されるシナリオテストの管理単位。stfw.yml の存在で識別・上位探索される"
+        - term: "インベントリ"
+          definition: "環境単位でテスト対象ホストをグループ（web/ap/db 等 + 予約値 all）で管理する定義"
+        - term: "secret"
+          definition: "ホスト×ユーザー単位の資格情報を age (X25519) で暗号化保管する仕組み。平文で扱わない"
+        - term: "プラグイン解決順"
+          definition: "同名プラグインをプロジェクト → 組込みの順に解決し、プロジェクト側を優先する規則"
+      related_subdomain_id: "SD-004"
+      owned_entity_ids:
+        - "E-001"
+        - "E-002"
+        - "E-003"
+        - "E-004"
+        - "E-005"
+        - "E-006"
+        - "E-007"
+        - "E-008"
+        - "E-022"
+      owned_buc_ids:
+        - "stfw導入フロー"
+        - "プロジェクト初期化フロー"
+        - "接続情報管理フロー"
+        - "プロセスプラグイン拡張フロー"
+      team_ownership: null
+      reason: "情報.tsv のコンテキスト「プロジェクト環境管理」に対応。設定・接続情報・プラグインの管理規則がシナリオ・実行の語彙と独立"
+      source_model: "情報: プロジェクト, インベントリ, 暗号化キー, パスワード, プラグイン, 実装: internal/domain/project"
+      confidence: "user"
+  context_map:
+    - id: "CM-001"
+      from_bc_id: "BC-002"
+      to_bc_id: "BC-001"
+      pattern: "customer_supplier"
+      direction: "downstream"
+      translator_description: "run（下流）が scenario（上流）の検証済みシナリオツリー（ScenarioTree）を実行対象として消費する。repository 層の scenariotree がディレクトリ構造を走査順つきドメインモデルに翻訳する"
+      integration_events: []
+      reason: "内蔵ランナーは規約検証済みのツリー構造を前提に逐次実行する。シナリオ記述の規約変更は実行側の要求（run 前静的検証）と協調して決まる"
+      source_model: "BUC: シナリオ一括自動実行フロー, 条件: 実行対象ディレクトリ規則, run 前静的検証"
+      confidence: "medium"
+    - id: "CM-002"
+      from_bc_id: "BC-003"
+      to_bc_id: "BC-002"
+      pattern: "published_language"
+      direction: "downstream"
+      translator_description: "run（上流）が公開する実行ジャーナルのイベントスキーマ（追記専用 JSONL）を公開言語とし、notify（下流）は OTel スパンツリー・HTML レポートへ投影する。BC 跨ぎの直接ファイルアクセスは禁止し、共有は ID とイベントのみ"
+      integration_events:
+        - "node_start"
+        - "steps_enumerated"
+        - "step_end"
+        - "node_end"
+      reason: "ジャーナルを唯一のソースとし、通知・レポート・status を全てイベントの投影として実装することで、通知経路の障害がテスト実行を止めない構造にする"
+      source_model: "情報: 実行ジャーナル（journal.jsonl）, OTel トレース（スパンツリー）, 条件: OTel エクスポート失敗の非致命扱い"
+      confidence: "user"
+    - id: "CM-003"
+      from_bc_id: "BC-002"
+      to_bc_id: "BC-004"
+      pattern: "customer_supplier"
+      direction: "downstream"
+      translator_description: "run（下流）が project（上流）の設定解決（デフォルト → プロジェクトの上書き順）・inventory・secret 復号・プラグイン解決を利用する。環境変数フラット化（env 契約）が翻訳面"
+      integration_events: []
+      reason: "実行時に必要な設定・接続情報・プラグインは全て project コンテキストの規則（上書き順・解決順）に従って供給される"
+      source_model: "条件: 設定の上書き順, プラグイン解決順, 情報: プロジェクト設定（stfw.yml）"
+      confidence: "medium"
+    - id: "CM-004"
+      from_bc_id: "BC-001"
+      to_bc_id: "BC-004"
+      pattern: "customer_supplier"
+      direction: "downstream"
+      translator_description: "scenario（下流）の scaffold 生成・静的検証が project（上流）のプラグイン存在確認（プロセス実行の前提条件）と設定解決に依存する"
+      integration_events: []
+      reason: "プロセスタイプはプラグインとして project 側で管理され、scaffold 生成時に存在検証される"
+      source_model: "条件: プロセス実行の前提条件, 情報: プラグイン"
+      confidence: "medium"
+  aggregate_hypotheses:
+    - id: "AG-001"
+      bounded_context_id: "BC-002"
+      root_entity_id: "E-015"
+      member_entity_ids:
+        - "E-016"
+        - "E-020"
+      invariants:
+        - "run 実行は対象シナリオが存在し run 前静的検証を通過していること"
+        - "エラー発生（終了コード 0 以外・比較不一致）後の後続ステップは実行せず Blocked として記録し停止する"
+        - "run_id は _{YYYYMMDDHHMMSS}_{PID} 形式で一意に採番する"
+        - "終了状態（Success / Error）からの再遷移は禁止。再実行は新しい run_id の別実行として扱う"
+        - "ジャーナルからの復元（リプレイ）経路でも生成時と同じ状態遷移検証を通す"
+      note: "承認済み v1.0 計画で確定した集約（集約 = Run、ジャーナル = Run のイベントストリーム）。メンバー詳細の最終確定は dist-spec or ddd-tactical-implementation で行う"
+      source_model: "情報: 実行（run）, 実行ジャーナル（journal.jsonl）, 条件: 逐次実行・エラー時 Blocked, run_id の採番・保持"
+      confidence: "user"
+    - id: "AG-002"
+      bounded_context_id: "BC-001"
+      root_entity_id: "E-009"
+      member_entity_ids:
+        - "E-010"
+        - "E-011"
+        - "E-012"
+        - "E-014"
+      invariants:
+        - "業務日付（bizdate）は YYYYMMDD の 8 桁数字であること"
+        - "業務日付・プロセスの連番（seq）は数値のみであること"
+        - "プロセスのグループ名に「_」を含めないこと"
+        - "「_」始まりのディレクトリのみを実行対象とし、名前昇順に実行順を決定すること"
+        - "シナリオ・業務日付・プロセスの各ディレクトリは scenario ルートからの深さと stfw.yml の存在で階層判定すること"
+      note: "仮説。実装ではファーストクラスコレクション ScenarioTree として表現されており、トランザクション境界を持つ集約かは未確定。最終確定は dist-spec or ddd-tactical-implementation で行う。ユーザー確認済み（2026-07-08）: 仮説のまま dist-spec へ引き継ぐことを確定"
+      source_model: "情報: シナリオ, 業務日付, プロセス, 条件: 業務日付フォーマット, 連番フォーマット, グループ名制約, 階層ディレクトリ判定"
+      confidence: "user"
+    - id: "AG-003"
+      bounded_context_id: "BC-004"
+      root_entity_id: "E-002"
+      member_entity_ids:
+        - "E-003"
+        - "E-004"
+        - "E-005"
+        - "E-006"
+        - "E-008"
+      invariants:
+        - "stfw.yml が既に存在するディレクトリでは再初期化（stfw init）をエラーとすること"
+        - "同一ホスト×ユーザーの資格情報の重複登録は不可とすること"
+        - "暗号化キーペアが存在する場合の再生成は --force 指定時のみとすること"
+      note: "仮説。project 配下はトランザクションスクリプト許容（Supporting）のため、集約として強整合を持たせるかは未確定。最終確定は dist-spec or ddd-tactical-implementation で行う。ユーザー確認済み（2026-07-08）: 仮説のまま dist-spec へ引き継ぐことを確定"
+      source_model: "情報: プロジェクト, 条件: プロジェクト再初期化禁止, パスワード重複登録禁止, 暗号化キー再生成の抑止"
+      confidence: "user"
+  diagram_mermaid: |
+    graph LR
+      BC1["scenario（シナリオ構造管理）"]
+      BC2["run（実行管理）"]
+      BC3["notify（通知管理）"]
+      BC4["project（プロジェクト環境管理）"]
+      BC2 -->|Customer-Supplier| BC1
+      BC2 -->|Customer-Supplier| BC4
+      BC1 -->|Customer-Supplier| BC4
+      BC3 -->|Published Language| BC2
+
+system_architecture:
+  tiers:
+    - id: "tier-cli"
+      name: "CLI 本体（stfw コマンド）"
+      description: "Go 単一バイナリの CLI。presentation〜gateway の 5 層と実行エンジン（内蔵ランナー）を内包し、init / new / validate / run / status / report / inventory / secret / ssh / plugin の各コマンドを提供する"
+      technology_candidates:
+        - "CLI（単一バイナリ配布・ランタイム依存なし）"
+        - "内蔵実行エンジン（木構造の逐次実行）"
+        - "構造化ログ（ローカルファイル出力）"
+      policies:
+        - id: "SP-001"
+          name: "サーバレス・オンデマンド実行"
+          description: "常駐サービス・server 管理・状態 DB を持たず、stfw run の 1 コマンドで前準備なしに実行を開始する。冗長化・サービス切替は対象外とし、可用性は配布物の再取得とプロジェクトディレクトリの保全で担保する"
+          reason: "NFR A.1.1.1 運用時間(Lv1) / A.2.1.1 冗長化(Lv1) への対応。利用者の作業時間帯にのみ動くオンデマンド CLI であり常駐構成は過剰"
+          source_model: "条件: run 実行の前提条件, NFR A.1.1.1, NFR A.1.2.1, NFR A.2.1.1, NFR A.2.3.1, NFR A.2.6.2"
+          confidence: "user"
+        - id: "SP-002"
+          name: "run 前静的検証の統合"
+          description: "stfw run の開始前に validate 相当の静的検証（ディレクトリ規約・プラグイン解決可否・config.yml・対象シナリオ存在・プラグインのランタイム依存の存在チェック）を自動実行し、エラー時は実行を開始しない。残存する *.dig ファイルには不要である旨を警告する"
+          reason: "規約違反や依存不足による実行時失敗を事前に防ぎ、テスト実行の再現性を守るため"
+          source_model: "条件: run 前静的検証, プロセス実行の前提条件, BUC: シナリオ静的検証フロー, NFR B.4.1.1"
+          confidence: "user"
+        - id: "SP-003"
+          name: "dry-run による事前確認"
+          description: "stfw run --dry-run は実タスク（execute / post_execute）をスキップし、setup → pre_execute → teardown のみ実行する。テスト対象環境に影響を与えずに実行経路と前後処理を本実行前に確認できる"
+          reason: "テスト実行者が本実行前に安全に実行経路を検証できるようにするため"
+          source_model: "条件: dry-run の実行範囲, バリエーション: 実行モード（run_mode）, アクター: テスト実行者"
+          confidence: "user"
+        - id: "SP-004"
+          name: "実行順序保証・エラー時停止"
+          description: "内蔵ランナーがスクリプトをファイル名昇順に逐次実行し、エラー発生（終了コード 0 以外・compare の比較不一致）後の後続スクリプトは実行せず Blocked として記録し停止する"
+          reason: "実行順序の保証とエラー時停止というビジネスポリシーを担保し、テスト結果の再現性と失敗箇所の特定を可能にするため"
+          source_model: "条件: 逐次実行・エラー時 Blocked, 状態モデル「ステップ実行ステータス」, BUC: シナリオ一括自動実行フロー"
+          confidence: "user"
+        - id: "SP-005"
+          name: "リプレイによる状態再構成"
+          description: "stfw status / stfw report は実行ジャーナルのリプレイで実行状況（階層ツリー・成否）を再構成する。実行中の状態を保持する常駐プロセスや状態 DB を持たない"
+          reason: "実行結果の唯一のソースをジャーナルに一元化し、障害検知・失敗調査の起点を単純化するため"
+          source_model: "情報: 実行ジャーナル（journal.jsonl）, アクター: テスト結果確認者, NFR C.3.1.1"
+          confidence: "user"
+      rules:
+        - id: "SR-001"
+          name: "run_id の採番・保持"
+          description: "run_id は _{YYYYMMDDHHMMSS}_{PID} 形式で採番し実行コンテキストに保持する。attempt_id は存在せず、run_id のみで一括自動実行を一意に識別し status / report / OTel トレースの基点とする"
+          reason: "従来形式を維持しつつ、実行の識別子を一本化するため"
+          source_model: "条件: run_id の採番・保持"
+          confidence: "user"
+        - id: "SR-002"
+          name: "実行ログ運用"
+          description: "実行ログは .stfw/stfw.log へ集約し、日次ローテーション・シークレットマスキング済み・terminal 実行時はカラー出力とする。ログレベル（trace〜error、デフォルト info）は stfw.yml またはコマンドオプションで変更できる"
+          reason: "NFR C.6.1.1 ログ保管期間(Lv1) / C.6.1.2 ログ種別への対応。障害調査に必要なログを単一ファイルへ集約する"
+          source_model: "情報: 実行ログ, バリエーション: ログレベル, NFR C.6.1.1, NFR C.6.1.2"
+          confidence: "user"
+        - id: "SR-003"
+          name: "廃止設定の警告"
+          description: "stfw.server.* 設定を含む stfw.yml の読み込み時に廃止警告を表示し、設定値は実行に影響させない"
+          reason: "digdag server 廃止後も旧設定を残したプロジェクトが暗黙に誤動作せず、廃止を利用者に確実に伝えるため"
+          source_model: "条件: server 設定の廃止警告"
+          confidence: "user"
+        - id: "SR-004"
+          name: "設定の上書き順"
+          description: "プロジェクト設定はデフォルト（stfw 本体の内蔵デフォルト）→ プロジェクトの順、プラグイン設定は組込み → プロジェクト → シナリオ内 Process 設定の順に読込・上書きし、環境変数として全スクリプトへ公開する"
+          reason: "共通デフォルトを保ちながらプロジェクト・シナリオ単位の個別調整を可能にするため"
+          source_model: "条件: 設定の上書き順, 情報: プロジェクト設定（stfw.yml）"
+          confidence: "user"
+        - id: "SR-005"
+          name: "終了コード体系の統一"
+          description: "スクリプト・コマンド共通の終了コード体系を 0（SUCCESS）/ 3（WARN）/ 6（ERROR）とし、ステップ実行結果の Success / Error 判定と後続 Blocked 判定の基準とする"
+          reason: "プラグイン実行契約の互換境界としてステップ成否判定を機械的に行うため"
+          source_model: "バリエーション: 終了コード, 条件: 逐次実行・エラー時 Blocked"
+          confidence: "user"
+        - id: "SR-006"
+          name: "プロジェクト再初期化禁止"
+          description: "stfw.yml が既に存在するディレクトリでは stfw init をエラーとし、既存プロジェクトの設定・シナリオのテンプレート上書き破壊を防ぐ"
+          reason: "既存資産の意図しない破壊を防ぐ従来仕様の維持"
+          source_model: "条件: プロジェクト再初期化禁止, 情報: プロジェクト, BUC: プロジェクト初期化フロー"
+          confidence: "user"
+    - id: "tier-plugin"
+      name: "プラグイン実行"
+      description: "プロセスタイプごとの実行方式を提供する拡張ポイント。組込みプラグイン群（収集系・データストア系・検証系・実行系）とプロジェクト側カスタムプラグインの 2 層構造。CLI 本体から外部プロセスとして任意言語スクリプトを起動する"
+      technology_candidates:
+        - "外部プロセス実行（任意言語スクリプト・env 注入）"
+        - "リモート接続 CLI（ssh / scp）"
+        - "データストアクライアント CLI（RDB / KVS クライアント）"
+        - "負荷試験・E2E 実行 OSS（k6 等）"
+      policies:
+        - id: "SP-101"
+          name: "2 層プラグインエコシステム"
+          description: "組込みプラグイン群（scripts・収集系 collectLog / collectFile・データストア系 export / import / clear（MySQL / PostgreSQL / Redis）・検証系 compare・実行系 invokeWeb / invokeRest）が Arrange → Act → Collect → Assert 各フェーズの汎用部品を提供し、プロダクト固有の処理（updateBizDate / invokeJob / importMaster 等）は利用者がカスタムプラグインとして組み込みプラグインの組み合わせで実装する"
+          reason: "プロダクト固有の知識は利用者側にしか無いため、フレームワークは汎用部品の提供に留め、拡張はプラグイン追加で対応する"
+          source_model: "情報: プラグイン, カスタムプラグイン実装ガイド, BUC: プロセスプラグイン拡張フロー, アクター: シナリオ作成者, バリエーション: プラグインフェーズ"
+          confidence: "medium"
+        - id: "SP-102"
+          name: "ランタイム依存の宣言と存在チェック"
+          description: "プラグインごとに前提コマンド（k6・RDB クライアント・ssh / scp 等）をランタイム依存として宣言し、stfw validate と run 前静的検証が存在チェックで検出する"
+          reason: "実行時になって判明する依存不足を実行前に検出するため"
+          source_model: "条件: プラグインのランタイム依存宣言と存在チェック, バリエーション: Docker イメージ構成"
+          confidence: "medium"
+        - id: "SP-103"
+          name: "接続情報のホストグループ名参照"
+          description: "組み込みプラグインの設定（config.yml）では収集先・接続先を inventory のホストグループ名参照のみで指定し、ホスト名・資格情報を直接記述しない。グループ名 all は全グループ横断の予約値とする"
+          reason: "プラグインごとの接続情報の重複と平文資格情報の混入を防ぐため"
+          source_model: "条件: プラグイン接続情報のグループ名参照, inventory 全件指定, 情報: インベントリ, 外部システム: テスト対象データストア（MySQL / PostgreSQL / Redis）, バリエーション: ホストグループ"
+          confidence: "medium"
+        - id: "SP-104"
+          name: "エビデンスディレクトリ規約と期待値比較"
+          description: "収集系プラグイン（collectFile / exportXxx）の出力構造と compare の expect 構造を同型にするディレクトリ規約を第 3 の互換境界として文書化する。compare は compare-files（ファイル比較 OSS）で期待値とエビデンスを比較し、不一致は該当ステップの Error として既存のエラー時停止・Blocked 伝播に載せる"
+          reason: "期待値比較の失敗検知と調査を既存の結果確認手段（status / report / OTel トレース）に一元化するため"
+          source_model: "条件: エビデンスディレクトリ規約, 比較不一致はステップ失敗, 情報: 期待値（expect）, エビデンス, 比較結果, 外部システム: compare-files（ファイル比較 OSS）"
+          confidence: "medium"
+        - id: "SP-105"
+          name: "ログ収集のフィルタ基準時刻と時刻同期前提"
+          description: "collectLog は logfilter（ログ収集 OSS）を収集先ホストへ scp 転送・ssh 実行し、実行ジャーナルの bizdate node_start イベント時刻（env 契約 stfw_bizdate_start_ts 等）以降のログ行にフィルタして収集する。収集先ホストとの時刻同期を前提とし、利用ドキュメントに明記する"
+          reason: "業務日付をまたぐ長時間シナリオでも人手を介さず機械的にログ収集し、時刻ずれによる収集漏れ・過剰収集を防ぐため"
+          source_model: "条件: 収集先ホストとの時刻同期前提, 外部システム: logfilter（ログ収集 OSS）, テスト対象ホスト群"
+          confidence: "medium"
+        - id: "SP-106"
+          name: "export / import ラウンドトリップ互換"
+          description: "データストア系プラグインの export はテーブル名リスト指定でヘッダー付き CSV をエクスポートし、import は export の出力形式をそのままインポートできる（ラウンドトリップ可能）"
+          reason: "エビデンス収集・期待値作成（export）とデータ準備（import）を同一形式で往復させ、人手の変換なしに業務日付ごとの反復を可能にするため"
+          source_model: "条件: export/import ラウンドトリップ互換, バリエーション: 対応データストア製品"
+          confidence: "medium"
+        - id: "SP-107"
+          name: "実行系プラグインの外部テストツール委譲"
+          description: "invokeWeb（ブラウザモード）/ invokeRest は grafana k6 を利用し、画面での取引入力・画面操作検証と API での取引入力・レスポンス検証を実行する。テスト実行エンジンは自作しない"
+          reason: "Generic 能力（負荷試験・E2E 実行）は実績ある OSS へ委譲し自作を回避するため"
+          source_model: "外部システム: grafana k6, 情報: プラグイン"
+          confidence: "medium"
+      rules:
+        - id: "SR-101"
+          name: "プラグイン解決順"
+          description: "同名プラグインはプロジェクト（{proj}/plugins/）→ 組込み（配布物同梱）の順に解決し、プロジェクト側を優先する"
+          reason: "組込みプラグイン群をプロジェクト側でカスタマイズ・差し替え可能にするため"
+          source_model: "条件: プラグイン解決順, バリエーション: プラグインスコープ"
+          confidence: "user"
+        - id: "SR-102"
+          name: "プラグイン env 契約の維持"
+          description: "プラグイン・全スクリプトへ stfw_* / STFW_PROJ_DIR / stfw_bizdate_start_ts 系の環境変数を公開する契約を互換境界として維持する。設定値は Process / Plugin 設定（config.yml）から環境変数としてフラット化される"
+          reason: "任意言語のプラグイン・スクリプトが同一契約で動作し続けるため（最大の互換リスクをゴールデンテストで固定）"
+          source_model: "情報: Process / Plugin 設定（config.yml）, プラグイン, NFR D.2.1.1"
+          confidence: "user"
+        - id: "SR-103"
+          name: "プラグインフェーズ区分"
+          description: "1 つの業務日付を構成するパイプラインを Arrange（準備）/ Act(実行) / Collect（収集）/ Assert（検証）のフェーズで区分し、組込みプラグインを各フェーズの汎用部品として位置付ける"
+          reason: "テストの 4 段階構造を明示し、カスタムプラグインの実装指針を与えるため"
+          source_model: "バリエーション: プラグインフェーズ, 情報: カスタムプラグイン実装ガイド"
+          confidence: "medium"
+    - id: "tier-file-datastore"
+      name: "ファイルデータストア"
+      description: "プロジェクトディレクトリ配下のファイルベース永続化。外部データストア（RDB / KVS 等）を持たない。実行ジャーナル（追記専用 JSONL）・設定 YAML・age 暗号化ファイル・エビデンス・静的 HTML を保持する"
+      technology_candidates:
+        - "ローカルファイルシステム（YAML / JSONL / CSV / 静的 HTML）"
+        - "追記専用イベントログ（JSONL）"
+        - "公開鍵暗号化ファイル（X25519）"
+      policies:
+        - id: "SP-201"
+          name: "実行ジャーナルを唯一のソースとする"
+          description: "各階層・ステップの開始・終了をイベント時刻つきで .stfw/runs/{run_id}/journal.jsonl に追記記録し、状態モデル「階層実行ステータス」「ステップ実行ステータス」の遷移はイベントとして永続化する。status / report / OTel エクスポートは全て本ジャーナルの投影とする"
+          reason: "実行結果のソースを一元化し、リプレイによる再構成・投影の追加を容易にするため"
+          source_model: "情報: 実行ジャーナル（journal.jsonl）, 状態モデル「階層実行ステータス」, NFR C.1.2.1"
+          confidence: "user"
+        - id: "SP-202"
+          name: "資格情報の暗号化保管"
+          description: "テスト対象ホストへの資格情報はホスト×ユーザー単位で age (X25519) により暗号化保管し、平文保管を行わない。重複登録は禁止、キーペアはプロジェクトに 1 組で再生成は --force 指定時のみとする"
+          reason: "NFR E.6.1.1 保管時暗号化(Lv1) への対応。資格情報を平文で扱わない原則を守るため"
+          source_model: "情報: 暗号化キー, パスワード, 条件: パスワード重複登録禁止, 暗号化キー再生成の抑止, バリエーション: 資格情報暗号化方式, NFR E.6.1.1, BUC: 接続情報管理フロー"
+          confidence: "user"
+        - id: "SP-203"
+          name: "バックアップ・復旧はプロジェクトディレクトリ単位"
+          description: "永続データは全てプロジェクトディレクトリ配下に閉じるため、バックアップ・復旧（RPO / RTO）・災害対策はプロジェクトディレクトリの版管理（VCS 等）と配布物の再取得で利用組織が担う。フレームワークとしての DR 機構は持たない"
+          reason: "NFR A.3.1.1 / A.3.1.2 災害対策(Lv0)、A.4.1.1 RPO / A.4.1.2 RTO(Lv1)、A.2.5.1 ストレージ冗長化(Lv1)、C.1.2.1 バックアップ方式(Lv1) への対応。テスト資産はテキストファイル群であり標準的な版管理で十分"
+          source_model: "NFR A.3.1.1, NFR A.3.1.2, NFR A.4.1.1, NFR A.4.1.2, NFR A.2.5.1, NFR C.1.2.1"
+          confidence: "medium"
+      rules:
+        - id: "SR-201"
+          name: "資格情報の旧形式読み込みと一括移行"
+          description: "旧 S/MIME 形式の資格情報は読み込み専用でサポートし、stfw secret migrate で age (X25519) 形式へ一括変換する（旧ファイルは .bak 退避）。移行リハーサルは実施しない（.bak 退避により失敗時は即時切り戻し可能）"
+          reason: "NFR D.2.1.1 移行方式 / D.4.1.1 データ移行量 / D.5.1.1 移行リハーサル(Lv0) への対応。旧環境からの移行時に資格情報を失わず、平文経由の再登録を不要にするため"
+          source_model: "条件: 資格情報の旧形式移行, NFR D.2.1.1, NFR D.4.1.1, NFR D.5.1.1"
+          confidence: "user"
+        - id: "SR-202"
+          name: "派生データの gitignore"
+          description: "compare の result ディレクトリと actual ディレクトリ（収集系 process ディレクトリへの symlink または一時コピー）は gitignore 対象とし、版管理へ混入させない"
+          reason: "再生成可能な派生データとテスト資産（期待値・シナリオ）を分離するため"
+          source_model: "情報: 比較結果"
+          confidence: "medium"
+    - id: "tier-report-delivery"
+      name: "レポート配信"
+      description: "実行ジャーナルから生成した静的 HTML レポート（index + run 詳細）をブラウザへ配信する。コンテナ構成では Web サーバ（nginx 等）が reports 共有 volume を読み取り専用配信する（stfw 自体はサーバレスのまま）"
+      technology_candidates:
+        - "静的 HTML（自己完結・ビルド不要・インライン CSS）"
+        - "静的 Web サーバ（コンテナ構成のリバースプロキシ）"
+        - "共有 volume（読み取り専用配信）"
+      policies:
+        - id: "SP-301"
+          name: "静的 HTML の増分再生成"
+          description: "stfw report が実行ジャーナルから静的 HTML（index + run 詳細）を生成する。実行中も process 終了ごとに増分再生成され、テスト結果確認者は準リアルタイムにブラウザ（コンテナ構成では http://localhost:8080）で閲覧できる"
+          reason: "NFR B.2.1.1 レスポンスタイム(Lv2) / C.1.1.1 運用監視への対応。常駐サーバなしで実行状況の確認手段を提供するため"
+          source_model: "情報: HTML レポート, BUC: 実行結果監視・確認フロー, アクター: テスト結果確認者, NFR B.2.1.1, NFR C.1.1.1"
+          confidence: "user"
+        - id: "SP-302"
+          name: "モダンブラウザ対応"
+          description: "HTML レポートは特定ブラウザ専用機能を使わない自己完結の静的 HTML とし、主要モダンブラウザで閲覧できる"
+          reason: "NFR F.1.1.2 対応ブラウザ(Lv2) への対応"
+          source_model: "NFR F.1.1.2"
+          confidence: "medium"
+      rules:
+        - id: "SR-301"
+          name: "読み取り専用・ローカル配信"
+          description: "Web サーバは reports 共有 volume を読み取り専用（:ro）でマウントして配信し、書き込み経路を持たない。配信はローカル / 閉域ネットワーク前提とし、WAF・IDS/IPS・ファイアウォールの追加構成は行わない（必要な場合は利用組織のネットワーク境界に委ねる）"
+          reason: "NFR E.10.1.1 WAF(Lv0) / E.8.1.1 ファイアウォール(Lv1) への対応。攻撃面を静的ファイル配信のみに限定する"
+          source_model: "情報: HTML レポート, NFR E.10.1.1, NFR E.8.1.1"
+          confidence: "medium"
+    - id: "tier-distribution"
+      name: "配布・CI"
+      description: "フレームワーク自体の品質保証と配布を担う開発時ティア。マルチプラットフォームバイナリ・コンテナイメージ・compose 定義を配布し、PR 検証からリリースまでを CI/CD パイプラインで自動化する"
+      technology_candidates:
+        - "バイナリリリースホスティング"
+        - "Container Registry"
+        - "CI/CD パイプライン"
+        - "リリース自動化ツール（クロスコンパイル + チェンジログ生成）"
+      policies:
+        - id: "SP-401"
+          name: "マルチプラットフォーム単一バイナリ配布"
+          description: "環境管理者は配布元（GitHub Releases / ghcr.io）から対象プラットフォームのバイナリ（linux/darwin × amd64/arm64 + windows/amd64）または Docker image / compose.yaml を取得し、配置のみで導入を完了する。install スクリプトと依存モジュールのダウンロードは廃止"
+          reason: "NFR F.1.1.1 対応 OS(Lv3) / D.2.1.1 移行方式への対応。tar.gz 展開 + 依存準備だった導入を配布物の配置のみに短縮する"
+          source_model: "情報: stfw 本体, 外部システム: 配布元（GitHub Releases / ghcr.io）, バリエーション: 対応 OS 種別, アクター: 環境管理者, BUC: stfw導入フロー, NFR F.1.1.1, NFR D.2.1.1"
+          confidence: "user"
+        - id: "SP-402"
+          name: "依存全部入りコンテナイメージタグの提供"
+          description: "Docker image は既存の最小構成に加えて、プラグインのランタイム依存（k6・RDB クライアント・ssh / scp 等）全部入りのタグ（例: stfw:full）を提供する"
+          reason: "依存準備なしで組込みプラグイン群を利用可能にし、導入の摩擦を下げるため"
+          source_model: "バリエーション: Docker イメージ構成, 情報: stfw 本体"
+          confidence: "medium"
+        - id: "SP-403"
+          name: "パッチ適用はバイナリ差し替え"
+          description: "バージョン更新・パッチ適用はバイナリ / イメージの差し替えで任意時点に行い、計画停止の概念を持たない"
+          reason: "NFR C.2.1.2 パッチ適用方針 / A.1.1.3 計画停止(Lv1) への対応。常駐サービスが無いため停止調整が不要"
+          source_model: "NFR C.2.1.2, NFR A.1.1.3"
+          confidence: "medium"
+      rules:
+        - id: "SR-401"
+          name: "CI 品質ゲート"
+          description: "開発 CI 基盤（GitHub Actions）で PR ごとに lint + test（単体テスト + testscript 受け入れテスト）、master マージで snapshot ビルド、tag 付与でリリースとコンテナイメージ配布を実行する"
+          reason: "NFR C.4.1.1 テスト環境(Lv2) / E.2.1.1 リスク分析への対応。フレームワーク自体の品質保証を自動化するため"
+          source_model: "外部システム: 開発 CI 基盤（GitHub Actions）, NFR C.4.1.1, NFR E.2.1.1"
+          confidence: "user"
+        - id: "SR-402"
+          name: "配布物の整合性検証"
+          description: "リリース成果物にはチェックサムを付与し、取得側で改竄・破損を検証できるようにする"
+          reason: "NFR E.9.1.1 マルウェア対策 / E.1.1.1 セキュリティポリシーへの対応。配布経路の完全性を担保する"
+          source_model: "NFR E.9.1.1, NFR E.1.1.1"
+          confidence: "default"
+        - id: "SR-403"
+          name: "OSS コミュニティサポート"
+          description: "サポートはリポジトリの issue ベース（ベストエフォート）とし、SLA を伴うサポート窓口は設けない"
+          reason: "NFR C.5.1.1 サポート時間(Lv1・ユーザー確定) への対応。OSS フレームワークとしての標準的な体制"
+          source_model: "NFR C.5.1.1"
+          confidence: "medium"
+  cross_tier_policies:
+    - id: "CTP-001"
+      name: "認証・認可の OS / 既存基盤委譲"
+      description: "IdP・API Gateway・認可サービスは導入しない。アクターは全員社内のテスト担当者（テスト実行者 / シナリオ作成者 / 環境管理者 / テスト結果確認者）であり、CLI は OS 実行ユーザーの権限とファイルパーミッションで動作する。テスト対象ホストへの接続は SSH 資格情報（secret）で認証する"
+      reason: "NFR E.5.1.1 認証方式(Lv1) / E.5.2.1 アクセス制御(Lv1) への対応。外部アクター・マルチテナントが存在しないため専用認証基盤は過剰"
+      source_model: "アクター: テスト実行者, シナリオ作成者, 環境管理者, テスト結果確認者, NFR E.5.1.1, NFR E.5.2.1"
+      confidence: "high"
+    - id: "CTP-002"
+      name: "トレーサビリティは OTLP トレース一本化"
+      description: "run > scenario > bizdate > process > step の実行状況を OTLP トレース（スパンツリー）として OTLP 受信先（OpenTelemetry Collector / 互換バックエンド）へ送信する。スパン属性に実行コンテキスト（run_id・階層タイプ・bizdate・seq・group・プロセスタイプ・終了コード等）を載せ、実行ステータス Error はスパンステータス Error にマップし Blocked はスパン属性で表現する。シグナルはトレースのみとしログ・メトリクスは送らない"
+      reason: "NFR C.1.3.1 監視範囲(Lv3) / C.1.1.1 運用監視 / C.3.1.1 障害検知(Lv2) への対応。既存オブザーバビリティ基盤でそのまま可視化・分析できる標準プロトコルへ委譲する"
+      source_model: "情報: OTel トレース（スパンツリー）, 外部システム: OTLP 受信先（OpenTelemetry Collector / 互換バックエンド）, 条件: スパンステータス・属性マップ, バリエーション: スパン階層タイプ, OTel エクスポート設定, NFR C.1.3.1, NFR C.1.1.1, NFR C.3.1.1"
+      confidence: "user"
+    - id: "CTP-003"
+      name: "互換境界の維持"
+      description: "3 つの互換境界を全ティア横断で維持する: (1) ディレクトリ規約（「_」始まりのディレクトリのみを実行対象とし名前昇順で実行順決定）、(2) プラグイン env 契約（stfw_* 環境変数 + 終了コード 0/3/6・任意言語）、(3) エビデンスディレクトリ規約（収集系出力と expect の同型構造）"
+      reason: "NFR D.2.1.1 移行方式 / D.4.1.1 データ移行量への対応。旧版からの移行と 2 層プラグインエコシステム全体の互換性を担保する"
+      source_model: "条件: 実行対象ディレクトリ規則, エビデンスディレクトリ規約, NFR D.2.1.1, NFR D.4.1.1"
+      confidence: "user"
+    - id: "CTP-004"
+      name: "シークレットマスキング"
+      description: "ログ出力時に環境変数 PASSWORD / TOKEN の値を [secret] に置換する。実行ログを出力・確認するすべての場面で資格情報を平文で扱わない原則を守る"
+      reason: "NFR E.6.2.1 データマスキング / E.7.1.1 監査ログへの対応。ログ経由の資格情報漏えいを防ぐ"
+      source_model: "条件: シークレットマスキング, NFR E.6.2.1, NFR E.7.1.1"
+      confidence: "user"
+    - id: "CTP-005"
+      name: "再実行は新 run_id の別実行"
+      description: "階層実行ステータスの終了状態（Success / Error）からの再遷移は行わず、再実行は常に新しい run_id の別実行として扱う。ジャーナルは追記専用でイベントの訂正・削除を行わない"
+      reason: "実行結果の不変性と監査可能性を保ち、冪等性の議論を「実行単位の分離」で単純化するため"
+      source_model: "条件: run_id の採番・保持, 状態モデル「階層実行ステータス」"
+      confidence: "user"
+    - id: "CTP-006"
+      name: "i18n 非対応（日本語中心）"
+      description: "多言語対応（i18n）は行わない。RDRA モデルに外国語アクター・多言語キーワード・地域バリエーション等の i18n シグナルが存在しない"
+      reason: "i18n シグナルなしのため、テキスト外部化等の先行投資は不要と判断"
+      source_model: "なし"
+      confidence: "high"
+    - id: "CTP-007"
+      name: "性能・拡張性は単一利用者・逐次実行前提"
+      description: "同時アクセス・スループットのスケールアウトはスコープ外とする（利用者ローカルで 1 実行 = 1 プロセス）。業務日付をまたぐ長時間バッチ実行は増分レポートと OTel トレースで進捗確認する。性能テストは実施せず、将来の並列実行はランナーのシナリオ単位分離で余地を残す"
+      reason: "NFR B.1.1.1 同時アクセス(Lv1) / B.1.1.3 / B.1.2.1 / B.2.1.2 スループット(Lv1) / B.2.2.1 バッチ処理時間(Lv1・ユーザー確定) / B.3.1.1 CPU 拡張性(Lv1) / B.4.1.1 性能テスト(Lv0) への対応"
+      source_model: "NFR B.1.1.1, NFR B.1.1.3, NFR B.1.2.1, NFR B.2.1.2, NFR B.2.2.1, NFR B.3.1.1, NFR B.4.1.1"
+      confidence: "medium"
+    - id: "CTP-008"
+      name: "セキュリティ運用の責務分担"
+      description: "フレームワーク側はセキュアな既定値（暗号化保管・マスキング・known_hosts 検証・依存最小化）と CI での静的解析を提供し、セキュリティポリシー策定・診断・インシデント対応は利用組織の運用に委ねる"
+      reason: "NFR E.1.1.1 セキュリティポリシー(Lv1) / E.2.1.1 リスク分析(Lv1) / E.3.1.1 診断(Lv0) / E.11.1.1 インシデント対応(Lv1) への対応。CLI ツールの責務範囲を明確化する"
+      source_model: "NFR E.1.1.1, NFR E.2.1.1, NFR E.3.1.1, NFR E.11.1.1"
+      confidence: "medium"
+  cross_tier_rules:
+    - id: "CTR-001"
+      name: "リモート接続の SSH サーバキー検証"
+      description: "テスト対象ホスト群へのリモート適用（ssh / scp）に先立ち、stfw ssh trust <host|group> で SSH サーバキーを known_hosts へ登録（旧キー削除 + 新キー登録、inventory グループ指定で一括登録）し、中間者リスクを避ける"
+      reason: "NFR E.6.1.2 通信時暗号化(Lv1) への対応。リモート通信は SSH で暗号化し、接続先の真正性を検証する"
+      source_model: "情報: SSH サーバキー（known_hosts）, 外部システム: テスト対象ホスト群, NFR E.6.1.2, BUC: 接続情報管理フロー"
+      confidence: "user"
+    - id: "CTR-002"
+      name: "OTel エクスポートの送信抑制と非致命扱い"
+      description: "OTEL_EXPORTER_OTLP_ENDPOINT・stfw.otel.endpoint のいずれにも送信先が未設定の場合はトレースを送信しない。送信失敗は実行を失敗させず、実行ログへの警告記録のみとする"
+      reason: "通知経路の障害がテスト実行そのものを止めないようにし、テスト結果の取得を優先するため"
+      source_model: "条件: OTel エクスポート先未設定時の送信抑制, OTel エクスポート失敗の非致命扱い"
+      confidence: "user"
+    - id: "CTR-003"
+      name: "構造化ログの単一ファイル集約"
+      description: "CLI 本体のログは構造化ログとして .stfw/stfw.log に集約する（stdout はコマンド出力専用）。OTLP 送信失敗等の警告も本ログに記録する"
+      reason: "NFR C.6.1.2 ログ種別への対応。障害調査の起点を単一ファイルに集約する"
+      source_model: "情報: 実行ログ, NFR C.6.1.2"
+      confidence: "user"
+  diagram_mermaid: |
+    graph TD
+      subgraph Local["利用者ホスト / コンテナ"]
+        CLI["CLI 本体（stfw・Go 単一バイナリ・内蔵ランナー）"]
+        PLG["プラグイン実行（組込み + カスタム・任意言語スクリプト）"]
+        FS[("ファイルデータストア（stfw.yml / journal.jsonl / age 暗号化 / エビデンス）")]
+        WEB["レポート配信（静的 Web サーバ + 共有 volume）"]
+      end
+      subgraph External["外部システム"]
+        TGT["テスト対象ホスト群 / データストア"]
+        OTLP["OTLP 受信先（オブザーバビリティ基盤）"]
+        DIST["配布元 / 開発 CI 基盤"]
+      end
+      CLI -->|外部プロセス起動・env 注入| PLG
+      CLI -->|読み書き| FS
+      CLI -->|OTLP トレース送信（非致命）| OTLP
+      PLG -->|ssh / scp / DB 接続 / k6| TGT
+      PLG -->|エビデンス収集| FS
+      WEB -->|読み取り専用配信| FS
+      DIST -->|バイナリ / イメージ配布| CLI
+
+app_architecture:
+  tier_layers:
+    - tier_id: "tier-cli"
+      layers:
+        - id: "L-cli-presentation"
+          name: "プレゼンテーション層"
+          responsibility: "Driver Side の入出力。CLI フレームワークによるコマンド・引数パース、入力バリデーション、出力フォーマット、ロガーのセットアップ（構造化ログ + マスキング Writer）"
+          allowed_dependencies:
+            - "L-cli-usecase"
+          policies:
+            - id: "LP-001"
+              name: "コマンド境界での入力バリデーション"
+              description: "scaffold 生成・実行コマンドの引数は境界で検証する。業務日付は YYYYMMDD の 8 桁数字、連番は数値のみ、グループ名は「_」を含まないこと。検証の関所自体はドメイン層の値オブジェクトに置き、presentation はエラーメッセージへの変換を担う"
+              reason: "規約違反のディレクトリ生成を防ぎ、ディレクトリ名パースの安全性を守るため"
+              source_model: "条件: 業務日付フォーマット, 連番フォーマット, グループ名制約"
+              confidence: "user"
+          rules:
+            - id: "LR-001"
+              name: "終了コード変換"
+              description: "ドメイン・ユースケースのエラーはプレゼンテーション層で終了コード体系（0 / 3 / 6）に変換して返却する"
+              reason: "呼び出し元（CI・スクリプト）が機械的に成否判定できるようにするため"
+              source_model: "バリエーション: 終了コード"
+              confidence: "user"
+            - id: "LR-002"
+              name: "マスキング Writer の必須経由"
+              description: "全ログ出力はシークレットマスキング（PASSWORD / TOKEN → [secret]）を行う Writer を経由する"
+              reason: "ログ経由の資格情報漏えいをレイヤー横断で防ぐため"
+              source_model: "条件: シークレットマスキング"
+              confidence: "user"
+        - id: "L-cli-usecase"
+          name: "ユースケース層"
+          responsibility: "ビジネスフロー制御。initialize / scaffold / validate / runscenario / status / report / inventory / secret / sshtrust / plugin の各ユースケース。runscenario が実行オーケストレーション（ツリー走査 → スクリプト実行 → ジャーナル追記 → 投影）を担う"
+          allowed_dependencies:
+            - "L-cli-domain"
+            - "L-cli-repository"
+          policies:
+            - id: "LP-002"
+              name: "実行オーケストレーション"
+              description: "runscenario はシナリオツリーの昇順走査・プロセス 5 フェーズ（setup → pre_execute → execute → post_execute → teardown）の制御・ジャーナル追記・OTel / レポート投影の呼び出しを編成する。dry-run は実タスクをスキップする"
+              reason: "一括自動実行のフロー制御をユースケース層に集約し、ドメインロジック（状態遷移・Blocked 伝播）と分離するため"
+              source_model: "BUC: シナリオ一括自動実行フロー, 条件: dry-run の実行範囲"
+              confidence: "user"
+            - id: "LP-003"
+              name: "エラー集約とログ一回出力"
+              description: "ドメイン・下位層のエラーはユースケース層で集約キャッチし、1 回だけログ出力して上位へ返す（多重ログ防止・cause chain 保持）"
+              reason: "同一エラーの多重ログを防ぎ、失敗調査のノイズを減らすため"
+              source_model: "なし"
+              confidence: "default"
+          rules: []
+        - id: "L-cli-domain"
+          name: "ドメイン層"
+          responsibility: "依存ゼロの純粋ロジック。BC ごとのパッケージ分割（scenario / run / notify / project）。値オブジェクト・状態遷移・ファーストクラスコレクション・ジャーナルイベント定義"
+          allowed_dependencies: []
+          policies:
+            - id: "LP-004"
+              name: "Core BC への戦術パターン集中"
+              description: "Core の 2 BC（scenario / run）のみ戦術パターン（値オブジェクトの関所一本化・振る舞いを持つ区分型・ファーストクラスコレクション・集約）を適用し、Supporting（notify / project）はトランザクションスクリプトを許容する"
+              reason: "投資配分をサブドメイン分類に従わせ、モデリングコストを競争優位の源泉に集中するため"
+              source_model: "情報: シナリオ, 実行（run）, BUC: シナリオ一括自動実行フロー"
+              confidence: "user"
+            - id: "LP-005"
+              name: "ドメイン層のログ出力禁止"
+              description: "ドメイン層は直接ログ出力を行わない。状態変化はイベントの発行または error の返却で通知する"
+              reason: "純粋ロジックの再利用性・テスト容易性を保つため"
+              source_model: "なし"
+              confidence: "default"
+          rules:
+            - id: "LR-003"
+              name: "依存ゼロ"
+              description: "ドメイン層は他レイヤー・外部ライブラリに依存しない（標準ライブラリのみ）"
+              reason: "最内層の安定性を最大化するため"
+              source_model: "なし"
+              confidence: "user"
+            - id: "LR-004"
+              name: "不正な状態遷移は error 返却"
+              description: "状態モデル「階層実行ステータス」（Started → Success / Error）と状態モデル「ステップ実行ステータス」（Pending → Success / Error / Blocked）は別型として実装し、不正遷移は panic せず error を返す"
+              reason: "外部から編集可能なジャーナルのリプレイ経路でも安全に検証を通すため"
+              source_model: "状態モデル「階層実行ステータス」, 状態モデル「ステップ実行ステータス」"
+              confidence: "user"
+        - id: "L-cli-repository"
+          name: "リポジトリ層"
+          responsibility: "aggregate root 単位のファイルアクセス抽象（journal / scenariotree / config / secret / inventory / plugin / scaffold / report）。ドメインモデルとファイル表現の相互変換を隠蔽する"
+          allowed_dependencies:
+            - "L-cli-domain"
+            - "L-cli-gateway"
+          policies: []
+          rules:
+            - id: "LR-005"
+              name: "Aggregate Root 対応"
+              description: "repository はドメインの aggregate root（またはファーストクラスコレクション）と 1:1 で定義する"
+              reason: "データアクセスの責務単位を集約境界に一致させるため"
+              source_model: "なし"
+              confidence: "default"
+            - id: "LR-006"
+              name: "シナリオツリーの規約解釈"
+              description: "scenariotree repository はシナリオ・業務日付・プロセスの各ディレクトリを scenario ルートからの深さと stfw.yml の存在で階層判定し、「_」始まりディレクトリのみを名前昇順で実行対象として列挙する"
+              reason: "ディレクトリ構造 = 実行定義の機械的解釈を一箇所に閉じるため"
+              source_model: "条件: 階層ディレクトリ判定, 実行対象ディレクトリ規則"
+              confidence: "user"
+            - id: "LR-007"
+              name: "ジャーナルの追記とリプレイ復元"
+              description: "journal repository は追記専用でイベントを書き込み（行 flush）、リプレイによる Run 復元時も生成時と同じ状態遷移検証を通す"
+              reason: "journal.jsonl は外部から編集可能なため、復元経路の妥当性検証を省略しない"
+              source_model: "情報: 実行ジャーナル（journal.jsonl）, 状態モデル「階層実行ステータス」"
+              confidence: "user"
+        - id: "L-cli-gateway"
+          name: "ゲートウェイ層"
+          responsibility: "Driven Side の入出力。scriptexec（外部プロセス起動 + env 注入）、otlptrace（OTLP エクスポート）、sshkeyscan（SSH サーバキー取得）、htmlwriter（静的 HTML 書き出し）"
+          allowed_dependencies: []
+          policies:
+            - id: "LP-006"
+              name: "外部 I/O の成否ログ"
+              description: "外部プロセス実行・OTLP 送信・SSH 接続の開始・終了・成否・処理時間を構造化ログに記録する。OTLP 送信失敗は WARN として記録し実行を継続する"
+              reason: "外部依存の劣化・失敗を調査可能にしつつ、通知経路の障害を非致命に留めるため"
+              source_model: "条件: OTel エクスポート失敗の非致命扱い, NFR C.3.1.1"
+              confidence: "user"
+          rules:
+            - id: "LR-008"
+              name: "env 注入契約"
+              description: "scriptexec はプラグイン env 契約（stfw_* / STFW_PROJ_DIR / stfw_bizdate_start_ts 系）に従い、解決済み設定値を環境変数としてスクリプトへ公開する"
+              reason: "互換境界（env 契約）の実装点を一箇所に固定するため"
+              source_model: "情報: Process / Plugin 設定（config.yml）, NFR D.2.1.1"
+              confidence: "user"
+            - id: "LR-009"
+              name: "出力先・外部ツールと 1:1 の adapter"
+              description: "gateway の各 adapter は出力先・外部ツール（外部プロセス / OTLP / SSH / HTML ファイル）と 1:1 で定義し、複数の外部依存を 1 つの adapter に混在させない"
+              reason: "外部依存の変更影響範囲を限定するため"
+              source_model: "なし"
+              confidence: "default"
+      cross_layer_policies:
+        - id: "CLP-001"
+          name: "IF なし（直接依存）"
+          description: "レイヤー間はインターフェースを介さず直接依存とし、開発スピードを優先する。外部依存の乗り換え・チーム分割が必要になった時点で該当箇所のみ凹型（IF 導入）で依存を内側に向ける"
+          reason: "承認済み v1.0 計画で確定。単一チーム・依存が安定した CLI のため IF による疎結合化は過剰"
+          source_model: "なし"
+          confidence: "user"
+        - id: "CLP-002"
+          name: "エラーハンドリング伝播"
+          description: "ドメインのエラーはユースケース層で集約キャッチ（ログ 1 回）し、プレゼンテーション層で終了コード（0 / 3 / 6）へ変換する。ゲートウェイ層は外部 I/O ログに記録後、エラーをそのまま返す"
+          reason: "レイヤー責務の分離と多重ログ防止"
+          source_model: "バリエーション: 終了コード"
+          confidence: "default"
+        - id: "CLP-003"
+          name: "ロギング方針"
+          description: "構造化ログを .stfw/stfw.log へ出力する（日次ローテーション・マスキング済み・terminal 実行時カラー）。ドメイン層はログ出力しない。ログレベルは trace〜error でデフォルト info"
+          reason: "NFR C.6.1.2 ログ種別への対応と、レイヤー別ログ責務の明確化"
+          source_model: "情報: 実行ログ, バリエーション: ログレベル, NFR C.6.1.2"
+          confidence: "user"
+      cross_layer_rules:
+        - id: "CLR-001"
+          name: "依存方向の固定"
+          description: "presentation → usecase → domain / repository、repository → domain / gateway とし、domain はどこにも依存しない"
+          reason: "最内層（ドメイン）の安定性を守る一方向依存の強制"
+          source_model: "なし"
+          confidence: "user"
+        - id: "CLR-002"
+          name: "BC 跨ぎの共有は ID とイベントのみ"
+          description: "domain 内 BC パッケージ間の共有は ID とジャーナルイベントのみとする。run のジャーナルイベントが notify（OTel）と report の唯一の入力であり、BC 跨ぎの直接ファイルアクセスは禁止する"
+          reason: "モジュラモノリス内の BC 境界を実装レベルで維持するため"
+          source_model: "情報: 実行ジャーナル（journal.jsonl）"
+          confidence: "user"
+        - id: "CLR-003"
+          name: "ログアンチパターン防止"
+          description: "多重ログ禁止・catch 握り潰し禁止・機密情報マスキング必須・非構造化ログ禁止を全レイヤーで徹底する"
+          reason: "一般的なベストプラクティスとして適用"
+          source_model: "条件: シークレットマスキング"
+          confidence: "default"
+      diagram_mermaid: |
+        graph TD
+          P["presentation（cobra CLI + logger/masker）"] --> U["usecase（runscenario / scaffold / validate 等）"]
+          U --> D["domain（scenario / run / notify / project・依存ゼロ）"]
+          U --> R["repository（journal / scenariotree / config / secret 等）"]
+          R --> D
+          R --> G["gateway（scriptexec / otlptrace / sshkeyscan / htmlwriter）"]
+    - tier_id: "tier-plugin"
+      layers:
+        - id: "L-plugin-contract"
+          name: "プラグイン契約層"
+          responsibility: "プラグインのエントリポイント（bin/）。env 契約（stfw_* / STFW_PROJ_DIR / stfw_bizdate_start_ts 系）の受領、config.yml 由来設定の解釈、終了コード（0 / 3 / 6）の返却"
+          allowed_dependencies:
+            - "L-plugin-exec"
+          policies:
+            - id: "LP-101"
+              name: "契約のみに依存"
+              description: "プラグインは env 契約と終了コード体系のみに依存し、stfw 本体の内部実装（Go パッケージ）へは依存しない"
+              reason: "任意言語での実装と本体・プラグインの独立進化を可能にするため"
+              source_model: "情報: プラグイン, バリエーション: 終了コード"
+              confidence: "medium"
+          rules: []
+        - id: "L-plugin-exec"
+          name: "外部ツール実行層"
+          responsibility: "外部ツール（ssh / scp・RDB / KVS クライアント・k6・logfilter・compare-files）の呼び出しと、エビデンスディレクトリ規約に従うファイル入出力"
+          allowed_dependencies: []
+          policies:
+            - id: "LP-102"
+              name: "宣言済みランタイム依存のみ使用"
+              description: "プラグインが呼び出す前提コマンドはランタイム依存として宣言済みのものに限定する（validate / run 前静的検証の存在チェック対象）"
+              reason: "宣言と実態の乖離による実行時失敗を防ぐため"
+              source_model: "条件: プラグインのランタイム依存宣言と存在チェック"
+              confidence: "medium"
+          rules:
+            - id: "LR-101"
+              name: "収集出力のエビデンスディレクトリ規約準拠"
+              description: "収集系プラグインの出力は expect と同型のエビデンスディレクトリ規約に従う"
+              reason: "期待値比較（compare）の入力を機械的に対応づけるため"
+              source_model: "条件: エビデンスディレクトリ規約"
+              confidence: "medium"
+      cross_layer_policies:
+        - id: "CLP-101"
+          name: "カスタムプラグインは組込みの組み合わせ"
+          description: "プロダクト固有のカスタムプラグインは、組込みプラグインの組み合わせとして実装する（カスタムプラグイン実装ガイドに想定パターンを文書化）"
+          reason: "プロダクト固有知識を利用者側に置き、フレームワークは汎用部品に徹するため"
+          source_model: "情報: カスタムプラグイン実装ガイド"
+          confidence: "medium"
+      cross_layer_rules:
+        - id: "CLR-101"
+          name: "終了コード 0 / 3 / 6 の遵守"
+          description: "プラグイン・スクリプトは終了コード体系（0: SUCCESS / 3: WARN / 6: ERROR）に従う"
+          reason: "ステップ成否判定と Blocked 伝播の互換性維持"
+          source_model: "バリエーション: 終了コード"
+          confidence: "user"
+        - id: "CLR-102"
+          name: "接続情報の直接記述禁止"
+          description: "プラグイン内・プラグイン設定にホスト名・資格情報を直接記述せず、inventory のホストグループ名参照と secret / ssh trust の既存機構を利用する"
+          reason: "接続情報の重複と平文資格情報の混入を防ぐため"
+          source_model: "条件: プラグイン接続情報のグループ名参照"
+          confidence: "medium"
+      diagram_mermaid: |
+        graph TD
+          C["プラグイン契約層（bin/ エントリポイント・env 契約・終了コード）"] --> X["外部ツール実行層（ssh / scp・DB クライアント・k6・logfilter・compare-files）"]
+
+data_architecture:
+  entities:
+    - id: "E-001"
+      name: "stfw 本体"
+      source_info: "情報: stfw 本体"
+      model_type: "resource_mutable"
+      attributes:
+        - name: "version"
+          type: "string"
+          description: "stfw のバージョン（VERSION）"
+          nullable: false
+          primary_key: true
+        - name: "distribution_form"
+          type: "string"
+          description: "配布形態（マルチプラットフォームバイナリ / Docker image / compose.yaml）"
+          nullable: false
+          primary_key: false
+        - name: "image_tag_composition"
+          type: "string"
+          description: "Docker image タグ構成（最小構成 / 依存全部入り）"
+          nullable: false
+          primary_key: false
+        - name: "builtin_plugins"
+          type: "text"
+          description: "配布物に同梱される組込みプラグイン群"
+          nullable: false
+          primary_key: false
+        - name: "builtin_default_config"
+          type: "text"
+          description: "内蔵デフォルト設定"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-007"
+          type: "1:N"
+          description: "stfw 本体が組込みプラグイン群を同梱する"
+    - id: "E-002"
+      name: "プロジェクト"
+      source_info: "情報: プロジェクト"
+      model_type: "resource_mutable"
+      attributes:
+        - name: "project_dir"
+          type: "string"
+          description: "プロジェクトディレクトリ（stfw.yml の存在で識別・上位探索）"
+          nullable: false
+          primary_key: true
+        - name: "config_dir"
+          type: "string"
+          description: "config/ ディレクトリ"
+          nullable: false
+          primary_key: false
+        - name: "plugins_dir"
+          type: "string"
+          description: "plugins/ ディレクトリ（プロジェクトスコープのプラグイン）"
+          nullable: false
+          primary_key: false
+        - name: "scenario_dir"
+          type: "string"
+          description: "scenario/ ディレクトリ"
+          nullable: false
+          primary_key: false
+        - name: "internal_dir"
+          type: "string"
+          description: ".stfw/ 内部データ（runs / reports 等）"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-001"
+          type: "N:1"
+          description: "プロジェクトは stfw 本体（バージョン）の上で管理される"
+    - id: "E-003"
+      name: "プロジェクト設定（stfw.yml）"
+      source_info: "情報: プロジェクト設定（stfw.yml）"
+      model_type: "resource_mutable"
+      attributes:
+        - name: "file_path"
+          type: "string"
+          description: "stfw.yml のパス（プロジェクトに 1 つ）"
+          nullable: false
+          primary_key: true
+        - name: "project_version"
+          type: "string"
+          description: "project_version"
+          nullable: false
+          primary_key: false
+        - name: "loglevel"
+          type: "string"
+          description: "ログレベル（trace〜error、デフォルト info）"
+          nullable: false
+          primary_key: false
+        - name: "inventory_ref"
+          type: "string"
+          description: "参照する inventory ファイル名"
+          nullable: false
+          primary_key: false
+        - name: "otel_endpoint"
+          type: "string"
+          description: "OTLP エクスポート先（未設定時は送信しない）"
+          nullable: true
+          primary_key: false
+        - name: "timezone"
+          type: "string"
+          description: "timezone"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-002"
+          type: "1:1"
+          description: "プロジェクトに 1 つの設定ファイル"
+    - id: "E-004"
+      name: "インベントリ"
+      source_info: "情報: インベントリ"
+      model_type: "resource_mutable"
+      attributes:
+        - name: "inventory_file"
+          type: "string"
+          description: "インベントリファイル名（環境単位。例: staging.yml）"
+          nullable: false
+          primary_key: true
+        - name: "group_name"
+          type: "string"
+          description: "グループ名（web / ap / db 等 + 予約値 all）"
+          nullable: false
+          primary_key: false
+        - name: "hosts"
+          type: "text"
+          description: "ホスト一覧（ip または hostname）"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-002"
+          type: "N:1"
+          description: "環境単位のインベントリがプロジェクトに属する"
+    - id: "E-005"
+      name: "暗号化キー"
+      source_info: "情報: 暗号化キー"
+      model_type: "resource_mutable"
+      attributes:
+        - name: "key_dir"
+          type: "string"
+          description: "config/encrypt/ 配下の格納先（プロジェクトに 1 組）"
+          nullable: false
+          primary_key: true
+        - name: "private_key"
+          type: "string"
+          description: "age (X25519) 秘密鍵"
+          nullable: false
+          primary_key: false
+        - name: "public_key"
+          type: "string"
+          description: "age (X25519) 公開鍵"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-002"
+          type: "1:1"
+          description: "プロジェクトに 1 組のキーペア"
+    - id: "E-006"
+      name: "パスワード"
+      source_info: "情報: パスワード"
+      model_type: "resource_mutable"
+      attributes:
+        - name: "file_name"
+          type: "string"
+          description: "資格情報ファイル名（{host}-{user}、config/passwd/ 配下）"
+          nullable: false
+          primary_key: true
+        - name: "host"
+          type: "string"
+          description: "対象ホスト"
+          nullable: false
+          primary_key: false
+        - name: "user_name"
+          type: "string"
+          description: "対象ユーザー"
+          nullable: false
+          primary_key: false
+        - name: "encrypted_value"
+          type: "text"
+          description: "暗号化済み文字列（password・token 等）"
+          nullable: false
+          primary_key: false
+        - name: "encryption_scheme"
+          type: "string"
+          description: "暗号化方式（age (X25519)。旧 S/MIME は読み込み専用）"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-005"
+          type: "N:1"
+          description: "プロジェクトの暗号化キーで暗号化・復号される"
+        - target_entity: "E-004"
+          type: "N:1"
+          description: "inventory 管理下のホストへの資格情報"
+    - id: "E-007"
+      name: "プラグイン"
+      source_info: "情報: プラグイン"
+      model_type: "resource_mutable"
+      attributes:
+        - name: "plugin_name"
+          type: "string"
+          description: "プラグイン名（process/{process_type}）"
+          nullable: false
+          primary_key: true
+        - name: "scope"
+          type: "string"
+          description: "スコープ（プロジェクト / 組込み）"
+          nullable: false
+          primary_key: false
+        - name: "phase"
+          type: "string"
+          description: "フェーズ（Arrange / Act / Collect / Assert）"
+          nullable: false
+          primary_key: false
+        - name: "runtime_deps"
+          type: "text"
+          description: "ランタイム依存宣言（前提コマンド: k6・RDB クライアント・ssh / scp 等）"
+          nullable: false
+          primary_key: false
+        - name: "config_file"
+          type: "string"
+          description: "config.yml"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-002"
+          type: "N:1"
+          description: "プロジェクトスコープのプラグインはプロジェクトに属する"
+    - id: "E-008"
+      name: "SSH サーバキー（known_hosts）"
+      source_info: "情報: SSH サーバキー（known_hosts）"
+      model_type: "resource_mutable"
+      attributes:
+        - name: "target_host"
+          type: "string"
+          description: "対象ホスト"
+          nullable: false
+          primary_key: true
+        - name: "server_public_key"
+          type: "text"
+          description: "SSH サーバ公開鍵"
+          nullable: false
+          primary_key: false
+        - name: "known_hosts_file"
+          type: "string"
+          description: "known_hosts ファイル"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-004"
+          type: "N:1"
+          description: "inventory のホスト・グループ指定で一括登録される"
+    - id: "E-009"
+      name: "シナリオ"
+      source_info: "情報: シナリオ"
+      model_type: "resource_mutable"
+      attributes:
+        - name: "scenario_name"
+          type: "string"
+          description: "シナリオ名（scenario/{name} ディレクトリ）"
+          nullable: false
+          primary_key: true
+        - name: "dir_path"
+          type: "string"
+          description: "ディレクトリパス（構造そのものが実行定義）"
+          nullable: false
+          primary_key: false
+        - name: "metadata_file"
+          type: "string"
+          description: "metadata.yml"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-002"
+          type: "N:1"
+          description: "プロジェクトに複数のシナリオが属する"
+    - id: "E-010"
+      name: "業務日付"
+      source_info: "情報: 業務日付"
+      model_type: "resource_mutable"
+      attributes:
+        - name: "dir_name"
+          type: "string"
+          description: "ディレクトリ名（_{seq}_{bizdate}）"
+          nullable: false
+          primary_key: true
+        - name: "seq"
+          type: "integer"
+          description: "実行順（数値のみ）"
+          nullable: false
+          primary_key: false
+        - name: "bizdate"
+          type: "string"
+          description: "業務日付（YYYYMMDD の 8 桁数字）"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-009"
+          type: "N:1"
+          description: "シナリオ内で日付単位にテストを区切る"
+    - id: "E-011"
+      name: "プロセス"
+      source_info: "情報: プロセス"
+      model_type: "resource_mutable"
+      attributes:
+        - name: "dir_name"
+          type: "string"
+          description: "ディレクトリ名（_{seq}_{group}_{process_type}）"
+          nullable: false
+          primary_key: true
+        - name: "seq"
+          type: "integer"
+          description: "実行順（数値のみ）"
+          nullable: false
+          primary_key: false
+        - name: "group_name"
+          type: "string"
+          description: "グループ（「_」を含まない）"
+          nullable: false
+          primary_key: false
+        - name: "process_type"
+          type: "string"
+          description: "プロセスタイプ（プラグインで拡張可）"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-010"
+          type: "N:1"
+          description: "業務日付内のまとまった処理単位"
+        - target_entity: "E-007"
+          type: "N:1"
+          description: "プロセスタイプに対応するプラグインで実行される"
+    - id: "E-012"
+      name: "スクリプト（ステップ）"
+      source_info: "情報: スクリプト（ステップ）"
+      model_type: "resource_mutable"
+      attributes:
+        - name: "file_name"
+          type: "string"
+          description: "scripts/ 直下のファイル名（昇順 = 実行順）"
+          nullable: false
+          primary_key: true
+        - name: "executable"
+          type: "string"
+          description: "任意言語の実行可能ファイル"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-011"
+          type: "N:1"
+          description: "プロセス内 scripts/ 直下に置かれる"
+    - id: "E-013"
+      name: "Process / Plugin 設定（config.yml）"
+      source_info: "情報: Process / Plugin 設定（config.yml）"
+      model_type: "resource_mutable"
+      attributes:
+        - name: "config_path"
+          type: "string"
+          description: "config.yml のパス"
+          nullable: false
+          primary_key: true
+        - name: "settings"
+          type: "text"
+          description: "stfw.process.{type} 配下の任意キー（全スクリプトへ環境変数として export）"
+          nullable: false
+          primary_key: false
+        - name: "override_order"
+          type: "string"
+          description: "上書き順（組込み → プロジェクト → シナリオ内）"
+          nullable: false
+          primary_key: false
+        - name: "hostgroup_ref"
+          type: "string"
+          description: "接続先のホストグループ名参照（inventory）"
+          nullable: true
+          primary_key: false
+      relationships:
+        - target_entity: "E-011"
+          type: "1:1"
+          description: "プロセスの実行時設定"
+        - target_entity: "E-004"
+          type: "N:1"
+          description: "接続先はホストグループ名参照で解決する"
+    - id: "E-014"
+      name: "メタ情報（metadata.yml）"
+      source_info: "情報: メタ情報（metadata.yml）"
+      model_type: "resource_mutable"
+      attributes:
+        - name: "file_path"
+          type: "string"
+          description: "metadata.yml のパス"
+          nullable: false
+          primary_key: true
+        - name: "description"
+          type: "text"
+          description: "説明"
+          nullable: true
+          primary_key: false
+        - name: "requirement_specifications"
+          type: "text"
+          description: "要求仕様の記述欄（scaffold 生成時に空で生成）"
+          nullable: true
+          primary_key: false
+      relationships:
+        - target_entity: "E-009"
+          type: "N:1"
+          description: "シナリオ・業務日付・プロセスの各階層に付与される"
+    - id: "E-015"
+      name: "実行（run）"
+      source_info: "情報: 実行（run）"
+      model_type: "event_snapshot"
+      attributes:
+        - name: "run_id"
+          type: "string"
+          description: "run_id（_{YYYYMMDDHHMMSS}_{PID}）"
+          nullable: false
+          primary_key: true
+        - name: "run_mode"
+          type: "string"
+          description: "実行モード（run / dry-run）"
+          nullable: false
+          primary_key: false
+        - name: "target_scenarios"
+          type: "text"
+          description: "対象シナリオ群"
+          nullable: false
+          primary_key: false
+        - name: "run_dir"
+          type: "string"
+          description: "実行ディレクトリ（.stfw/runs/{run_id}）"
+          nullable: false
+          primary_key: false
+        - name: "current_status"
+          type: "string"
+          description: "階層実行ステータス（Started / Success / Error）。ジャーナルのリプレイで導出され、永続スナップショットは持たない"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-009"
+          type: "N:M"
+          description: "一括自動実行が複数シナリオを対象とする"
+        - target_entity: "E-020"
+          type: "1:1"
+          description: "実行の状態遷移はジャーナル（イベントストリーム）として記録される"
+    - id: "E-016"
+      name: "実行コンテキスト"
+      source_info: "情報: 実行コンテキスト"
+      model_type: "resource_mutable"
+      attributes:
+        - name: "context_key"
+          type: "string"
+          description: "key（run_id 等）"
+          nullable: false
+          primary_key: true
+        - name: "context_value"
+          type: "string"
+          description: "value"
+          nullable: false
+          primary_key: false
+        - name: "lifecycle"
+          type: "string"
+          description: "ライフサイクル（コマンド開始で初期化・終了で破棄）"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-015"
+          type: "N:1"
+          description: "コマンド実行中の実行情報を引き継ぐ"
+    - id: "E-017"
+      name: "実行ログ"
+      source_info: "情報: 実行ログ"
+      model_type: "event"
+      attributes:
+        - name: "log_file"
+          type: "string"
+          description: "ログファイル（.stfw/stfw.log、日次ローテーション）"
+          nullable: false
+          primary_key: true
+        - name: "log_level"
+          type: "string"
+          description: "ログレベル（trace〜error）"
+          nullable: false
+          primary_key: false
+        - name: "masked"
+          type: "boolean"
+          description: "シークレットマスキング済みか（常に true）"
+          nullable: false
+          primary_key: false
+        - name: "colored"
+          type: "boolean"
+          description: "terminal 実行時のカラー出力"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-002"
+          type: "N:1"
+          description: "プロジェクトの .stfw/ 配下へ集約される"
+    - id: "E-018"
+      name: "ステップ実行結果"
+      source_info: "情報: ステップ実行結果"
+      model_type: "event"
+      attributes:
+        - name: "script_name"
+          type: "string"
+          description: "スクリプト名"
+          nullable: false
+          primary_key: true
+        - name: "result"
+          type: "string"
+          description: "結果（Pending / Success / Error / Blocked）"
+          nullable: false
+          primary_key: false
+        - name: "start_time"
+          type: "datetime"
+          description: "開始時刻"
+          nullable: false
+          primary_key: false
+        - name: "end_time"
+          type: "datetime"
+          description: "終了時刻"
+          nullable: false
+          primary_key: false
+        - name: "processing_time"
+          type: "decimal"
+          description: "処理時間"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-012"
+          type: "1:1"
+          description: "スクリプト単位の実行結果"
+        - target_entity: "E-020"
+          type: "N:1"
+          description: "ジャーナルの step_end イベントとして記録される"
+    - id: "E-019"
+      name: "OTel トレース（スパンツリー）"
+      source_info: "情報: OTel トレース（スパンツリー）"
+      model_type: "event"
+      attributes:
+        - name: "trace_id"
+          type: "string"
+          description: "トレース ID"
+          nullable: false
+          primary_key: true
+        - name: "span_tree"
+          type: "text"
+          description: "スパンツリー（run = ルート、scenario / bizdate / process = 子、step = 末端）"
+          nullable: false
+          primary_key: false
+        - name: "span_attributes"
+          type: "text"
+          description: "スパン属性（run_id・階層タイプ・bizdate・seq・group・プロセスタイプ・終了コード・Blocked 表現等）"
+          nullable: false
+          primary_key: false
+        - name: "span_status"
+          type: "string"
+          description: "スパンステータス（Error マップ）"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-020"
+          type: "1:1"
+          description: "実行ジャーナルのイベントの投影として生成される"
+        - target_entity: "E-015"
+          type: "1:1"
+          description: "run をルートスパンとするトレース"
+    - id: "E-020"
+      name: "実行ジャーナル（journal.jsonl）"
+      source_info: "情報: 実行ジャーナル（journal.jsonl）"
+      model_type: "event"
+      attributes:
+        - name: "file_path"
+          type: "string"
+          description: "journal.jsonl（.stfw/runs/{run_id}/ 配下、追記専用 JSONL）"
+          nullable: false
+          primary_key: true
+        - name: "event_type"
+          type: "string"
+          description: "イベント種別（node_start / steps_enumerated / step_end / node_end）"
+          nullable: false
+          primary_key: false
+        - name: "event_time"
+          type: "datetime"
+          description: "イベント時刻（bizdate の node_start は collectLog のフィルタ基準時刻として env 契約に公開）"
+          nullable: false
+          primary_key: false
+        - name: "node_status"
+          type: "string"
+          description: "ステータス"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-015"
+          type: "N:1"
+          description: "run 単位のイベントストリーム（実行結果の唯一のソース）"
+    - id: "E-021"
+      name: "HTML レポート"
+      source_info: "情報: HTML レポート"
+      model_type: "resource_mutable"
+      attributes:
+        - name: "report_path"
+          type: "string"
+          description: "出力先（.stfw/reports/、index + run 詳細）"
+          nullable: false
+          primary_key: true
+        - name: "report_type"
+          type: "string"
+          description: "種別（index / run 詳細）"
+          nullable: false
+          primary_key: false
+        - name: "generated_at"
+          type: "datetime"
+          description: "生成時刻（実行中も process 終了ごとに増分再生成）"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-020"
+          type: "N:1"
+          description: "実行ジャーナルから生成される投影（再生成可能）"
+    - id: "E-022"
+      name: "カスタムプラグイン実装ガイド"
+      source_info: "情報: カスタムプラグイン実装ガイド"
+      model_type: "resource_mutable"
+      attributes:
+        - name: "doc_path"
+          type: "string"
+          description: "ガイドドキュメント"
+          nullable: false
+          primary_key: true
+        - name: "expected_patterns"
+          type: "text"
+          description: "想定パターン（updateBizDate / invokeJob / importMaster / export / clear）"
+          nullable: false
+          primary_key: false
+        - name: "combination_examples"
+          type: "text"
+          description: "組み込みプラグインの組み合わせ例"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-007"
+          type: "1:N"
+          description: "カスタムプラグイン実装の指針を与える"
+    - id: "E-023"
+      name: "期待値（expect）"
+      source_info: "情報: 期待値（expect）"
+      model_type: "resource_mutable"
+      attributes:
+        - name: "expect_dir"
+          type: "string"
+          description: "expect ディレクトリ（収集系プラグインの出力構造と同型）"
+          nullable: false
+          primary_key: true
+        - name: "expected_files"
+          type: "text"
+          description: "期待値ファイル（実行ログ・外部 IF ファイル・ヘッダー付き CSV）"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-009"
+          type: "N:1"
+          description: "シナリオのテスト資産として保持される"
+        - target_entity: "E-024"
+          type: "1:1"
+          description: "エビデンスとディレクトリ規約で同型対応する"
+    - id: "E-024"
+      name: "エビデンス"
+      source_info: "情報: エビデンス"
+      model_type: "event"
+      attributes:
+        - name: "evidence_dir"
+          type: "string"
+          description: "エビデンスディレクトリ（エビデンスディレクトリ規約に従う収集系プラグインの出力先）"
+          nullable: false
+          primary_key: true
+        - name: "collected_files"
+          type: "text"
+          description: "収集ファイル（実行ログ・外部 IF ファイル・ヘッダー付き CSV）"
+          nullable: false
+          primary_key: false
+        - name: "source_hostgroup"
+          type: "string"
+          description: "収集元（ホストグループ / テーブル名リスト）"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-011"
+          type: "N:1"
+          description: "収集系プロセスの出力"
+        - target_entity: "E-015"
+          type: "N:1"
+          description: "run の実行中に収集される"
+    - id: "E-025"
+      name: "比較結果"
+      source_info: "情報: 比較結果"
+      model_type: "event"
+      attributes:
+        - name: "result_dir"
+          type: "string"
+          description: "result ディレクトリ（gitignore 対象）"
+          nullable: false
+          primary_key: true
+        - name: "actual_dir"
+          type: "string"
+          description: "actual ディレクトリ（収集系 process ディレクトリへの symlink または一時コピー、gitignore 対象）"
+          nullable: false
+          primary_key: false
+        - name: "comparison_result"
+          type: "string"
+          description: "比較成否（一致 / 不一致。不一致はステップ Error）"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-024"
+          type: "1:1"
+          description: "エビデンス（actual）を入力とする"
+        - target_entity: "E-023"
+          type: "N:1"
+          description: "期待値（expect）を比較基準とする"
+        - target_entity: "E-018"
+          type: "1:1"
+          description: "比較不一致は該当ステップの Error として結果に反映される"
+  storage_mapping:
+    - entity_id: "E-001"
+      storage_type: "file"
+      reason: "配布物（バイナリ / イメージ）と同梱アセット。外部データストアなしの as-is 制約"
+      confidence: "high"
+    - entity_id: "E-002"
+      storage_type: "file"
+      reason: "プロジェクトディレクトリそのもの"
+      confidence: "high"
+    - entity_id: "E-003"
+      storage_type: "file"
+      reason: "stfw.yml（YAML ファイル）"
+      confidence: "high"
+    - entity_id: "E-004"
+      storage_type: "file"
+      reason: "環境単位の inventory YAML ファイル"
+      confidence: "high"
+    - entity_id: "E-005"
+      storage_type: "file"
+      reason: "config/encrypt/ 配下のキーペアファイル"
+      confidence: "high"
+    - entity_id: "E-006"
+      storage_type: "file"
+      reason: "config/passwd/ 配下の age 暗号化ファイル（平文保管しない）"
+      confidence: "high"
+    - entity_id: "E-007"
+      storage_type: "file"
+      reason: "plugins/（プロジェクト）と配布物同梱（組込み）のディレクトリ"
+      confidence: "high"
+    - entity_id: "E-008"
+      storage_type: "file"
+      reason: "known_hosts ファイル"
+      confidence: "high"
+    - entity_id: "E-009"
+      storage_type: "file"
+      reason: "scenario/{name} ディレクトリ（構造 = 実行定義）"
+      confidence: "high"
+    - entity_id: "E-010"
+      storage_type: "file"
+      reason: "_{seq}_{bizdate} ディレクトリ"
+      confidence: "high"
+    - entity_id: "E-011"
+      storage_type: "file"
+      reason: "_{seq}_{group}_{process_type} ディレクトリ。実行状態は E-020（ジャーナル）側でイベントとして管理し、定義自体は静的"
+      confidence: "high"
+    - entity_id: "E-012"
+      storage_type: "file"
+      reason: "scripts/ 直下の実行可能ファイル。実行状態は E-020 側で管理"
+      confidence: "high"
+    - entity_id: "E-013"
+      storage_type: "file"
+      reason: "config.yml（YAML ファイル）"
+      confidence: "high"
+    - entity_id: "E-014"
+      storage_type: "file"
+      reason: "metadata.yml（YAML ファイル）"
+      confidence: "high"
+    - entity_id: "E-015"
+      storage_type: "file"
+      reason: ".stfw/runs/{run_id}/ 配下。状態はジャーナル（E-020）のイベントとして永続化し、スナップショットはリプレイで都度導出（永続スナップショットなし）"
+      confidence: "high"
+    - entity_id: "E-016"
+      storage_type: "cache"
+      reason: "コマンドプロセス内メモリ保持（開始で初期化・終了で破棄）。永続化しない"
+      confidence: "medium"
+    - entity_id: "E-017"
+      storage_type: "file"
+      reason: ".stfw/stfw.log（日次ローテーション）"
+      confidence: "high"
+    - entity_id: "E-018"
+      storage_type: "file"
+      reason: "ジャーナルの step_end イベントとして記録（スパン属性へは投影）"
+      confidence: "high"
+    - entity_id: "E-019"
+      storage_type: "cache"
+      reason: "メモリ上でスパンを構築し OTLP 受信先へ送信する（ローカル永続化なし。正は実行ジャーナル）。ユーザー確認済み（2026-07-08）: cache 分類を確定"
+      confidence: "user"
+    - entity_id: "E-020"
+      storage_type: "file"
+      reason: "追記専用 JSONL（実行結果の唯一のソース。UPDATE / DELETE なし）"
+      confidence: "high"
+    - entity_id: "E-021"
+      storage_type: "file"
+      reason: ".stfw/reports/ 配下の静的 HTML（共有 volume 経由で配信）"
+      confidence: "high"
+    - entity_id: "E-022"
+      storage_type: "file"
+      reason: "ドキュメントファイル"
+      confidence: "high"
+    - entity_id: "E-023"
+      storage_type: "file"
+      reason: "expect ディレクトリ（テスト資産として版管理対象）"
+      confidence: "high"
+    - entity_id: "E-024"
+      storage_type: "file"
+      reason: "エビデンスディレクトリ規約に従うローカル保管"
+      confidence: "high"
+    - entity_id: "E-025"
+      storage_type: "file"
+      reason: "result / actual ディレクトリ（gitignore 対象の派生データ）"
+      confidence: "high"
+  diagram_mermaid: |
+    erDiagram
+      STFW_HONTAI ||--o{ PLUGIN : bundles
+      PROJECT }o--|| STFW_HONTAI : managed_by
+      PROJECT ||--|| STFW_YML : has
+      PROJECT ||--o{ INVENTORY : has
+      PROJECT ||--|| ENCRYPT_KEY : has
+      ENCRYPT_KEY ||--o{ PASSWORD : encrypts
+      INVENTORY ||--o{ PASSWORD : targets
+      INVENTORY ||--o{ KNOWN_HOSTS : registers
+      PROJECT ||--o{ SCENARIO : contains
+      SCENARIO ||--o{ BIZDATE : contains
+      BIZDATE ||--o{ PROCESS : contains
+      PROCESS ||--o{ STEP_SCRIPT : contains
+      PROCESS ||--|| CONFIG_YML : configured_by
+      PROCESS }o--|| PLUGIN : executed_by
+      SCENARIO ||--o{ METADATA : described_by
+      RUN }o--o{ SCENARIO : executes
+      RUN ||--|| JOURNAL : records
+      RUN ||--o{ RUN_CONTEXT : holds
+      JOURNAL ||--o{ STEP_RESULT : contains
+      JOURNAL ||--|| OTEL_TRACE : projected_to
+      JOURNAL ||--o{ HTML_REPORT : projected_to
+      SCENARIO ||--o{ EXPECT : keeps
+      PROCESS ||--o{ EVIDENCE : collects
+      EXPECT ||--|| EVIDENCE : corresponds
+      EVIDENCE ||--|| COMPARE_RESULT : compared_as
+      COMPARE_RESULT ||--|| STEP_RESULT : fails_step
+      GUIDE ||--o{ PLUGIN : guides
