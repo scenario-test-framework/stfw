@@ -1,0 +1,26 @@
+# scpPut のデフォルト設定。
+#
+# targets : 配置対象 (プロセスの config/config.yml で定義する)
+#   group : inventory グループ名 (ホスト解決)
+#   user  : ログインユーザー (secret {host}-{user} でパスワード解決)
+#   dest  : リモートの配置先ディレクトリ (グループ毎に指定)
+#
+# 処理: ローカルの target/{グループ}/ 配下のディレクトリ構成を、解決した各ホストへ
+#   一括で put する。まず配置先の隣接一時ディレクトリ (同一 FS) へ scp put し、
+#   その後一時ディレクトリを dest へ mv (ディレクトリ rename) して原子的に配置する。
+#   空ディレクトリを含む source のツリー全体が反映され、dest は source 内容で全置換される
+#   (既存 dest は削除される。専用の配置先ディレクトリを指定すること)。
+#   dest は安全文字 (英数 . _ - /) のみ許可 (シェルメタ文字は不可)。
+#   接続情報は inventory/secret から解決し config に直書きしない。
+#
+#   stfw:
+#     process:
+#       scpPut:
+#         targets:
+#           - group: web
+#             user: appuser
+#             dest: /opt/app/conf
+stfw:
+  process:
+    scpPut:
+      targets: []

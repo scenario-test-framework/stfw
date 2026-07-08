@@ -1,0 +1,108 @@
+# STEP: sshExec プラグイン (scripts/ を各ホストへ ssh 送信しファイル名昇順に一括実行)
+# ssh / sshpass はモックする。モック ssh は stdin のスクリプトを擬似リモートで実行し、
+# host 別の exec.log へ追記して実行順序を検証可能にする。パスワードは SSHPASS 経由 (sshpass -e)。
+
+env PATH=${WORK}/fakebin:${PATH}
+env STFW_TEST_REMOTE=${WORK}/remote
+chmod 755 fakebin/ssh
+chmod 755 fakebin/sshpass
+
+# 資格情報 (secret {host}-{user})
+exec stfw secret keygen
+exec stfw secret set web01 appuser secretpw
+exec stfw secret set fail01 appuser secretpw
+
+# --- 正常系: scripts/ 配下が昇順 (10 -> 20) に一括実行される ---
+exec stfw run demo
+exec cat remote/web01/exec.log
+stdout 'first ran\nsecond ran'
+
+# --- fail-fast: 途中スクリプトが失敗すると即時終了 (exit 6) し以降を実行しない ---
+execcode 6 stfw run failfast
+stderr 'finished with status Error'
+exec cat remote/fail01/exec.log
+stdout 'boom'
+! stdout 'should-not-run'
+
+# --- 設定不備: host_group 未指定はステップ Error (exit 6) ---
+execcode 6 stfw run noconf
+stderr 'host_group is required'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  inventory: staging.yml
+-- config/inventory/staging.yml --
+stfw_inventory:
+  - web:
+    - host: web01
+  - failgrp:
+    - host: fail01
+-- scenario/demo/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_grp_sshExec/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_grp_sshExec/config/config.yml --
+stfw:
+  process:
+    sshExec:
+      host_group: web
+      user: appuser
+-- scenario/demo/_10_99990101/_10_grp_sshExec/scripts/10_first.sh --
+#!/bin/bash
+echo "first ran"
+-- scenario/demo/_10_99990101/_10_grp_sshExec/scripts/20_second.sh --
+#!/bin/bash
+echo "second ran"
+-- scenario/failfast/metadata.yml --
+description:
+-- scenario/failfast/_10_99990101/metadata.yml --
+description:
+-- scenario/failfast/_10_99990101/_10_grp_sshExec/metadata.yml --
+description:
+-- scenario/failfast/_10_99990101/_10_grp_sshExec/config/config.yml --
+stfw:
+  process:
+    sshExec:
+      host_group: failgrp
+      user: appuser
+-- scenario/failfast/_10_99990101/_10_grp_sshExec/scripts/10_boom.sh --
+#!/bin/bash
+echo "boom"
+exit 1
+-- scenario/failfast/_10_99990101/_10_grp_sshExec/scripts/20_never.sh --
+#!/bin/bash
+echo "should-not-run"
+-- scenario/noconf/metadata.yml --
+description:
+-- scenario/noconf/_10_99990101/metadata.yml --
+description:
+-- scenario/noconf/_10_99990101/_10_grp_sshExec/metadata.yml --
+description:
+-- scenario/noconf/_10_99990101/_10_grp_sshExec/config/config.yml --
+stfw:
+  process:
+    sshExec:
+      user: appuser
+-- scenario/noconf/_10_99990101/_10_grp_sshExec/scripts/10_x.sh --
+#!/bin/bash
+echo "x"
+-- fakebin/sshpass --
+#!/bin/bash
+# sshpass -e <cmd...> : SSHPASS 環境変数からパスワードを読む方式。
+# -e を食って残りをそのまま実行 (stdin はそのまま引き継ぐ)。
+if [ "$1" = "-e" ]; then shift; fi
+exec "$@"
+-- fakebin/ssh --
+#!/bin/bash
+# ssh [opts] user@host 'bash -s' : stdin のスクリプトを擬似リモートで実行し、
+# host 別の exec.log へ追記する (実行順序の検証用)。
+host=""
+for a in "$@"; do case "$a" in *@*) host="${a#*@}";; esac; done
+root="${STFW_TEST_REMOTE}/${host}"
+mkdir -p "${root}"
+bash >> "${root}/exec.log" 2>&1
+exit $?

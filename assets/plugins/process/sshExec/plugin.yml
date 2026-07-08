@@ -1,0 +1,5 @@
+# sshExec プラグインのメタデータ。
+# requires は実行前ゲート (validate / run) で PATH 存在チェックされる。
+requires:
+  - ssh
+  - sshpass

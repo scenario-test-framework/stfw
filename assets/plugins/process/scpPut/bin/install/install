@@ -1,0 +1,4 @@
+#!/bin/bash
+# scpPut プラグインは ssh / scp / sshpass (システムコマンド) のみに依存し、
+# ダウンロードするバイナリはない。前提コマンドの存在は requires で実行前ゲートされる。
+exit 0

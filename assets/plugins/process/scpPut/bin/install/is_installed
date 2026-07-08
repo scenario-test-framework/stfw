@@ -1,0 +1,17 @@
+#!/bin/bash
+# scpPut は追加バイナリを持たない。前提コマンド (ssh / scp / sshpass) の存在のみ確認する。
+
+function is_installed_cmd() {
+  local _target_cmd="$1"
+  if ! command -v "${_target_cmd}" >/dev/null 2>&1; then
+    echo "${_target_cmd} is not installed."
+    exit 1
+  fi
+}
+
+is_installed_cmd "ssh"
+is_installed_cmd "scp"
+is_installed_cmd "sshpass"
+
+echo "true"
+exit 0

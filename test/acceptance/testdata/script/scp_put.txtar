@@ -1,0 +1,142 @@
+# STEP: scpPut プラグイン (target/{group}/ を各ホストへ scp put -> tmp から dest へ mv 配置)
+# ssh / scp / sshpass はモックする。モック ssh はリモート絶対パス ('/...') を擬似リモート
+# ルート配下へ書き換えて実行し、モック scp はローカルツリーを擬似リモートへ複製する。
+# パスワードは SSHPASS 経由 (sshpass -e)。
+
+env PATH=${WORK}/fakebin:${PATH}
+env STFW_TEST_REMOTE=${WORK}/remote
+chmod 755 fakebin/ssh
+chmod 755 fakebin/scp
+chmod 755 fakebin/sshpass
+
+# 資格情報 (secret {host}-{user})
+exec stfw secret keygen
+exec stfw secret set web01 appuser secretpw
+
+# --- 再配置 (既存 dest あり): target/web/ 配下 (隠しファイル・サブディレクトリ・空ディレクトリ
+#     含む) が dest へ原子的に配置される。dest は source 内容で全置換され、既存の同名サブ
+#     ディレクトリがあっても失敗しない。 ---
+# (remote/web01/opt/app/conf に旧 app.conf・sub/old.conf・stale/gone.conf を事前配置済み)
+# 空ディレクトリは txtar で表現できないため mkdir で用意する
+mkdir scenario/demo/_10_99990101/_10_grp_scpPut/target/web/emptydir
+exec stfw run demo
+
+# 新規ファイルで置き換わる
+exec cat remote/web01/opt/app/conf/app.conf
+stdout 'app-config-content'
+# サブディレクトリ配下も配置される (既存 sub/ があっても Directory not empty で失敗しない)
+exists remote/web01/opt/app/conf/sub/nested.conf
+# 隠しファイルも配置される
+exists remote/web01/opt/app/conf/.env
+# 空ディレクトリもツリー構成として配置される
+exists remote/web01/opt/app/conf/emptydir
+# 全置換のため source に無い既存ファイル/ディレクトリは残らない
+! exists remote/web01/opt/app/conf/sub/old.conf
+! exists remote/web01/opt/app/conf/stale
+# 一時ディレクトリ (dest.stfw_scpput_*) は mv 後に削除され残らない
+exec ls remote/web01/opt/app
+! stdout 'stfw_scpput'
+
+# --- 設定不備: ローカル target/{group} が無いとステップ Error (exit 6) ---
+execcode 6 stfw run nosrc
+stderr 'source directory not found'
+
+# --- 設定不備: dest に不正文字を含むとステップ Error (exit 6)。注入は実行されない ---
+execcode 6 stfw run baddest
+stderr 'unsupported characters'
+! exists scenario/baddest/_10_99990101/_10_grp_scpPut/pwned
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  inventory: staging.yml
+-- config/inventory/staging.yml --
+stfw_inventory:
+  - web:
+    - host: web01
+-- remote/web01/opt/app/conf/app.conf --
+old-app-content
+-- remote/web01/opt/app/conf/sub/old.conf --
+preexisting
+-- remote/web01/opt/app/conf/stale/gone.conf --
+should-be-removed-by-wholesale-replace
+-- scenario/demo/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_grp_scpPut/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_grp_scpPut/config/config.yml --
+stfw:
+  process:
+    scpPut:
+      targets:
+        - group: web
+          user: appuser
+          dest: /opt/app/conf
+-- scenario/demo/_10_99990101/_10_grp_scpPut/target/web/app.conf --
+app-config-content
+-- scenario/demo/_10_99990101/_10_grp_scpPut/target/web/.env --
+KEY=value
+-- scenario/demo/_10_99990101/_10_grp_scpPut/target/web/sub/nested.conf --
+nested
+-- scenario/nosrc/metadata.yml --
+description:
+-- scenario/nosrc/_10_99990101/metadata.yml --
+description:
+-- scenario/nosrc/_10_99990101/_10_grp_scpPut/metadata.yml --
+description:
+-- scenario/nosrc/_10_99990101/_10_grp_scpPut/config/config.yml --
+stfw:
+  process:
+    scpPut:
+      targets:
+        - group: web
+          user: appuser
+          dest: /opt/x
+-- scenario/baddest/metadata.yml --
+description:
+-- scenario/baddest/_10_99990101/metadata.yml --
+description:
+-- scenario/baddest/_10_99990101/_10_grp_scpPut/metadata.yml --
+description:
+-- scenario/baddest/_10_99990101/_10_grp_scpPut/config/config.yml --
+stfw:
+  process:
+    scpPut:
+      targets:
+        - group: web
+          user: appuser
+          dest: /opt/$(touch pwned)
+-- scenario/baddest/_10_99990101/_10_grp_scpPut/target/web/x.conf --
+x
+-- fakebin/sshpass --
+#!/bin/bash
+# sshpass -e <cmd...> : SSHPASS 環境変数からパスワードを読む方式。
+if [ "$1" = "-e" ]; then shift; fi
+exec "$@"
+-- fakebin/ssh --
+#!/bin/bash
+# ssh [opts] user@host '<remote-cmd>' : リモート絶対パス ('/...') を擬似リモートルート
+# (STFW_TEST_REMOTE/host) 配下へ書き換えて実行する。
+host=""
+for a in "$@"; do case "$a" in *@*) host="${a#*@}";; esac; done
+root="${STFW_TEST_REMOTE}/${host}"
+mkdir -p "${root}"
+cmd="${@: -1}"
+cmd_local="$(printf '%s' "${cmd}" | sed "s#'/#'${root}/#g")"
+bash -c "${cmd_local}"
+exit $?
+-- fakebin/scp --
+#!/bin/bash
+# scp [opts] -r <src>/. user@host:<path>/ : ローカルツリーを擬似リモートへ複製する。
+dest="${@: -1}"
+src="${@: -2:1}"
+if [[ "${dest}" == *@*:* ]]; then
+  host="${dest%%:*}"; host="${host#*@}"; path="${dest#*:}"
+  real="${STFW_TEST_REMOTE}/${host}${path}"
+  mkdir -p "${real}"
+  cp -R "${src}" "${real}"
+fi
+exit 0
