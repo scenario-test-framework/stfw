@@ -1,0 +1,97 @@
+#!/bin/bash
+# invokeWeb: grafana k6 (ブラウザモード) で画面への取引入力と画面操作検証を実行する (Act)。
+#
+# 設定 (config.yml の stfw.process.invokeWeb):
+#   script     : k6 ブラウザモードのテストスクリプトのパス (プロセスディレクトリ基準。既定 script.js)
+#   host_group : (任意) inventory グループ名。先頭ホストを __ENV.stfw_target_host へ注入
+#   user       : (任意) secret {host}-{user} のパスワードを __ENV.stfw_target_password へ注入
+#   env        : (任意) k6 へ渡す "KEY=VALUE" のリスト (-e で注入)
+#
+# 処理: キャッシュした k6 バイナリで `k6 run` を実行する。ブラウザは既定でヘッドレス
+#   (K6_BROWSER_HEADLESS=true)。実行には Chromium が必要 (stfw:full イメージに同梱)。
+#   接続情報は inventory/secret から解決し config に直書きしない。パスワードは argv 露出を
+#   避けるため環境変数として export し (k6 は include-system-env-vars 既定 true で __ENV へ
+#   取り込む)、Masker が出力をマスクする。
+# 出力: end-of-test サマリを ${stfw_process_dir}/evidence/summary.json (--summary-export) へ。
+#
+# 終了コード: k6 は 0=成功 / 99=閾値失敗 / 100+=各種エラー / 105=外部中断 を返す。
+#   本プラグインは「Act の失敗はステップ失敗」に従い、非 0 を一律 exit 6 とする。
+set -uo pipefail
+
+case "$(uname -s)" in
+  Linux) k6_os=linux ;;
+  Darwin) k6_os=macos ;;
+  *) echo "invokeWeb: unsupported OS: $(uname -s)" >&2; exit 6 ;;
+esac
+case "$(uname -m)" in
+  x86_64 | amd64) arch=amd64 ;;
+  aarch64 | arm64) arch=arm64 ;;
+  *) echo "invokeWeb: unsupported arch: $(uname -m)" >&2; exit 6 ;;
+esac
+k6_bin="${stfw_plugin_cache_dir}/k6/${k6_os}_${arch}/k6"
+if [ ! -x "${k6_bin}" ]; then
+  echo "invokeWeb: k6 not provisioned: ${k6_bin} (run \`stfw plugin install invokeWeb\`)" >&2
+  exit 6
+fi
+
+script_rel="${stfw_process_invokeWeb_script:-script.js}"
+script="${stfw_process_dir}/${script_rel}"
+if [ ! -f "${script}" ]; then
+  echo "invokeWeb: k6 script not found: ${script}" >&2
+  exit 6
+fi
+
+host_group="${stfw_process_invokeWeb_host_group:-}"
+user="${stfw_process_invokeWeb_user:-}"
+
+# ブラウザは既定でヘッドレス (CI/非対話環境向け)。スクリプト側の指定が優先される。
+export K6_BROWSER_HEADLESS="${K6_BROWSER_HEADLESS:-true}"
+
+k6_args=(run --summary-export "${stfw_process_dir}/evidence/summary.json")
+
+# 接続情報の解決 (任意)。host_group があれば先頭ホストを __ENV へ注入する。
+if [ -n "${host_group}" ]; then
+  if ! hosts="$(stfw inventory list "${host_group}")"; then
+    echo "invokeWeb: inventory list failed for group: ${host_group}" >&2
+    exit 6
+  fi
+  # shellcheck disable=SC2086
+  set -- ${hosts}
+  host="${1:-}"
+  if [ -z "${host}" ]; then
+    echo "invokeWeb: no host resolved for group: ${host_group}" >&2
+    exit 6
+  fi
+  if [ "$#" -gt 1 ]; then
+    echo "invokeWeb: group ${host_group} resolves to multiple hosts; using ${host}" >&2
+  fi
+  k6_args+=(-e "stfw_target_host=${host}")
+
+  # パスワードは argv に載せず環境変数で渡す (Masker で自動マスク)。
+  if [ -n "${user}" ]; then
+    if ! password="$(stfw secret show "${host}" "${user}")"; then
+      echo "invokeWeb: secret not found: ${host}-${user}" >&2
+      exit 6
+    fi
+    export stfw_target_password="${password}"
+  fi
+fi
+
+# 追加の k6 環境変数 (config の env リスト) を -e で注入する。
+i=0
+while :; do
+  env_var="stfw_process_invokeWeb_env_${i}"
+  kv="${!env_var:-}"
+  [ -z "${kv}" ] && break
+  i=$((i + 1))
+  k6_args+=(-e "${kv}")
+done
+
+"${k6_bin}" "${k6_args[@]}" "${script}"
+k6_rc=$?
+
+if [ "${k6_rc}" -eq 0 ]; then
+  exit 0
+fi
+echo "invokeWeb: k6 run failed (exit ${k6_rc})" >&2
+exit 6

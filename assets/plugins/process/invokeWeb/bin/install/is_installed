@@ -1,0 +1,22 @@
+#!/bin/bash
+# 実行ホストの os_arch 版 k6 がキャッシュ済みならインストール済みとみなす。
+# 欠けていれば false を返し、stfw plugin install invokeWeb で補修できるようにする。
+case "$(uname -s)" in
+  Linux) k6_os=linux ;;
+  Darwin) k6_os=macos ;;
+  *) echo "invokeWeb: unsupported OS: $(uname -s)"; exit 1 ;;
+esac
+case "$(uname -m)" in
+  x86_64 | amd64) arch=amd64 ;;
+  aarch64 | arm64) arch=arm64 ;;
+  *) echo "invokeWeb: unsupported arch: $(uname -m)"; exit 1 ;;
+esac
+os_arch="${k6_os}_${arch}"
+
+if [ ! -x "${stfw_plugin_cache_dir}/k6/${os_arch}/k6" ]; then
+  echo "k6 for ${os_arch} is not provisioned (run \`stfw plugin install invokeWeb\`)."
+  exit 1
+fi
+
+echo "true"
+exit 0

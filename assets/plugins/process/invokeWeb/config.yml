@@ -1,0 +1,25 @@
+# invokeWeb のデフォルト設定。
+#
+# k6_version : 取得する k6 のリリースタグ
+# script     : k6 ブラウザモードのテストスクリプトのパス (プロセスディレクトリ基準)
+# host_group : (任意) inventory グループ名。先頭ホストを __ENV.stfw_target_host へ注入
+# user       : (任意) secret {host}-{user} のパスワードを __ENV.stfw_target_password へ注入
+# env        : (任意) k6 へ渡す "KEY=VALUE" のリスト (-e で注入)
+#
+#   stfw:
+#     process:
+#       invokeWeb:
+#         script: script.js
+#         host_group: web
+#         user: appuser
+#         env:
+#           - "VUS=1"
+#
+# invokeWeb は画面への取引入力と画面操作検証 (Act) を grafana k6 (ブラウザモード) で実行する。
+# ブラウザは既定でヘッドレス。実行には Chromium が必要 (stfw:full イメージに同梱)。
+# 接続情報は inventory/secret から解決し config に直書きしない。
+stfw:
+  process:
+    invokeWeb:
+      k6_version: v2.1.0
+      script: script.js

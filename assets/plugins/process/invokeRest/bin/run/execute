@@ -1,0 +1,92 @@
+#!/bin/bash
+# invokeRest: grafana k6 で API への取引入力とレスポンス検証を実行する (Act)。
+#
+# 設定 (config.yml の stfw.process.invokeRest):
+#   script     : k6 テストスクリプトのパス (プロセスディレクトリ基準。既定 script.js)
+#   host_group : (任意) inventory グループ名。先頭ホストを __ENV.stfw_target_host へ注入
+#   user       : (任意) secret {host}-{user} のパスワードを __ENV.stfw_target_password へ注入
+#   env        : (任意) k6 へ渡す "KEY=VALUE" のリスト (-e で注入)
+#
+# 処理: キャッシュした k6 バイナリで `k6 run` を実行する。接続情報は inventory/secret から
+#   解決し config に直書きしない。パスワードは argv 露出を避けるため環境変数として export し
+#   (k6 は include-system-env-vars 既定 true で __ENV へ取り込む)、Masker が出力をマスクする。
+# 出力: end-of-test サマリを ${stfw_process_dir}/evidence/summary.json (--summary-export) へ。
+#
+# 終了コード: k6 は 0=成功 / 99=閾値失敗 / 100+=各種エラー / 105=外部中断 を返す。
+#   本プラグインは「Act の失敗はステップ失敗」に従い、非 0 を一律 exit 6 とする。
+set -uo pipefail
+
+case "$(uname -s)" in
+  Linux) k6_os=linux ;;
+  Darwin) k6_os=macos ;;
+  *) echo "invokeRest: unsupported OS: $(uname -s)" >&2; exit 6 ;;
+esac
+case "$(uname -m)" in
+  x86_64 | amd64) arch=amd64 ;;
+  aarch64 | arm64) arch=arm64 ;;
+  *) echo "invokeRest: unsupported arch: $(uname -m)" >&2; exit 6 ;;
+esac
+k6_bin="${stfw_plugin_cache_dir}/k6/${k6_os}_${arch}/k6"
+if [ ! -x "${k6_bin}" ]; then
+  echo "invokeRest: k6 not provisioned: ${k6_bin} (run \`stfw plugin install invokeRest\`)" >&2
+  exit 6
+fi
+
+script_rel="${stfw_process_invokeRest_script:-script.js}"
+script="${stfw_process_dir}/${script_rel}"
+if [ ! -f "${script}" ]; then
+  echo "invokeRest: k6 script not found: ${script}" >&2
+  exit 6
+fi
+
+host_group="${stfw_process_invokeRest_host_group:-}"
+user="${stfw_process_invokeRest_user:-}"
+
+k6_args=(run --summary-export "${stfw_process_dir}/evidence/summary.json")
+
+# 接続情報の解決 (任意)。host_group があれば先頭ホストを __ENV へ注入する。
+if [ -n "${host_group}" ]; then
+  if ! hosts="$(stfw inventory list "${host_group}")"; then
+    echo "invokeRest: inventory list failed for group: ${host_group}" >&2
+    exit 6
+  fi
+  # shellcheck disable=SC2086
+  set -- ${hosts}
+  host="${1:-}"
+  if [ -z "${host}" ]; then
+    echo "invokeRest: no host resolved for group: ${host_group}" >&2
+    exit 6
+  fi
+  if [ "$#" -gt 1 ]; then
+    echo "invokeRest: group ${host_group} resolves to multiple hosts; using ${host}" >&2
+  fi
+  k6_args+=(-e "stfw_target_host=${host}")
+
+  # パスワードは argv に載せず環境変数で渡す (Masker で自動マスク)。
+  if [ -n "${user}" ]; then
+    if ! password="$(stfw secret show "${host}" "${user}")"; then
+      echo "invokeRest: secret not found: ${host}-${user}" >&2
+      exit 6
+    fi
+    export stfw_target_password="${password}"
+  fi
+fi
+
+# 追加の k6 環境変数 (config の env リスト) を -e で注入する。
+i=0
+while :; do
+  env_var="stfw_process_invokeRest_env_${i}"
+  kv="${!env_var:-}"
+  [ -z "${kv}" ] && break
+  i=$((i + 1))
+  k6_args+=(-e "${kv}")
+done
+
+"${k6_bin}" "${k6_args[@]}" "${script}"
+k6_rc=$?
+
+if [ "${k6_rc}" -eq 0 ]; then
+  exit 0
+fi
+echo "invokeRest: k6 run failed (exit ${k6_rc})" >&2
+exit 6
