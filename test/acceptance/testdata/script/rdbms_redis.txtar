@@ -42,6 +42,8 @@ stderr 'source csv not found'
 # per-key の redis-cli 失敗 (TTL 取得不可) を握りつぶさず exit 6
 execcode 6 stfw run rttlerr
 stderr 'TTL failed'
+# 不完全な CSV は成果物として公開しない
+! exists scenario/rttlerr/_10_99990101/_10_grp_exportRedis/evidence/redis01/bad.csv
 
 # inventory list の失敗も握りつぶさず exit 6
 cp badstfw.yml stfw.yml
@@ -214,7 +216,7 @@ if [ "${STFW_TEST_REDIS_FAIL:-0}" = "1" ]; then
 fi
 
 if [ "$scan" = "1" ]; then
-  # 返却順は実装側のソートを検証するため、あえてソートしない (readdir 順)。
+  # 実装側のキーソートを検証するため、あえて降順で返す (未ソートを再現)。
   for f in "${STFW_TEST_REDIS}"/*.type; do
     [ -e "$f" ] || continue
     k="$(basename "$f" .type)"
@@ -222,7 +224,7 @@ if [ "$scan" = "1" ]; then
     case "$k" in
       $pattern) echo "$k" ;;
     esac
-  done
+  done | sort -r
   exit 0
 fi
 
