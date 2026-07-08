@@ -68,15 +68,26 @@ for entry in "${entries[@]}"; do
     echo "compare: evidence not found for expect entry '${name}': ${src}" >&2
     exit 6
   fi
-  # evidence 配下の各ファイルを、actual/{name}/ に同じ相対パスで symlink する。
+  # actual/{name} は evidence が空でも作る (actual は expect と同じ構造を再現する)。
+  mkdir -p "${actual_dir}/${name}"
+
+  # evidence 配下の全ファイルを列挙する。process substitution だと find の失敗
+  # (読取不能ディレクトリ等) を取りこぼすため、コマンド置換で終了コードを確認する。
+  if ! filelist="$(cd "${src}" && find . -type f)"; then
+    echo "compare: failed to enumerate evidence: ${src}" >&2
+    exit 6
+  fi
+  # evidence 配下の各ファイルを、actual/{name}/ に同じ相対パスで symlink する
+  # (find 出力が空なら here-string は空行 1 つになるので skip する)。
   while IFS= read -r rel; do
+    [ -z "${rel}" ] && continue
     rel="${rel#./}"
     dst="${actual_dir}/${name}/${rel}"
     if ! mkdir -p "$(dirname "${dst}")" || ! ln -s "${src}/${rel}" "${dst}"; then
       echo "compare: failed to link evidence file: ${src}/${rel}" >&2
       exit 6
     fi
-  done < <(cd "${src}" && find . -type f)
+  done <<< "${filelist}"
 done
 
 # 前回の比較結果を掃除 (compare-files も outputDir を初期化するが明示的に消す)。

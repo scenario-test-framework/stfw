@@ -25,8 +25,10 @@ exec stfw plugin install compare
 exec stfw run cmp
 stdout 'run_id: _'
 
-# actual/ が evidence への file-level symlink として組み立てられている
+# actual/ が evidence への file-level symlink (コピーではない) として組み立てられている
 exists scenario/cmp/_10_99990101/_20_asrt_compare/actual/_10_col_scripts/host1/data.txt
+exec readlink scenario/cmp/_10_99990101/_20_asrt_compare/actual/_10_col_scripts/host1/data.txt
+stdout '_10_col_scripts/evidence/host1/data.txt'
 # symlink 先 (evidence 実体) の内容が読める
 exec cat scenario/cmp/_10_99990101/_20_asrt_compare/actual/_10_col_scripts/host1/data.txt
 stdout 'hello'
@@ -34,6 +36,12 @@ stdout 'hello'
 exists scenario/cmp/_10_99990101/_20_asrt_compare/result/CompareSummary.csv
 exec cat scenario/cmp/_10_99990101/_20_asrt_compare/result/CompareSummary.csv
 stdout 'OK,'
+
+# --- compare-files 自体のエラー (exit 6) を握りつぶさず exit 6 (差分とは別メッセージ) ---
+env STFW_TEST_CF_FAIL=1
+execcode 6 stfw run cmp
+stderr 'compare-files failed'
+env STFW_TEST_CF_FAIL=0
 
 # --- 差分ケース: expect が evidence と異なる → compare-files exit 3 → プラグイン exit 6 ---
 execcode 6 stfw run cmpng
@@ -140,10 +148,16 @@ if [ -z "${left}" ] || [ -z "${right}" ]; then
   echo "fake compare_files: need LEFT RIGHT" >&2
   exit 6
 fi
+# compare-files 自体のエラー (exit 6) を再現する
+if [ "${STFW_TEST_CF_FAIL:-0}" = "1" ]; then
+  echo "fake compare_files: simulated error" >&2
+  exit 6
+fi
 mkdir -p "${out}"
 summary="${out}/CompareSummary.csv"
 echo "Status,Left,Right" > "${summary}"
 rc=0
+# 左(expect)基準で OK/NG/LeftOnly を判定 (actual 側の symlink は追従して読む)
 while IFS= read -r f; do
   rel="${f#"${left}/"}"
   r="${right}/${rel}"
@@ -155,4 +169,12 @@ while IFS= read -r f; do
     echo "OK,${f},${r}" >> "${summary}"
   fi
 done < <(find "${left}" -type f)
+# 右(actual)側の余剰ファイル (RightOnly) も検出する (-L で symlink を追従)
+while IFS= read -r f; do
+  rel="${f#"${right}/"}"
+  l="${left}/${rel}"
+  if [ ! -e "${l}" ]; then
+    echo "RightOnly,${l},${f}" >> "${summary}"; rc=3
+  fi
+done < <(find -L "${right}" -type f)
 exit ${rc}
