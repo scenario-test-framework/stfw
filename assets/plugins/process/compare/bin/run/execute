@@ -44,6 +44,12 @@ expect_dir="${stfw_process_dir}/expect"
 actual_dir="${stfw_process_dir}/actual"
 result_dir="${stfw_process_dir}/result"
 
+# 比較準備の先頭 (全 expect 検証・早期 exit より前) で actual/ と result/ を掃除する。
+# expect 不在・expect 空・evidence 不在・find 失敗・ln 失敗のいずれで失敗しても、
+# 前回 run の古い比較結果が残らないようにする (古い成果物を今回の結果と誤認させない)。
+rm -rf "${actual_dir}" "${result_dir}"
+mkdir -p "${actual_dir}"
+
 if [ ! -d "${expect_dir}" ]; then
   echo "compare: expect directory not found: ${expect_dir}" >&2
   exit 6
@@ -58,11 +64,6 @@ if [ "${#entries[@]}" -eq 0 ]; then
   exit 6
 fi
 
-# 比較準備の先頭で actual/ と result/ を掃除する。以降の早期 exit (evidence 不在・
-# find 失敗・ln 失敗) で失敗しても、前回 run の古い比較結果が残らないようにする
-# (失敗時に古い成果物を今回の結果と誤認させない)。
-rm -rf "${actual_dir}" "${result_dir}"
-mkdir -p "${actual_dir}"
 for entry in "${entries[@]}"; do
   name="$(basename "${entry}")"
   src="${stfw_bizdate_dir}/${name}/evidence"

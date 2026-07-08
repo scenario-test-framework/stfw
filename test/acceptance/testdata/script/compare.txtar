@@ -54,6 +54,18 @@ execcode 6 stfw run cmperr
 stderr 'evidence not found'
 ! exists scenario/cmperr/_10_99990101/_10_asrt_compare/result/CompareSummary.csv
 
+# --- expect ディレクトリ不在で早期失敗しても古い result は残らない ---
+exists scenario/cmpnoexp/_10_99990101/_10_asrt_compare/result/CompareSummary.csv
+execcode 6 stfw run cmpnoexp
+stderr 'expect directory not found'
+! exists scenario/cmpnoexp/_10_99990101/_10_asrt_compare/result/CompareSummary.csv
+
+# --- expect が空 (収集 process ディレクトリ無し) で早期失敗しても古い result は残らない ---
+exists scenario/cmpempexp/_10_99990101/_10_asrt_compare/result/CompareSummary.csv
+execcode 6 stfw run cmpempexp
+stderr 'no process directories'
+! exists scenario/cmpempexp/_10_99990101/_10_asrt_compare/result/CompareSummary.csv
+
 # --- 空 evidence: evidence にファイルが無くても actual/{name} は作られ、
 #     expect のファイルは LeftOnly として mismatch になる ---
 execcode 6 stfw run cmpempty
@@ -137,6 +149,36 @@ stfw:
 hello
 world
 -- scenario/cmperr/_10_99990101/_10_asrt_compare/result/CompareSummary.csv --
+Status,Left,Right
+STALE,old,run
+-- scenario/cmpnoexp/metadata.yml --
+description:
+-- scenario/cmpnoexp/_10_99990101/metadata.yml --
+description:
+-- scenario/cmpnoexp/_10_99990101/_10_asrt_compare/metadata.yml --
+description:
+-- scenario/cmpnoexp/_10_99990101/_10_asrt_compare/config/config.yml --
+stfw:
+  process:
+    compare:
+      compare_files_version: v2.2.0
+-- scenario/cmpnoexp/_10_99990101/_10_asrt_compare/result/CompareSummary.csv --
+Status,Left,Right
+STALE,old,run
+-- scenario/cmpempexp/metadata.yml --
+description:
+-- scenario/cmpempexp/_10_99990101/metadata.yml --
+description:
+-- scenario/cmpempexp/_10_99990101/_10_asrt_compare/metadata.yml --
+description:
+-- scenario/cmpempexp/_10_99990101/_10_asrt_compare/config/config.yml --
+stfw:
+  process:
+    compare:
+      compare_files_version: v2.2.0
+-- scenario/cmpempexp/_10_99990101/_10_asrt_compare/expect/README.txt --
+expect は存在するが収集 process ディレクトリ (サブディレクトリ) を含まない
+-- scenario/cmpempexp/_10_99990101/_10_asrt_compare/result/CompareSummary.csv --
 Status,Left,Right
 STALE,old,run
 -- scenario/cmpempty/metadata.yml --
