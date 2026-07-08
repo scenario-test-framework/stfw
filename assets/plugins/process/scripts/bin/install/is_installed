@@ -1,9 +1,10 @@
 #!/bin/bash
-. "${STFW_HOME}/bin/lib/setenv"
+# scripts プラグインは Go ネイティブ実行。前提コマンド (find / sed) の存在のみ確認する。
+# (v1.0 で STFW_HOME は廃止したため setenv の読み込みは行わない)
 
 function is_installed_cmd() {
   local _target_cmd="$1"
-  if [[ "$(which ${_target_cmd})x" = "x" ]]; then
+  if ! command -v "${_target_cmd}" >/dev/null 2>&1; then
     echo "${_target_cmd} is not installed."
     exit 1
   fi

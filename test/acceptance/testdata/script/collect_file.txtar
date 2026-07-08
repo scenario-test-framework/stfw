@@ -1,0 +1,80 @@
+# STEP: collectFile プラグイン (ホストからファイル収集 → エビデンス規約出力)
+# ssh / scp / sshpass はモックし、擬似リモート ${WORK}/remote/{host}/ から収集する。
+
+env PATH=${WORK}/fakebin:${PATH}
+env STFW_TEST_REMOTE=${WORK}/remote
+chmod 755 fakebin/ssh
+chmod 755 fakebin/scp
+chmod 755 fakebin/sshpass
+
+# 暗号鍵とシークレット (host-user のパスワード) を用意
+exec stfw secret keygen
+exec stfw secret set web01 appuser secretpw
+
+# 収集実行 (collectFile は組み込み。run が embed から解決・展開する)
+exec stfw run demo
+
+# エビデンスディレクトリ規約どおりに収集されている
+exists scenario/demo/_10_99990101/_10_grp_collectFile/evidence/web01/var/log/app/access.log
+exec cat scenario/demo/_10_99990101/_10_grp_collectFile/evidence/web01/var/log/app/access.log
+stdout 'hello from remote access.log'
+
+# パターンに合致しないファイルは収集されない
+! exists scenario/demo/_10_99990101/_10_grp_collectFile/evidence/web01/var/log/app/other.txt
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  inventory: staging.yml
+-- config/inventory/staging.yml --
+stfw_inventory:
+  - web:
+    - web01
+-- scenario/demo/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_grp_collectFile/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_grp_collectFile/config/config.yml --
+stfw:
+  process:
+    collectFile:
+      targets:
+        - group: web
+          user: appuser
+          paths:
+            - /var/log/app/.*\.log
+-- remote/web01/manifest --
+/var/log/app/access.log
+/var/log/app/other.txt
+-- remote/web01/var/log/app/access.log --
+hello from remote access.log
+-- remote/web01/var/log/app/other.txt --
+should not be collected
+-- fakebin/sshpass --
+#!/bin/bash
+# sshpass -p <pw> <cmd...> -> <cmd...>
+if [ "$1" = "-p" ]; then shift 2; fi
+exec "$@"
+-- fakebin/ssh --
+#!/bin/bash
+# ssh <opts> user@host "find / ... -regex 'PAT' ..." を擬似リモートの manifest で再現
+host=""
+for a in "$@"; do case "$a" in *@*) host="${a#*@}";; esac; done
+cmd="${@: -1}"
+pat="$(sed -n "s/.*-regex '\([^']*\)'.*/\1/p" <<<"$cmd")"
+manifest="${STFW_TEST_REMOTE}/${host}/manifest"
+[ -f "$manifest" ] || exit 0
+if [ -n "$pat" ]; then grep -E "$pat" "$manifest"; else cat "$manifest"; fi
+exit 0
+-- fakebin/scp --
+#!/bin/bash
+# scp <opts> user@host:/path destdir/ を擬似リモートからのコピーで再現
+dest="${@: -1}"
+src="${@: -2:1}"
+host="${src%%:*}"; host="${host#*@}"
+path="${src#*:}"
+cp "${STFW_TEST_REMOTE}/${host}${path}" "${dest}"
+exit 0

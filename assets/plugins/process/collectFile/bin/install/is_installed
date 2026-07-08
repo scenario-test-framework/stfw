@@ -1,0 +1,11 @@
+#!/bin/bash
+# 前提コマンドが揃っていればインストール済みとみなす
+# (requires と重複するが、v0.2 互換の is_installed ゲートを満たすため)。
+for cmd in ssh scp sshpass; do
+  if ! command -v "${cmd}" >/dev/null 2>&1; then
+    echo "${cmd} is not installed."
+    exit 1
+  fi
+done
+echo "true"
+exit 0

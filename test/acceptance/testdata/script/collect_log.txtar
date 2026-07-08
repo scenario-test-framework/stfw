@@ -1,0 +1,123 @@
+# STEP: collectLog プラグイン (logfilter プロビジョニング → 時刻フィルタ収集)
+# curl(DL) / ssh / scp / sshpass はモックし、擬似リモートから収集する。
+# logfilter の実処理 (時刻絞り込み) は外部ツールの責務のため、モック ssh が
+# 「マーカー付与 + 入力複製」で実行を再現する。
+
+env PATH=${WORK}/fakebin:${PATH}
+env STFW_TEST_REMOTE=${WORK}/remote
+chmod 755 fakebin/ssh
+chmod 755 fakebin/scp
+chmod 755 fakebin/sshpass
+chmod 755 fakebin/curl
+chmod 755 fakebin/fakelogfilter
+
+# logfilter リリース tarball のフィクスチャを作る (logfilter_{ver}_{arch}/logfilter)
+mkdir lfsrc
+mkdir lfsrc/logfilter_v2.0.0_linux_amd64
+cp fakebin/fakelogfilter lfsrc/logfilter_v2.0.0_linux_amd64/logfilter
+exec tar czf lf.tar.gz -C lfsrc logfilter_v2.0.0_linux_amd64
+env STFW_TEST_LF_TARBALL=${WORK}/lf.tar.gz
+
+# プロビジョニング (curl はモック。arch 別に logfilter をキャッシュ)
+exec stfw plugin install collectLog
+exists .stfw/cache/plugins/collectLog/logfilter/linux_amd64/logfilter
+
+# 資格情報
+exec stfw secret keygen
+exec stfw secret set web01 appuser secretpw
+
+# 収集実行
+exec stfw run demo
+
+# host の arch (linux_amd64) 版 logfilter で収集され、エビデンス規約どおり配置される
+exists scenario/demo/_10_99990101/_10_grp_collectLog/evidence/web01/var/log/app/app.log
+exec cat scenario/demo/_10_99990101/_10_grp_collectLog/evidence/web01/var/log/app/app.log
+stdout 'filtered by logfilter'
+stdout 'app started'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  inventory: staging.yml
+-- config/inventory/staging.yml --
+stfw_inventory:
+  - web:
+    - host: web01
+      arch: linux_amd64
+-- scenario/demo/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_grp_collectLog/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_grp_collectLog/config/config.yml --
+stfw:
+  process:
+    collectLog:
+      targets:
+        - group: web
+          user: appuser
+          paths:
+            - /var/log/app/.*\.log
+-- remote/web01/manifest --
+/var/log/app/app.log
+-- remote/web01/var/log/app/app.log --
+app started
+-- fakebin/fakelogfilter --
+#!/bin/bash
+# 実体は使われない (モック ssh が logfilter 実行を再現する)。存在確認用。
+exit 0
+-- fakebin/curl --
+#!/bin/bash
+# curl -fsSL <url> -o <out> をフィクスチャ tarball のコピーで再現
+out=""
+while [ $# -gt 0 ]; do
+  case "$1" in -o) out="$2"; shift 2;; *) shift;; esac
+done
+cp "${STFW_TEST_LF_TARBALL}" "${out}"
+exit 0
+-- fakebin/sshpass --
+#!/bin/bash
+if [ "$1" = "-p" ]; then shift 2; fi
+exec "$@"
+-- fakebin/ssh --
+#!/bin/bash
+host=""
+for a in "$@"; do case "$a" in *@*) host="${a#*@}";; esac; done
+cmd="${@: -1}"
+root="${STFW_TEST_REMOTE}/${host}"
+set -- ${cmd}
+first="$1"
+case "${first}" in
+  find)
+    pat="$(sed -n "s/.*-regex '\([^']*\)'.*/\1/p" <<<"${cmd}")"
+    manifest="${root}/manifest"
+    [ -f "${manifest}" ] || exit 0
+    grep -E "${pat}" "${manifest}"
+    ;;
+  chmod|rm)
+    exit 0
+    ;;
+  *)
+    # logfilter 実行: 末尾 2 つのクオート引数が input, output
+    infile="$(sed -E "s/.*'([^']*)' '([^']*)'[^']*\$/\1/" <<<"${cmd}")"
+    outfile="$(sed -E "s/.*'([^']*)' '([^']*)'[^']*\$/\2/" <<<"${cmd}")"
+    mkdir -p "${root}$(dirname "${outfile}")"
+    { echo "# filtered by logfilter"; cat "${root}${infile}"; } > "${root}${outfile}"
+    ;;
+esac
+exit 0
+-- fakebin/scp --
+#!/bin/bash
+dest="${@: -1}"
+src="${@: -2:1}"
+if [[ "${src}" == *@*:* ]]; then
+  host="${src%%:*}"; host="${host#*@}"; path="${src#*:}"
+  cp "${STFW_TEST_REMOTE}/${host}${path}" "${dest}"
+elif [[ "${dest}" == *@*:* ]]; then
+  host="${dest%%:*}"; host="${host#*@}"; path="${dest#*:}"
+  mkdir -p "$(dirname "${STFW_TEST_REMOTE}/${host}${path}")"
+  cp "${src}" "${STFW_TEST_REMOTE}/${host}${path}"
+fi
+exit 0

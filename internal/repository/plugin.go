@@ -19,6 +19,14 @@ import (
 // embeddedPluginRoot は同梱プラグインの embed FS 上のルート。
 const embeddedPluginRoot = "plugins"
 
+// PluginCacheDir はプラグインが provisioning した資産 (install でダウンロード
+// したバイナリ等) を置く永続キャッシュディレクトリを返す。
+// MaterializePlugin が毎回ワイプする .stfw/plugins/ とは別に、実行をまたいで
+// 保持する必要がある資産のための場所 (例: collectLog の logfilter バイナリ)。
+func PluginCacheDir(projDir, processType string) string {
+	return filepath.Join(projDir, project.DataDirName, "cache", "plugins", processType)
+}
+
 // PluginLocation は解決済みプラグインの所在。
 type PluginLocation struct {
 	// Dir はプロジェクトプラグインのディスクパス (Embedded=false のとき有効)。
@@ -129,6 +137,23 @@ func CopyPluginTemplate(loc PluginLocation, destDir string) ([]string, error) {
 // (v0.2 の process_service.private.export_config + scripts プラグイン execute の
 // export_yaml と同じ上書きチェーン)。
 func ProcessConfigEnv(projDir string, loc PluginLocation, processType, processDir string) (map[string]string, error) {
+	flat, err := PluginConfigEnv(projDir, loc, processType)
+	if err != nil {
+		return nil, err
+	}
+	// プロセス設定
+	if err := flattenYAMLFile(filepath.Join(processDir, "config", "config.yml"), flat); err != nil {
+		return nil, err
+	}
+	return flat, nil
+}
+
+// PluginConfigEnv はプロセス非依存のプラグイン設定 env を返す。
+// プラグイン config.yml → プロジェクト config/plugins/process/{type}/config.yml の
+// 上書きチェーン (プロセスの config/config.yml は含まない)。
+// install / is_installed のプロビジョニングは特定プロセスに紐づかないため、
+// この段までの設定 (例: collectLog の logfilter_version / logfilter_arches) を使う。
+func PluginConfigEnv(projDir string, loc PluginLocation, processType string) (map[string]string, error) {
 	flat := map[string]string{}
 
 	// プラグイン設定
@@ -147,11 +172,6 @@ func ProcessConfigEnv(projDir string, loc PluginLocation, processType, processDi
 	// プロジェクト上書き
 	projConf := filepath.Join(projDir, "config", "plugins", "process", processType, "config.yml")
 	if err := flattenYAMLFile(projConf, flat); err != nil {
-		return nil, err
-	}
-
-	// プロセス設定
-	if err := flattenYAMLFile(filepath.Join(processDir, "config", "config.yml"), flat); err != nil {
 		return nil, err
 	}
 	return flat, nil

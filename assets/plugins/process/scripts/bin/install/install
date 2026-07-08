@@ -1,5 +1,4 @@
 #!/bin/bash
-. "${STFW_HOME}/bin/lib/setenv"
-
-# 依存なし
+# scripts プラグインは Go ネイティブ実行のため追加の依存はない。
+# (v1.0 で STFW_HOME は廃止したため setenv の読み込みは行わない)
 exit 0

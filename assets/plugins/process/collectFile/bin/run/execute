@@ -1,0 +1,57 @@
+#!/bin/bash
+# collectFile: テスト対象ホストからファイル (外部 IF ファイル等) を収集する。
+#
+# 設定 (config.yml の stfw.process.collectFile.targets):
+#   targets[].group : inventory グループ名 (ホスト解決)
+#   targets[].user  : ログインユーザー (secret {host}-{user} でパスワード解決)
+#   targets[].paths : 収集対象ファイルパスの正規表現 (posix-extended)
+#
+# 出力: エビデンスディレクトリ規約に従い
+#   ${stfw_process_dir}/evidence/{host}/{収集元の絶対パスをそのまま再現}
+#
+# 接続情報 (ホスト/パスワード) は inventory / secret から解決し、config に直書きしない。
+# ssh のホストキーは事前に `stfw ssh trust` で known_hosts へ登録しておくこと。
+set -uo pipefail
+
+evidence_root="${stfw_process_dir}/evidence"
+ssh_opts=(-o StrictHostKeyChecking=yes -o ConnectTimeout=10)
+rc=0
+
+i=0
+while :; do
+  group_var="stfw_process_collectFile_targets_${i}_group"
+  group="${!group_var:-}"
+  [ -z "${group}" ] && break
+  user_var="stfw_process_collectFile_targets_${i}_user"
+  user="${!user_var:-}"
+
+  for host in $(stfw inventory list "${group}"); do
+    if ! password="$(stfw secret show "${host}" "${user}")"; then
+      echo "collectFile: secret not found: ${host}-${user}" >&2
+      rc=6
+      continue
+    fi
+
+    j=0
+    while :; do
+      path_var="stfw_process_collectFile_targets_${i}_paths_${j}"
+      pattern="${!path_var:-}"
+      [ -z "${pattern}" ] && break
+      j=$((j + 1))
+
+      files="$(sshpass -p "${password}" ssh "${ssh_opts[@]}" "${user}@${host}" \
+        "find / -regextype posix-extended -regex '${pattern}' -type f 2>/dev/null")"
+      for f in ${files}; do
+        destdir="${evidence_root}/${host}$(dirname "${f}")"
+        mkdir -p "${destdir}"
+        if ! sshpass -p "${password}" scp "${ssh_opts[@]}" "${user}@${host}:${f}" "${destdir}/"; then
+          echo "collectFile: scp failed: ${host}:${f}" >&2
+          rc=6
+        fi
+      done
+    done
+  done
+  i=$((i + 1))
+done
+
+exit ${rc}

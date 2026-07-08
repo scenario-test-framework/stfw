@@ -49,6 +49,7 @@ stfw_bizdate_dirname=_10_99990101
 stfw_bizdate_seq=10
 stfw_bizdate_start_ts=START_TS
 stfw_loglevel=info
+stfw_plugin_cache_dir=PROJ_DIR/.stfw/cache/plugins/scripts
 stfw_process_dir=PROJ_DIR/scenario/envtest/_10_99990101/_10_pre_scripts
 stfw_process_dirname=_10_pre_scripts
 stfw_process_group=pre

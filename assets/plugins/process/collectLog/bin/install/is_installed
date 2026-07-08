@@ -1,0 +1,16 @@
+#!/bin/bash
+# 収集時の前提コマンドが揃い、logfilter バイナリが 1 つ以上キャッシュ済みなら
+# インストール済みとみなす。
+for cmd in ssh scp sshpass; do
+  if ! command -v "${cmd}" >/dev/null 2>&1; then
+    echo "${cmd} is not installed."
+    exit 1
+  fi
+done
+
+if find "${stfw_plugin_cache_dir}/logfilter" -type f -name logfilter 2>/dev/null | grep -q .; then
+  echo "true"
+  exit 0
+fi
+echo "logfilter is not provisioned (run \`stfw plugin install collectLog\`)."
+exit 1

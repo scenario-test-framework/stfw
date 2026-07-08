@@ -1,0 +1,6 @@
+# collectLog プラグインのメタデータ。
+# requires は実行時 (収集) の前提コマンド。install 時の curl / tar は install 側で確認する。
+requires:
+  - ssh
+  - scp
+  - sshpass

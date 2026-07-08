@@ -1,0 +1,4 @@
+#!/bin/bash
+# 収集出力ルート (エビデンスディレクトリ規約) を用意する。
+mkdir -p "${stfw_process_dir}/evidence"
+exit 0

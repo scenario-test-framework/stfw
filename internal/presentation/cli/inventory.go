@@ -16,8 +16,24 @@ func newInventoryCmd(a *app) *cobra.Command {
 	cmd.AddCommand(
 		newInventoryListCmd(a),
 		newInventoryExistsCmd(a),
+		newInventoryArchCmd(a),
 	)
 	return cmd
+}
+
+func newInventoryArchCmd(a *app) *cobra.Command {
+	return &cobra.Command{
+		Use:   "arch <host>",
+		Short: "print arch configured for host (empty if unset)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := inventory.Arch(cmd.OutOrStdout(), a.projDir, a.config.Get("stfw_inventory"), args[0]); err != nil {
+				a.log.Error(err.Error())
+				return &exitError{code: run.ExitError, err: err}
+			}
+			return nil
+		},
+	}
 }
 
 func newInventoryListCmd(a *app) *cobra.Command {

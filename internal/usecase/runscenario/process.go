@@ -69,6 +69,9 @@ func (r *runner) execProcess(nodeID run.NodeID, processDir, processType string, 
 	for k, v := range confEnv {
 		env[k] = v
 	}
+	// プラグインが install でプロビジョニングした資産の永続キャッシュ
+	// (collectLog の logfilter バイナリ等) を実行時にも参照できるようにする。
+	env["stfw_plugin_cache_dir"] = repository.PluginCacheDir(r.projDir, processType)
 
 	if loc.Embedded && processType == scriptsPluginType {
 		return r.runScriptsProcess(nodeID, processDir, env)
