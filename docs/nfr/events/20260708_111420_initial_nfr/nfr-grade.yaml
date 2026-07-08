@@ -1,0 +1,1162 @@
+version: "1.0"
+event_id: "20260708_111420_initial_nfr"
+created_at: "2026-07-08T11:14:20"
+source: "RDRA モデルからの初期 NFR グレード構築（trigger_event: rdra:20260708_103305_builtin_plugin_ecosystem）"
+trigger_event: "rdra:20260708_103305_builtin_plugin_ecosystem"
+
+model_system:
+  type: "model1"
+  reason: "アクターは全員社内のテスト担当者（4ロール、アクター.tsv で社内のみ）であり、stfw はテスト環境で利用者がオンデマンド実行する CLI ツール（システム概要.json）。停止しても影響はテスト作業の遅延に限定され、社会的影響は極めて限定的なため model1 とする"
+
+categories:
+  - id: "A"
+    name: "可用性"
+    subcategories:
+      - id: "A.1"
+        name: "継続性"
+        items:
+          - id: "A.1.1"
+            name: "運用スケジュール"
+            important: true
+            metrics:
+              - id: "A.1.1.1"
+                name: "運用時間（通常）"
+                important: true
+                grade: 1
+                grade_description: "定時内（9時〜17時）"
+                reason: "stfw は常駐サービスを持たないオンデマンド実行の CLI（stfw run の 1 コマンドで開始・終了）であり、稼働時間の概念は利用者の作業時間帯（テスト実行時のみ）に限定されるため"
+                source_model: "システム概要.json、BUC: シナリオ一括自動実行フロー"
+                confidence: "high"
+              - id: "A.1.1.2"
+                name: "運用時間（特定日）"
+                important: false
+                grade: 0
+                grade_description: "規定なし"
+                reason: "常駐サービスが無く特定日の運用時間の概念が該当しないため、モデルシステム1のデフォルト値を適用"
+                source_model: ""
+                confidence: "default"
+              - id: "A.1.1.3"
+                name: "計画停止の有無"
+                important: true
+                grade: 1
+                grade_description: "定期的に計画停止あり（月次等）"
+                reason: "常駐サービスが無くバージョン更新はバイナリ差し替えで任意時点に行えるため、計画停止の概念が該当しない（model1 デフォルト相当）"
+                source_model: "情報: stfw 本体（Go 単一バイナリ）"
+                confidence: "medium"
+          - id: "A.1.2"
+            name: "サービス切替時間"
+            important: true
+            metrics:
+              - id: "A.1.2.1"
+                name: "サービス切替時間"
+                important: true
+                grade: 1
+                grade_description: "24時間未満（部品交換による復旧）"
+                reason: "実行基盤は配布物（バイナリ / Docker image）の再取得・再配置で復旧でき、切替対象の冗長系を持たないため"
+                source_model: "BUC: stfw導入フロー、外部システム: 配布元（GitHub Releases / ghcr.io）"
+                confidence: "medium"
+      - id: "A.2"
+        name: "耐障害性"
+        items:
+          - id: "A.2.1"
+            name: "サーバ"
+            important: true
+            metrics:
+              - id: "A.2.1.1"
+                name: "サーバ内の冗長化"
+                important: true
+                grade: 1
+                grade_description: "冗長化なし（再起動で復旧）"
+                reason: "実行ホストは利用者のローカル端末または CI ランナーであり、フレームワークとして冗長化は提供しない（失敗時は新しい run_id で再実行）ため"
+                source_model: "情報: 実行（run）、外部システム: 開発 CI 基盤（GitHub Actions）"
+                confidence: "high"
+          - id: "A.2.2"
+            name: "端末"
+            important: false
+            metrics:
+              - id: "A.2.2.1"
+                name: "端末の冗長化"
+                important: false
+                grade: 1
+                grade_description: "冗長化なし"
+                reason: "実行端末は利用者環境に依存するため、モデルシステム1のデフォルト値を適用"
+                source_model: ""
+                confidence: "default"
+          - id: "A.2.3"
+            name: "ネットワーク機器"
+            important: true
+            metrics:
+              - id: "A.2.3.1"
+                name: "ネットワーク機器の冗長化"
+                important: true
+                grade: 1
+                grade_description: "冗長化なし"
+                reason: "ネットワークはテスト対象環境・利用者環境に依存し、フレームワークの要求範囲外のため、モデルシステム1のデフォルト値を適用"
+                source_model: ""
+                confidence: "default"
+          - id: "A.2.4"
+            name: "ネットワーク回線"
+            important: false
+            metrics:
+              - id: "A.2.4.1"
+                name: "回線の冗長化"
+                important: false
+                grade: 1
+                grade_description: "冗長化なし"
+                reason: "回線は利用者環境に依存するため、モデルシステム1のデフォルト値を適用"
+                source_model: ""
+                confidence: "default"
+          - id: "A.2.5"
+            name: "ストレージ"
+            important: true
+            metrics:
+              - id: "A.2.5.1"
+                name: "ストレージの冗長化"
+                important: true
+                grade: 1
+                grade_description: "RAID1（ミラーリング）"
+                reason: "実行成果物（実行ジャーナル・エビデンス・HTML レポート）はローカルファイルであり、シナリオ資材は git 管理・成果物は再実行で再生成可能なため、ストレージ冗長化は要求しない"
+                source_model: "情報: 実行ジャーナル（journal.jsonl）、エビデンス、HTML レポート"
+                confidence: "medium"
+          - id: "A.2.6"
+            name: "建物・電源"
+            important: false
+            metrics:
+              - id: "A.2.6.1"
+                name: "建物の耐震・免震"
+                important: false
+                grade: 1
+                grade_description: "一般建築基準"
+                reason: "設置環境は利用者環境に依存するため、モデルシステム1のデフォルト値を適用"
+                source_model: ""
+                confidence: "default"
+              - id: "A.2.6.2"
+                name: "電源の冗長化"
+                important: true
+                grade: 1
+                grade_description: "冗長化なし"
+                reason: "電源設備は利用者環境に依存するため、モデルシステム1のデフォルト値を適用"
+                source_model: ""
+                confidence: "default"
+      - id: "A.3"
+        name: "災害対策"
+        items:
+          - id: "A.3.1"
+            name: "災害対策"
+            important: true
+            metrics:
+              - id: "A.3.1.1"
+                name: "災害対策の範囲"
+                important: true
+                grade: 0
+                grade_description: "対策なし"
+                reason: "シナリオ資材・設定は git リポジトリで保全され、実行成果物は再実行で再取得できるため、専用の災害対策は要求しない"
+                source_model: "情報: プロジェクト、シナリオ"
+                confidence: "medium"
+              - id: "A.3.1.2"
+                name: "業務継続の要否"
+                important: true
+                grade: 0
+                grade_description: "業務継続不要"
+                reason: "テスト実行基盤の停止は被災時のテスト作業中断にとどまり、復旧後の再実行で継続できるため"
+                source_model: "システム概要.json"
+                confidence: "medium"
+      - id: "A.4"
+        name: "回復性"
+        items:
+          - id: "A.4.1"
+            name: "目標復旧水準"
+            important: true
+            metrics:
+              - id: "A.4.1.1"
+                name: "RPO（目標復旧地点）"
+                important: true
+                grade: 1
+                grade_description: "前日の最終バックアップまで"
+                reason: "実行結果は新しい run_id での再実行で再取得可能であり（専用のリラン・途中再開 I/F は無い）、資材は git 管理のため、直前データの復旧は要求しない"
+                source_model: "情報: 実行（run）、状態: 階層実行ステータス（再実行は新 run_id）"
+                confidence: "medium"
+              - id: "A.4.1.2"
+                name: "RTO（目標復旧時間）"
+                important: true
+                grade: 1
+                grade_description: "1営業日以内"
+                reason: "配布物の再取得・再配置（tar.gz 展開 / docker pull）と再実行で 1 営業日以内に復旧できるため"
+                source_model: "BUC: stfw導入フロー"
+                confidence: "medium"
+              - id: "A.4.1.3"
+                name: "RLO（目標復旧レベル）"
+                important: false
+                grade: 1
+                grade_description: "縮退運転（主要機能のみ）"
+                reason: "復旧水準の特段の要求は無いため、モデルシステム1のデフォルト値を適用（実態はバイナリ再配置で全機能復旧）"
+                source_model: ""
+                confidence: "default"
+  - id: "B"
+    name: "性能・拡張性"
+    subcategories:
+      - id: "B.1"
+        name: "業務処理量"
+        items:
+          - id: "B.1.1"
+            name: "通常時の業務量"
+            important: true
+            metrics:
+              - id: "B.1.1.1"
+                name: "同時アクセス数"
+                important: true
+                grade: 1
+                grade_description: "〜100"
+                reason: "stfw は単一ユーザーが起動する CLI であり、同時アクセスはローカル nginx での HTML レポート閲覧（チーム内数名）程度のため"
+                source_model: "アクター.tsv（社内テスト担当者のみ）、情報: HTML レポート（nginx 配信 http://localhost:8080）"
+                confidence: "high"
+              - id: "B.1.1.2"
+                name: "データ量"
+                important: false
+                grade: 1
+                grade_description: "小規模（プロジェクト単位のエビデンス・ログ・ジャーナルで GB オーダー以内を想定）"
+                reason: "扱うデータは実行ジャーナル・エビデンス（収集ログ・CSV）・レポートのローカルファイルだが、収集対象の規模はテスト対象プロダクト依存で RDRA からは確定できない"
+                source_model: "情報: エビデンス、実行ジャーナル（journal.jsonl）"
+                confidence: "low"
+              - id: "B.1.1.3"
+                name: "オンラインリクエスト件数"
+                important: true
+                grade: 1
+                grade_description: "〜1,000件/日"
+                reason: "オンラインリクエストを受け付けるサービスを持たない（digdag server は廃止、nginx は静的レポート配信のみ）ため"
+                source_model: "情報: 実行（run）（前準備コマンド・server 不要）、条件: server 設定の廃止警告"
+                confidence: "high"
+              - id: "B.1.1.4"
+                name: "バッチ処理件数"
+                important: false
+                grade: 1
+                grade_description: "小規模（シナリオ×業務日付×プロセス×ステップの逐次実行）"
+                reason: "シナリオ一括自動実行がバッチに相当するが、シナリオ数・ステップ数はテストプロジェクト依存で RDRA からは確定できない"
+                source_model: "BUC: シナリオ一括自動実行フロー"
+                confidence: "low"
+          - id: "B.1.2"
+            name: "ピーク時の業務量"
+            important: true
+            metrics:
+              - id: "B.1.2.1"
+                name: "ピーク時同時アクセス数"
+                important: true
+                grade: 1
+                grade_description: "通常時の1.5倍"
+                reason: "単一ユーザー CLI のためピーク同時アクセスの概念が実質該当しない"
+                source_model: "アクター.tsv（社内テスト担当者のみ）"
+                confidence: "high"
+              - id: "B.1.2.2"
+                name: "ピーク時データ量"
+                important: false
+                grade: 1
+                grade_description: "小規模（リリース前テスト期の実行増を想定）"
+                reason: "ピークはリリース前のテスト集中期と推定されるが、規模はテストプロジェクト依存で確定できない"
+                source_model: ""
+                confidence: "low"
+      - id: "B.2"
+        name: "性能目標値"
+        items:
+          - id: "B.2.1"
+            name: "オンライン"
+            important: true
+            metrics:
+              - id: "B.2.1.1"
+                name: "レスポンスタイム"
+                important: true
+                grade: 2
+                grade_description: "10秒以内"
+                reason: "対話的 CLI コマンド（stfw status / inventory / secret show 等）は内部利用者向け操作のため 10 秒以内を目標とする"
+                source_model: "画面: 実行状況確認CLI、インベントリ照会CLI 等（利用者は社内テスト担当者）"
+                confidence: "medium"
+              - id: "B.2.1.2"
+                name: "スループット"
+                important: true
+                grade: 1
+                grade_description: "〜10 TPS"
+                reason: "トランザクション処理を提供しないため、最低レベルを適用"
+                source_model: "システム概要.json（CLI フレームワーク）"
+                confidence: "high"
+              - id: "B.2.1.3"
+                name: "ターンアラウンドタイム"
+                important: false
+                grade: 1
+                grade_description: "シナリオ実行のターンアラウンドはテスト内容依存（目標値の規定なし）"
+                reason: "1 回のシナリオ実行の所要時間はテスト対象の業務処理・収集データ量に依存し、RDRA からは目標値を確定できない"
+                source_model: "BUC: シナリオ一括自動実行フロー"
+                confidence: "low"
+          - id: "B.2.2"
+            name: "バッチ"
+            important: true
+            metrics:
+              - id: "B.2.2.1"
+                name: "バッチ処理時間"
+                important: true
+                grade: 1
+                grade_description: "翌営業日開始まで"
+                reason: "業務日付をまたぐ一連の業務処理を自動実行する長時間シナリオを許容する設計（人手を介さず反復）のため、厳しい時間制約は課さない"
+                source_model: "システム概要.json、情報: エビデンス（業務日付をまたぐ長時間シナリオ）"
+                confidence: "medium"
+              - id: "B.2.2.2"
+                name: "バッチ処理量"
+                important: false
+                grade: 1
+                grade_description: "小規模（テーブル名リスト単位の export/import、ホストグループ単位の収集）"
+                reason: "データストア export/import・ログ収集の処理量はテスト対象プロダクトのデータ規模に依存し、RDRA からは確定できない"
+                source_model: "条件: export/import ラウンドトリップ互換"
+                confidence: "low"
+      - id: "B.3"
+        name: "リソース拡張性"
+        items:
+          - id: "B.3.1"
+            name: "CPU"
+            important: true
+            metrics:
+              - id: "B.3.1.1"
+                name: "CPU拡張性"
+                important: true
+                grade: 1
+                grade_description: "スケールアップ（CPU追加・交換）"
+                reason: "単一ホスト上の単一プロセス実行（逐次実行が仕様）のため、性能向上は実行ホストのスケールアップで対応する"
+                source_model: "条件: 逐次実行・エラー時 Blocked"
+                confidence: "medium"
+          - id: "B.3.2"
+            name: "メモリ"
+            important: false
+            metrics:
+              - id: "B.3.2.1"
+                name: "メモリ拡張性"
+                important: false
+                grade: 1
+                grade_description: "実行ホストのスケールアップで対応"
+                reason: "特段の要求が無いため、モデルシステム1のデフォルト値を適用"
+                source_model: ""
+                confidence: "default"
+          - id: "B.3.3"
+            name: "ストレージ"
+            important: false
+            metrics:
+              - id: "B.3.3.1"
+                name: "ストレージ拡張性"
+                important: false
+                grade: 1
+                grade_description: "実行ホストのディスク増設で対応"
+                reason: "エビデンス・レポートはローカルファイルであり、実行ホストのディスク増設で対応する"
+                source_model: "情報: エビデンス"
+                confidence: "default"
+          - id: "B.3.4"
+            name: "ネットワーク"
+            important: false
+            metrics:
+              - id: "B.3.4.1"
+                name: "ネットワーク拡張性"
+                important: false
+                grade: 1
+                grade_description: "特段の要求なし"
+                reason: "特段の要求が無いため、モデルシステム1のデフォルト値を適用"
+                source_model: ""
+                confidence: "default"
+      - id: "B.4"
+        name: "性能品質保証"
+        items:
+          - id: "B.4.1"
+            name: "性能テスト"
+            important: true
+            metrics:
+              - id: "B.4.1.1"
+                name: "性能テスト"
+                important: true
+                grade: 0
+                grade_description: "性能テストなし"
+                reason: "フレームワーク自体の CI は lint（golangci-lint）+ test（Go 単体テスト + testscript 受け入れテスト）であり、性能テストは含まれないため"
+                source_model: "外部システム: 開発 CI 基盤（GitHub Actions）"
+                confidence: "medium"
+  - id: "C"
+    name: "運用・保守性"
+    subcategories:
+      - id: "C.1"
+        name: "通常運用"
+        items:
+          - id: "C.1.1"
+            name: "運用時間"
+            important: true
+            metrics:
+              - id: "C.1.1.1"
+                name: "運用監視時間"
+                important: true
+                grade: 1
+                grade_description: "定時内（9時〜17時）"
+                reason: "常駐監視は行わず、実行中のみ OTel トレース・status・レポートで状況を確認する運用のため（運用時間 A.1.1.1 = Lv1 に連動）"
+                source_model: "情報: OTel トレース（スパンツリー）、BUC: 実行結果監視・確認フロー"
+                confidence: "high"
+              - id: "C.1.1.2"
+                name: "バックアップ時間帯"
+                important: false
+                grade: 1
+                grade_description: "規定なし（常駐サービスが無く任意時点で取得可能）"
+                reason: "常駐サービスを持たないため、バックアップ時間帯の制約は該当しない"
+                source_model: ""
+                confidence: "default"
+              - id: "C.1.1.3"
+                name: "計画停止対応時間"
+                important: false
+                grade: 1
+                grade_description: "規定なし（計画停止の概念が該当しない）"
+                reason: "常駐サービスを持たないため、計画停止対応時間は該当しない"
+                source_model: ""
+                confidence: "default"
+          - id: "C.1.2"
+            name: "バックアップ"
+            important: true
+            metrics:
+              - id: "C.1.2.1"
+                name: "バックアップ方式"
+                important: true
+                grade: 1
+                grade_description: "フルバックアップ（週次）"
+                reason: "シナリオ資材・設定は git 管理を想定し、実行成果物は再実行で再生成可能なため、最低限のバックアップ水準とする"
+                source_model: "情報: プロジェクト、比較結果（result / actual は gitignore 対象）"
+                confidence: "medium"
+              - id: "C.1.2.2"
+                name: "バックアップ対象"
+                important: false
+                grade: 1
+                grade_description: "プロジェクトディレクトリ（特に config/encrypt/ の暗号化キーと config/passwd/ の暗号化資格情報）"
+                reason: "暗号化キーを失うと登録済み資格情報が復号不能になるため（キー再生成の抑止条件が存在）、キーペアと暗号化資格情報をバックアップ対象の中心とする"
+                source_model: "情報: 暗号化キー、パスワード、条件: 暗号化キー再生成の抑止"
+                confidence: "medium"
+              - id: "C.1.2.3"
+                name: "バックアップ世代管理"
+                important: false
+                grade: 1
+                grade_description: "世代管理の規定なし（git 履歴に委ねる）"
+                reason: "資材は git 履歴で世代管理されるため、専用の世代管理は要求しない"
+                source_model: ""
+                confidence: "default"
+          - id: "C.1.3"
+            name: "運用監視"
+            important: true
+            metrics:
+              - id: "C.1.3.1"
+                name: "監視範囲"
+                important: true
+                grade: 3
+                grade_description: "+アプリケーション監視"
+                reason: "run / scenario / bizdate / process / step の実行状況を OTLP トレースとして既存オブザーバビリティ基盤（Jaeger / Grafana Tempo / Datadog 等）で監視できる（送信先設定時のみ、opt-in）ため"
+                source_model: "情報: OTel トレース（スパンツリー）、外部システム: OTLP 受信先"
+                confidence: "medium"
+              - id: "C.1.3.2"
+                name: "監視方式"
+                important: false
+                grade: 1
+                grade_description: "OTLP push 型のトレース送信（実行ジャーナルのイベントの投影。シグナルはトレースのみ）"
+                reason: "監視は実行ジャーナルのイベントを OTLP トレースとして push する方式であり、外形監視・エージェント監視は提供しないため"
+                source_model: "情報: OTel トレース（スパンツリー）、実行ジャーナル（journal.jsonl）"
+                confidence: "high"
+              - id: "C.1.3.3"
+                name: "監視間隔"
+                important: false
+                grade: 1
+                grade_description: "イベント駆動（各階層・ステップの開始・終了イベント時に送信。ポーリングなし）"
+                reason: "実行ジャーナルへのイベント記録の投影としてスパンを送信するイベント駆動方式のため、監視間隔の設定は該当しない"
+                source_model: "情報: 実行ジャーナル（journal.jsonl）"
+                confidence: "high"
+      - id: "C.2"
+        name: "保守運用"
+        items:
+          - id: "C.2.1"
+            name: "計画保守"
+            important: true
+            metrics:
+              - id: "C.2.1.1"
+                name: "計画保守の時間帯"
+                important: false
+                grade: 1
+                grade_description: "任意時点（バイナリ差し替え / docker pull で更新）"
+                reason: "常駐サービスを持たないため、保守作業（バージョン更新）は利用者の任意時点に実施できる"
+                source_model: "情報: stfw 本体（配布形態）"
+                confidence: "medium"
+              - id: "C.2.1.2"
+                name: "パッチ適用方針"
+                important: true
+                grade: 1
+                grade_description: "セキュリティパッチのみ随時"
+                reason: "tag 付与時に goreleaser でリリースされる新バージョンへ利用者が随時差し替える運用のため、最低水準を適用"
+                source_model: "外部システム: 配布元（GitHub Releases / ghcr.io）、開発 CI 基盤（GitHub Actions）"
+                confidence: "medium"
+          - id: "C.2.2"
+            name: "ソフトウェア保守"
+            important: false
+            metrics:
+              - id: "C.2.2.1"
+                name: "ライフサイクル管理"
+                important: false
+                grade: 1
+                grade_description: "VERSION によるバージョン管理と goreleaser によるリリース管理（旧 v0.2 系はタグ凍結）"
+                reason: "stfw 本体は VERSION 属性で管理され、tag 付与時に CI からリリースされる。旧 v0.2 系（Bash + digdag）はタグ凍結済みのため"
+                source_model: "情報: stfw 本体（VERSION）、外部システム: 開発 CI 基盤（GitHub Actions）"
+                confidence: "medium"
+      - id: "C.3"
+        name: "障害時運用"
+        items:
+          - id: "C.3.1"
+            name: "障害検知"
+            important: true
+            metrics:
+              - id: "C.3.1.1"
+                name: "障害検知方式"
+                important: true
+                grade: 2
+                grade_description: "監視ツールによる検知（アラート通知）"
+                reason: "テスト実行の失敗はエラー時停止 + スパンステータス Error の OTLP 投影・stfw status / report で機械的に検知できるため"
+                source_model: "状態: 階層実行ステータス / ステップ実行ステータス、条件: スパンステータス・属性マップ"
+                confidence: "medium"
+          - id: "C.3.2"
+            name: "障害通知"
+            important: false
+            metrics:
+              - id: "C.3.2.1"
+                name: "障害通知方式"
+                important: false
+                grade: 1
+                grade_description: "OTLP トレース経由で既存オブザーバビリティ基盤の通知機能に委ねる（送信失敗は実行ログへの警告のみ）"
+                reason: "通知はスパンステータス Error の投影として既存基盤側で実現し、stfw 自体は通知経路の障害でテスト実行を止めない方針のため"
+                source_model: "条件: OTel エクスポート失敗の非致命扱い"
+                confidence: "medium"
+          - id: "C.3.3"
+            name: "障害復旧"
+            important: false
+            metrics:
+              - id: "C.3.3.1"
+                name: "障害復旧方式"
+                important: false
+                grade: 1
+                grade_description: "レポート・ログで失敗箇所を調査 → シナリオ修正 → 新しい run_id で再実行（途中再開 I/F なし）"
+                reason: "失敗時は status / report / OTel トレース / ログで調査し、修正後に stfw run で再実行する運用が RDRA に定義されているため"
+                source_model: "BUC: 実行結果監視・確認フロー"
+                confidence: "high"
+      - id: "C.4"
+        name: "運用環境"
+        items:
+          - id: "C.4.1"
+            name: "テスト環境"
+            important: true
+            metrics:
+              - id: "C.4.1.1"
+                name: "テスト環境"
+                important: true
+                grade: 2
+                grade_description: "簡易テスト環境（本番縮小構成）"
+                reason: "stfw validate による静的検証と stfw run --dry-run により、テスト対象環境に影響を与えずに実行経路を事前検証できるため"
+                source_model: "条件: dry-run の実行範囲、run 前静的検証"
+                confidence: "medium"
+          - id: "C.4.2"
+            name: "開発環境"
+            important: false
+            metrics:
+              - id: "C.4.2.1"
+                name: "開発環境"
+                important: false
+                grade: 1
+                grade_description: "Go 開発環境 + GitHub Actions CI（PR で lint + test、master で snapshot ビルド）"
+                reason: "フレームワーク自体の開発は Go + GitHub Actions の CI で品質保証されるため"
+                source_model: "外部システム: 開発 CI 基盤（GitHub Actions）"
+                confidence: "medium"
+      - id: "C.5"
+        name: "サポート体制"
+        items:
+          - id: "C.5.1"
+            name: "サポート時間"
+            important: true
+            metrics:
+              - id: "C.5.1.1"
+                name: "サポート時間"
+                important: true
+                grade: 1
+                grade_description: "営業時間内（9時〜17時）"
+                reason: "OSS としてベストエフォート（GitHub Issues 等）と推定されるが、サポート体制は RDRA に定義が無く確定できない"
+                source_model: ""
+                confidence: "low"
+          - id: "C.5.2"
+            name: "エスカレーション"
+            important: false
+            metrics:
+              - id: "C.5.2.1"
+                name: "エスカレーション体制"
+                important: false
+                grade: 1
+                grade_description: "エスカレーション体制の規定なし"
+                reason: "エスカレーション体制の定義が無いため、モデルシステム1のデフォルト値を適用"
+                source_model: ""
+                confidence: "default"
+      - id: "C.6"
+        name: "その他の運用管理方針"
+        items:
+          - id: "C.6.1"
+            name: "ログ管理"
+            important: true
+            metrics:
+              - id: "C.6.1.1"
+                name: "ログ保管期間"
+                important: true
+                grade: 1
+                grade_description: "1ヶ月"
+                reason: "実行ログは日次ローテーションが定義されているが保管期間の規定は無く、テスト成果物としての保持要件が確定できないため保守的に 1 ヶ月とする"
+                source_model: "情報: 実行ログ（日次ローテーション）"
+                confidence: "low"
+              - id: "C.6.1.2"
+                name: "ログ種別"
+                important: false
+                grade: 1
+                grade_description: "実行ログ（.stfw/stfw.log、trace〜error、シークレットマスキング済み）+ 実行ジャーナル（journal.jsonl、追記専用）"
+                reason: "障害調査用の実行ログと、実行結果の唯一のソースである追記専用ジャーナルの 2 種が定義されているため"
+                source_model: "情報: 実行ログ、実行ジャーナル（journal.jsonl）"
+                confidence: "high"
+  - id: "D"
+    name: "移行性"
+    subcategories:
+      - id: "D.1"
+        name: "移行時期"
+        items:
+          - id: "D.1.1"
+            name: "移行時期"
+            important: false
+            metrics:
+              - id: "D.1.1.1"
+                name: "移行時期"
+                important: false
+                grade: 1
+                grade_description: "利用プロジェクトの任意タイミング（v0.2 系はタグ凍結済み、旧形式は読み込み専用で並行サポート）"
+                reason: "旧 S/MIME 形式は読み込み専用でサポートされ移行前も参照できるため、移行時期の強い制約は無い"
+                source_model: "条件: 資格情報の旧形式移行、README（v0.2.0 タグ凍結）"
+                confidence: "medium"
+      - id: "D.2"
+        name: "移行方式"
+        items:
+          - id: "D.2.1"
+            name: "移行方式"
+            important: true
+            metrics:
+              - id: "D.2.1.1"
+                name: "移行方式"
+                important: true
+                grade: 1
+                grade_description: "一括移行（ビッグバン方式）"
+                reason: "プロジェクト単位で stfw secret migrate による資格情報の一括変換と *.dig ファイル整理を行う一括移行のため"
+                source_model: "BUC: 接続情報管理フロー「資格情報を旧形式から移行する」、条件: run 前静的検証（*.dig 警告）"
+                confidence: "high"
+      - id: "D.3"
+        name: "移行対象（機器）"
+        items:
+          - id: "D.3.1"
+            name: "移行対象機器"
+            important: false
+            metrics:
+              - id: "D.3.1.1"
+                name: "移行対象機器"
+                important: false
+                grade: 1
+                grade_description: "機器移行なし（配布物の差し替えのみ。JVM / Python 2 / Ruby / digdag 等のランタイムは不要化）"
+                reason: "移行は同一ホスト上のソフトウェア差し替えであり、機器の移行は発生しないため"
+                source_model: "情報: stfw 本体（ランタイム・依存モジュール不要）"
+                confidence: "high"
+              - id: "D.3.1.2"
+                name: "移行元環境の廃棄"
+                important: false
+                grade: 1
+                grade_description: "旧資格情報ファイルは .bak 退避、旧ランタイム（digdag / JVM 等）は不要化により任意削除"
+                reason: "移行時に旧ファイルは .bak として退避される仕様のため、即時廃棄は行わない"
+                source_model: "条件: 資格情報の旧形式移行（.bak 退避）"
+                confidence: "high"
+      - id: "D.4"
+        name: "移行対象（データ）"
+        items:
+          - id: "D.4.1"
+            name: "移行データ"
+            important: true
+            metrics:
+              - id: "D.4.1.1"
+                name: "データ移行量"
+                important: true
+                grade: 1
+                grade_description: "〜100GB"
+                reason: "移行対象は資格情報ファイル（ホスト×ユーザー単位の小容量ファイル）と既存シナリオ資材のみで、KB〜MB オーダーのため"
+                source_model: "情報: パスワード（config/passwd/ 配下のファイル）"
+                confidence: "high"
+              - id: "D.4.1.2"
+                name: "データ変換"
+                important: false
+                grade: 1
+                grade_description: "S/MIME (RSA+AES256) → age (X25519) への暗号化方式一括変換（stfw secret migrate）"
+                reason: "資格情報の暗号化方式変換が移行の中心であり、変換コマンドが提供されるため"
+                source_model: "バリエーション: 資格情報暗号化方式、BUC: 接続情報管理フロー"
+                confidence: "high"
+              - id: "D.4.1.3"
+                name: "データクレンジング"
+                important: false
+                grade: 1
+                grade_description: "クレンジングなし（形式変換のみ）"
+                reason: "移行は暗号化方式の変換のみで、データ品質の修正は該当しないため"
+                source_model: ""
+                confidence: "default"
+      - id: "D.5"
+        name: "移行計画"
+        items:
+          - id: "D.5.1"
+            name: "移行計画"
+            important: true
+            metrics:
+              - id: "D.5.1.1"
+                name: "移行リハーサル"
+                important: true
+                grade: 0
+                grade_description: "リハーサルなし"
+                reason: "移行は可逆（旧ファイル .bak 退避、旧形式読み込み専用サポート）で小規模なため、リハーサルは要求しない"
+                source_model: "条件: 資格情報の旧形式移行"
+                confidence: "medium"
+              - id: "D.5.1.2"
+                name: "移行判定基準"
+                important: false
+                grade: 1
+                grade_description: "stfw secret show による復号確認と stfw validate / dry-run による実行可能性確認"
+                reason: "移行後の確認手段として復号参照・静的検証・dry-run が提供されるため"
+                source_model: "BUC: 接続情報管理フロー、シナリオ静的検証フロー"
+                confidence: "medium"
+              - id: "D.5.1.3"
+                name: "切り戻し計画"
+                important: false
+                grade: 1
+                grade_description: ".bak からの復元と v0.2.0 凍結タグへの切り戻しが可能"
+                reason: "旧ファイルの .bak 退避と旧バージョンのタグ凍結により切り戻し手段が確保されているため"
+                source_model: "条件: 資格情報の旧形式移行、README（v0.2.0 タグ凍結）"
+                confidence: "medium"
+  - id: "E"
+    name: "セキュリティ"
+    subcategories:
+      - id: "E.1"
+        name: "前提条件・制約条件"
+        items:
+          - id: "E.1.1"
+            name: "セキュリティポリシー"
+            important: true
+            metrics:
+              - id: "E.1.1.1"
+                name: "セキュリティポリシー"
+                important: true
+                grade: 1
+                grade_description: "簡易的なガイドラインあり"
+                reason: "「資格情報を平文で扱わない」原則（age 暗号化保管・シークレットマスキング・接続情報のグループ名参照）が要件として明文化されているため"
+                source_model: "条件: シークレットマスキング、プラグイン接続情報のグループ名参照"
+                confidence: "medium"
+          - id: "E.1.2"
+            name: "セキュリティ関連法規"
+            important: false
+            metrics:
+              - id: "E.1.2.1"
+                name: "準拠すべき法規・基準"
+                important: false
+                grade: 1
+                grade_description: "特段の法規制なし（テスト環境の資格情報のみを扱う想定）"
+                reason: "個人情報等の本番データを扱うかはテスト運用（本番データをテストに流用するか）に依存し、RDRA からは確定できない"
+                source_model: ""
+                confidence: "low"
+      - id: "E.2"
+        name: "セキュリティリスク分析"
+        items:
+          - id: "E.2.1"
+            name: "リスク分析"
+            important: true
+            metrics:
+              - id: "E.2.1.1"
+                name: "セキュリティリスク分析"
+                important: true
+                grade: 1
+                grade_description: "簡易チェックリストによる確認"
+                reason: "リスク分析の定義が無いため、モデルシステム1のデフォルト値を適用"
+                source_model: ""
+                confidence: "default"
+      - id: "E.3"
+        name: "セキュリティ診断"
+        items:
+          - id: "E.3.1"
+            name: "セキュリティ診断"
+            important: true
+            metrics:
+              - id: "E.3.1.1"
+                name: "セキュリティ診断"
+                important: true
+                grade: 0
+                grade_description: "診断なし"
+                reason: "CI は lint + test のみでセキュリティ診断は含まれないため（model1 デフォルトとも一致）"
+                source_model: "外部システム: 開発 CI 基盤（GitHub Actions）"
+                confidence: "medium"
+      - id: "E.4"
+        name: "セキュリティリスク管理"
+        items:
+          - id: "E.4.1"
+            name: "リスク管理"
+            important: false
+            metrics:
+              - id: "E.4.1.1"
+                name: "リスク管理プロセス"
+                important: false
+                grade: 1
+                grade_description: "リスク管理プロセスの規定なし"
+                reason: "リスク管理プロセスの定義が無いため、モデルシステム1のデフォルト値を適用"
+                source_model: ""
+                confidence: "default"
+      - id: "E.5"
+        name: "アクセス・利用制限"
+        items:
+          - id: "E.5.1"
+            name: "認証"
+            important: true
+            metrics:
+              - id: "E.5.1.1"
+                name: "認証方式"
+                important: true
+                grade: 1
+                grade_description: "ID/パスワード認証"
+                reason: "stfw 自体にユーザー認証は無く OS ユーザー権限に依拠する。テスト対象ホストへの接続は SSH + age 暗号化資格情報（ホスト×ユーザー単位）で行うため"
+                source_model: "情報: パスワード、SSH サーバキー（known_hosts）"
+                confidence: "medium"
+          - id: "E.5.2"
+            name: "アクセス制御"
+            important: true
+            metrics:
+              - id: "E.5.2.1"
+                name: "アクセス制御"
+                important: true
+                grade: 1
+                grade_description: "ユーザ単位の制御"
+                reason: "アクセス制御はファイルシステム権限（プロジェクトディレクトリ・暗号化キー）に依拠し、ロール概念は持たないため"
+                source_model: "情報: プロジェクト、暗号化キー（config/encrypt/ 配下）"
+                confidence: "medium"
+          - id: "E.5.3"
+            name: "利用制限"
+            important: false
+            metrics:
+              - id: "E.5.3.1"
+                name: "利用制限"
+                important: false
+                grade: 1
+                grade_description: "利用端末・接続元の制限なし（ローカル実行の CLI）"
+                reason: "ローカル実行の CLI のため、接続元制限の概念が該当しない"
+                source_model: ""
+                confidence: "default"
+      - id: "E.6"
+        name: "データ秘匿"
+        items:
+          - id: "E.6.1"
+            name: "暗号化"
+            important: true
+            metrics:
+              - id: "E.6.1.1"
+                name: "データ暗号化（保管時）"
+                important: true
+                grade: 1
+                grade_description: "機密データのみ暗号化"
+                reason: "資格情報（パスワード・トークン）を age (X25519) で暗号化保管し平文保管を避ける。エビデンス等その他データは暗号化しないため"
+                source_model: "情報: パスワード（age (X25519) 暗号化）、暗号化キー"
+                confidence: "high"
+              - id: "E.6.1.2"
+                name: "データ暗号化（通信時）"
+                important: true
+                grade: 1
+                grade_description: "外部通信のみ暗号化（TLS）"
+                reason: "テスト対象ホストとの通信は ssh/scp、配布物取得は HTTPS で暗号化される。OTLP・データストア接続の暗号化は接続先構成に依存するため"
+                source_model: "外部システム: テスト対象ホスト群（scp/ssh）、配布元（GitHub Releases / ghcr.io）"
+                confidence: "medium"
+          - id: "E.6.2"
+            name: "データマスキング"
+            important: false
+            metrics:
+              - id: "E.6.2.1"
+                name: "データマスキング"
+                important: false
+                grade: 1
+                grade_description: "ログ出力時に環境変数 PASSWORD / TOKEN の値を [secret] に置換"
+                reason: "シークレットマスキングがログを出力・確認するすべての場面で適用される仕様のため"
+                source_model: "条件: シークレットマスキング"
+                confidence: "high"
+      - id: "E.7"
+        name: "不正追跡・監視"
+        items:
+          - id: "E.7.1"
+            name: "監査ログ"
+            important: true
+            metrics:
+              - id: "E.7.1.1"
+                name: "監査ログ"
+                important: true
+                grade: 1
+                grade_description: "ログイン/ログアウトのみ（相当: 実行操作の記録のみ）"
+                reason: "実行操作は追記専用の実行ジャーナルと実行ログに記録されるが、認証を持たないため監査専用ログ（アクセスログ・改ざん検知）は無い"
+                source_model: "情報: 実行ジャーナル（journal.jsonl、追記専用）、実行ログ"
+                confidence: "medium"
+          - id: "E.7.2"
+            name: "不正監視"
+            important: false
+            metrics:
+              - id: "E.7.2.1"
+                name: "不正監視"
+                important: false
+                grade: 0
+                grade_description: "不正監視なし"
+                reason: "不正監視の定義が無く、ローカル実行の CLI のため要求しない"
+                source_model: ""
+                confidence: "default"
+      - id: "E.8"
+        name: "ネットワーク対策"
+        items:
+          - id: "E.8.1"
+            name: "ファイアウォール"
+            important: true
+            metrics:
+              - id: "E.8.1.1"
+                name: "ファイアウォール"
+                important: true
+                grade: 1
+                grade_description: "パケットフィルタリング"
+                reason: "ネットワーク対策は実行ホスト・テスト対象環境の設備に依存し、フレームワークの要求範囲外のため、モデルシステム1のデフォルト値を適用"
+                source_model: ""
+                confidence: "default"
+          - id: "E.8.2"
+            name: "IDS/IPS"
+            important: false
+            metrics:
+              - id: "E.8.2.1"
+                name: "IDS/IPS"
+                important: false
+                grade: 0
+                grade_description: "IDS/IPS 導入なし"
+                reason: "利用環境依存でありフレームワークとしては要求しない"
+                source_model: ""
+                confidence: "default"
+          - id: "E.8.3"
+            name: "ネットワーク分離"
+            important: false
+            metrics:
+              - id: "E.8.3.1"
+                name: "ネットワーク分離"
+                important: false
+                grade: 1
+                grade_description: "テスト対象環境のネットワーク内で実行（環境別 inventory で対象を分離）"
+                reason: "環境別 inventory により staging 等の環境単位で接続対象を分離する設計のため"
+                source_model: "情報: インベントリ（環境単位のファイル）"
+                confidence: "medium"
+      - id: "E.9"
+        name: "マルウェア対策"
+        items:
+          - id: "E.9.1"
+            name: "マルウェア対策"
+            important: true
+            metrics:
+              - id: "E.9.1.1"
+                name: "マルウェア対策"
+                important: true
+                grade: 1
+                grade_description: "ウイルス対策ソフト導入"
+                reason: "実行ホストのマルウェア対策は利用者環境に依存するため、モデルシステム1のデフォルト値を適用"
+                source_model: ""
+                confidence: "default"
+      - id: "E.10"
+        name: "Web対策"
+        items:
+          - id: "E.10.1"
+            name: "WAF"
+            important: true
+            metrics:
+              - id: "E.10.1.1"
+                name: "WAF"
+                important: true
+                grade: 0
+                grade_description: "WAFなし"
+                reason: "公開 Web アプリケーションを持たない（nginx はローカルの静的 HTML レポート配信のみ）ため"
+                source_model: "情報: HTML レポート（nginx 配信、http://localhost:8080）"
+                confidence: "high"
+          - id: "E.10.2"
+            name: "Webアプリケーション対策"
+            important: false
+            metrics:
+              - id: "E.10.2.1"
+                name: "Webアプリケーション対策"
+                important: false
+                grade: 1
+                grade_description: "動的 Web アプリなし（静的 HTML のみ配信）"
+                reason: "レポートは静的 HTML であり、XSS/SQL インジェクション等の動的 Web アプリ対策は実質該当しないため"
+                source_model: "情報: HTML レポート（静的 HTML）"
+                confidence: "medium"
+      - id: "E.11"
+        name: "セキュリティインシデント対応"
+        items:
+          - id: "E.11.1"
+            name: "インシデント対応"
+            important: true
+            metrics:
+              - id: "E.11.1.1"
+                name: "インシデント対応計画"
+                important: true
+                grade: 1
+                grade_description: "基本的な連絡体制のみ"
+                reason: "インシデント対応計画の定義が無いため、モデルシステム1のデフォルト値を適用"
+                source_model: ""
+                confidence: "default"
+  - id: "F"
+    name: "システム環境・エコロジー"
+    subcategories:
+      - id: "F.1"
+        name: "システム制約・前提条件"
+        items:
+          - id: "F.1.1"
+            name: "システム制約"
+            important: true
+            metrics:
+              - id: "F.1.1.1"
+                name: "対応OS"
+                important: true
+                grade: 3
+                grade_description: "マルチプラットフォーム（OS非依存）"
+                reason: "linux/darwin × amd64/arm64 + windows/amd64 のマルチプラットフォームバイナリと Docker image を配布し、追加ランタイム不要のため"
+                source_model: "情報: stfw 本体（配布形態）、バリエーション: 対応 OS 種別"
+                confidence: "high"
+              - id: "F.1.1.2"
+                name: "対応ブラウザ"
+                important: true
+                grade: 2
+                grade_description: "主要ブラウザ2-3種対応"
+                reason: "HTML レポートは静的 HTML のため特定ブラウザへの強い依存は無いと推定されるが、対応ブラウザの明示的な規定は RDRA に無い"
+                source_model: "情報: HTML レポート（静的 HTML）"
+                confidence: "medium"
+              - id: "F.1.1.3"
+                name: "対応デバイス"
+                important: false
+                grade: 1
+                grade_description: "PC（CLI 実行端末）のみ"
+                reason: "CLI ツールのため実行デバイスは PC / サーバ / CI ランナーに限定されるため"
+                source_model: "システム概要.json（CLI フレームワーク）"
+                confidence: "high"
+          - id: "F.1.2"
+            name: "ネットワーク制約"
+            important: false
+            metrics:
+              - id: "F.1.2.1"
+                name: "通信プロトコル"
+                important: false
+                grade: 1
+                grade_description: "ssh/scp（収集・リモート適用）、HTTP(S)（配布物取得・OTLP・レポート閲覧）、データストアプロトコル（MySQL / PostgreSQL / Redis）"
+                reason: "外部システムとの連携プロトコルが RDRA の外部システム・イベント定義から特定できるため"
+                source_model: "外部システム.tsv（テスト対象ホスト群、OTLP 受信先、テスト対象データストア）"
+                confidence: "high"
+              - id: "F.1.2.2"
+                name: "帯域要件"
+                important: false
+                grade: 1
+                grade_description: "特段の帯域要件なし"
+                reason: "帯域の規定が無いため、モデルシステム1のデフォルト値を適用"
+                source_model: ""
+                confidence: "default"
+      - id: "F.2"
+        name: "システム特性"
+        items:
+          - id: "F.2.1"
+            name: "可搬性"
+            important: false
+            metrics:
+              - id: "F.2.1.1"
+                name: "可搬性"
+                important: false
+                grade: 3
+                grade_description: "クラウド/オンプレ間移行可能"
+                reason: "Go 単一バイナリ + Docker image で環境依存が少なく、ローカル / CI / コンテナのどこでも実行できるため"
+                source_model: "情報: stfw 本体（Go 単一バイナリ、Docker image、ランタイム不要）"
+                confidence: "high"
+          - id: "F.2.2"
+            name: "拡張性"
+            important: false
+            metrics:
+              - id: "F.2.2.1"
+                name: "アーキテクチャ拡張性"
+                important: false
+                grade: 1
+                grade_description: "プラグイン機構（組込み + カスタムの 2 層構造、プロジェクト → 組込みの解決順）によるプロセスタイプ拡張"
+                reason: "プロセスタイプはプラグイン追加で拡張でき、組み込みプラグインの組み合わせでカスタムプラグインを実装する 2 層構造が定義されているため"
+                source_model: "情報: プラグイン、条件: プラグイン解決順、バリエーション: プラグインスコープ"
+                confidence: "high"
+      - id: "F.3"
+        name: "適合規格"
+        items:
+          - id: "F.3.1"
+            name: "適合規格"
+            important: false
+            metrics:
+              - id: "F.3.1.1"
+                name: "業界標準・規格"
+                important: false
+                grade: 1
+                grade_description: "OpenTelemetry（OTLP）標準に準拠した連携（OTel 標準環境変数の尊重を含む）"
+                reason: "オブザーバビリティ連携は OTLP 標準に準拠し、OTEL_EXPORTER_OTLP_ENDPOINT 等の標準環境変数を尊重する仕様のため"
+                source_model: "バリエーション: OTel エクスポート設定、外部システム: OTLP 受信先"
+                confidence: "medium"
+              - id: "F.3.1.2"
+                name: "アクセシビリティ"
+                important: false
+                grade: 0
+                grade_description: "アクセシビリティ規格への対応規定なし"
+                reason: "アクセシビリティの定義が無いため、モデルシステム1のデフォルト値を適用"
+                source_model: ""
+                confidence: "default"
+      - id: "F.4"
+        name: "機材設置環境条件"
+        items:
+          - id: "F.4.1"
+            name: "設置環境"
+            important: false
+            metrics:
+              - id: "F.4.1.1"
+                name: "耐震クラス"
+                important: false
+                grade: 1
+                grade_description: "一般オフィス"
+                reason: "実行環境は利用者のオフィス / CI 環境に依存するため、モデルシステム1のデフォルト値を適用"
+                source_model: ""
+                confidence: "default"
+              - id: "F.4.1.2"
+                name: "空調・温度管理"
+                important: false
+                grade: 1
+                grade_description: "特段の空調要件なし"
+                reason: "専用機材を持たないため、モデルシステム1のデフォルト値を適用"
+                source_model: ""
+                confidence: "default"
+              - id: "F.4.1.3"
+                name: "物理セキュリティ"
+                important: false
+                grade: 1
+                grade_description: "特段の物理セキュリティ要件なし（暗号化キーを保持する端末の一般的な管理に準ずる）"
+                reason: "専用設備を持たないため、モデルシステム1のデフォルト値を適用"
+                source_model: ""
+                confidence: "default"
+      - id: "F.5"
+        name: "環境マネージメント"
+        items:
+          - id: "F.5.1"
+            name: "環境対策"
+            important: false
+            metrics:
+              - id: "F.5.1.1"
+                name: "CO2排出量"
+                important: false
+                grade: 0
+                grade_description: "考慮なし"
+                reason: "環境対策の定義が無いため、モデルシステム1のデフォルト値を適用"
+                source_model: ""
+                confidence: "default"
+              - id: "F.5.1.2"
+                name: "廃棄物・リサイクル"
+                important: false
+                grade: 0
+                grade_description: "該当なし（専用機材を持たない）"
+                reason: "専用機材を持たないため該当しない"
+                source_model: ""
+                confidence: "default"

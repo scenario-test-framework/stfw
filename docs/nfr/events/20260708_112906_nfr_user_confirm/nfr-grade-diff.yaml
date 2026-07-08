@@ -1,0 +1,135 @@
+version: "1.0"
+event_id: "20260708_112906_nfr_user_confirm"
+created_at: "2026-07-08T11:29:06"
+source: "初期構築イベント 20260708_111420_initial_nfr の確認推奨項目に対するユーザー回答の反映"
+trigger_event: "nfr:20260708_111420_initial_nfr"
+
+model_system:
+  type: "model1"
+  reason: "ユーザー確認済み: 推定どおり model1 で確定（社内テスト担当者のみが利用する CLI ツール、停止影響はテスト作業の遅延に限定）"
+
+categories:
+  - id: "B"
+    name: "性能・拡張性"
+    subcategories:
+      - id: "B.1"
+        name: "業務処理量"
+        items:
+          - id: "B.1.1"
+            name: "通常時の業務量"
+            important: true
+            metrics:
+              - id: "B.1.1.2"
+                name: "データ量"
+                important: false
+                grade: 1
+                grade_description: "小規模（プロジェクト単位のエビデンス・ログ・ジャーナルで GB オーダー以内）"
+                reason: "ユーザー指定: エビデンス・export データの規模は GB オーダー以内（Lv1）で確定"
+                source_model: "情報: エビデンス、実行ジャーナル（journal.jsonl）"
+                confidence: "user"
+              - id: "B.1.1.4"
+                name: "バッチ処理件数"
+                important: false
+                grade: 1
+                grade_description: "小規模（シナリオ×業務日付×プロセス×ステップの逐次実行、データ量は GB オーダー以内）"
+                reason: "ユーザー指定: データ量規模は Lv1（GB オーダー以内）で確定"
+                source_model: "BUC: シナリオ一括自動実行フロー"
+                confidence: "user"
+          - id: "B.1.2"
+            name: "ピーク時の業務量"
+            important: true
+            metrics:
+              - id: "B.1.2.2"
+                name: "ピーク時データ量"
+                important: false
+                grade: 1
+                grade_description: "小規模（リリース前テスト集中期でも GB オーダー以内）"
+                reason: "ユーザー指定: ピーク時のデータ量も GB オーダー以内（Lv1）で確定"
+                source_model: ""
+                confidence: "user"
+      - id: "B.2"
+        name: "性能目標値"
+        items:
+          - id: "B.2.1"
+            name: "オンライン"
+            important: true
+            metrics:
+              - id: "B.2.1.3"
+                name: "ターンアラウンドタイム"
+                important: false
+                grade: 1
+                grade_description: "シナリオ実行は翌営業日開始までに完了すれば可"
+                reason: "ユーザー指定: シナリオ実行時間は翌営業日開始まで（Lv1）で確定"
+                source_model: "BUC: シナリオ一括自動実行フロー"
+                confidence: "user"
+          - id: "B.2.2"
+            name: "バッチ"
+            important: true
+            metrics:
+              - id: "B.2.2.1"
+                name: "バッチ処理時間"
+                important: true
+                grade: 1
+                grade_description: "翌営業日開始まで"
+                reason: "ユーザー指定: シナリオ一括自動実行は翌営業日開始までに完了すれば可（Lv1）で確定"
+                source_model: "システム概要.json、情報: エビデンス（業務日付をまたぐ長時間シナリオ）"
+                confidence: "user"
+              - id: "B.2.2.2"
+                name: "バッチ処理量"
+                important: false
+                grade: 1
+                grade_description: "小規模（export/import・ログ収集の処理量は GB オーダー以内）"
+                reason: "ユーザー指定: export データ等の処理量は GB オーダー以内（Lv1）で確定"
+                source_model: "条件: export/import ラウンドトリップ互換"
+                confidence: "user"
+  - id: "C"
+    name: "運用・保守性"
+    subcategories:
+      - id: "C.5"
+        name: "サポート体制"
+        items:
+          - id: "C.5.1"
+            name: "サポート時間"
+            important: true
+            metrics:
+              - id: "C.5.1.1"
+                name: "サポート時間"
+                important: true
+                grade: 1
+                grade_description: "営業時間内（9時〜17時）"
+                reason: "ユーザー指定: 営業時間内・OSS ベストエフォート（GitHub Issues 等）で確定"
+                source_model: ""
+                confidence: "user"
+      - id: "C.6"
+        name: "その他の運用管理方針"
+        items:
+          - id: "C.6.1"
+            name: "ログ管理"
+            important: true
+            metrics:
+              - id: "C.6.1.1"
+                name: "ログ保管期間"
+                important: true
+                grade: 1
+                grade_description: "1ヶ月"
+                reason: "ユーザー指定: ログ・実行成果物の保管期間は 1 ヶ月（Lv1）で確定"
+                source_model: "情報: 実行ログ（日次ローテーション）"
+                confidence: "user"
+  - id: "E"
+    name: "セキュリティ"
+    subcategories:
+      - id: "E.1"
+        name: "前提条件・制約条件"
+        items:
+          - id: "E.1.2"
+            name: "セキュリティ関連法規"
+            important: false
+            metrics:
+              - id: "E.1.2.1"
+                name: "準拠すべき法規・基準"
+                important: false
+                grade: 1
+                grade_description: "特段の法規制なし（テスト用ダミーデータ前提）"
+                reason: "ユーザー指定: 特段の法規・コンプライアンス要件なし。テスト用ダミーデータ前提で確定"
+                source_model: ""
+                confidence: "user"

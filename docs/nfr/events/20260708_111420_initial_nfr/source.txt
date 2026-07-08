@@ -1,0 +1,6 @@
+RDRA モデルからの初期 NFR グレード構築
+
+- trigger_event: rdra:20260708_103305_builtin_plugin_ecosystem
+- 入力: docs/rdra/latest/*.tsv、docs/rdra/latest/システム概要.json
+- モード: 初期構築（docs/nfr/latest/nfr-grade.yaml 不在のためフル推論）
+- 対象システム: stfw（シナリオテスト自動実行の CLI フレームワーク。Web サービスではない）
