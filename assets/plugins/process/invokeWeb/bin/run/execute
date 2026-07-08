@@ -44,6 +44,13 @@ fi
 host_group="${stfw_process_invokeWeb_host_group:-}"
 user="${stfw_process_invokeWeb_user:-}"
 
+# secret は {host}-{user} で引くため user 単独指定 (host_group 無し) は解決不能。
+# 無言で無認証実行にならないよう明示的にエラーにする。
+if [ -z "${host_group}" ] && [ -n "${user}" ]; then
+  echo "invokeWeb: user requires host_group (secret is keyed by {host}-{user})" >&2
+  exit 6
+fi
+
 # ブラウザは既定でヘッドレス (CI/非対話環境向け)。スクリプト側の指定が優先される。
 export K6_BROWSER_HEADLESS="${K6_BROWSER_HEADLESS:-true}"
 
