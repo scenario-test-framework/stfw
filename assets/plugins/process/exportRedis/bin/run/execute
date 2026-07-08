@@ -64,6 +64,9 @@ while :; do
 
   out="${destdir}/${name}.csv"
   tmp="${out}.tmp.$$"
+  # 「成功時のみ再配置」。開始時に既存成果物を削除し、失敗・クラッシュ時に
+  # 前回 run の古いエビデンスが残らないようにする (再実行での残留防止)。
+  rm -f "${out}"
   echo 'key,type,ttl,value' > "${tmp}"
 
   # SCAN の返却順は不定なため、CSV 行順を安定させるためキーをソートする

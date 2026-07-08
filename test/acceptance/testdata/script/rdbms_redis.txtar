@@ -39,10 +39,13 @@ env STFW_TEST_REDIS_FAIL=0
 execcode 6 stfw run rimp
 stderr 'source csv not found'
 
-# per-key の redis-cli 失敗 (TTL 取得不可) を握りつぶさず exit 6
+# per-key の redis-cli 失敗 (TTL 取得不可) を握りつぶさず exit 6。
+# 事前に前回 run の古い成果物 (bad.csv) を置いておき、失敗した再実行では
+# それが残らない (=成功時のみ再配置) ことも検証する。
+exists scenario/rttlerr/_10_99990101/_10_grp_exportRedis/evidence/redis01/bad.csv
 execcode 6 stfw run rttlerr
 stderr 'TTL failed'
-# 不完全な CSV は成果物として公開しない
+# 不完全な CSV は成果物として公開しない (古い成果物も削除される)
 ! exists scenario/rttlerr/_10_99990101/_10_grp_exportRedis/evidence/redis01/bad.csv
 
 # inventory list の失敗も握りつぶさず exit 6
@@ -188,6 +191,9 @@ stfw:
       key_patterns:
         - name: bad
           match: 'bad:*'
+-- scenario/rttlerr/_10_99990101/_10_grp_exportRedis/evidence/redis01/bad.csv --
+key,type,ttl,value
+stale:1,string,-1,old-run-leftover
 -- fakebin/redis-cli --
 #!/bin/bash
 # fake redis-cli: シードした keyspace を返し、DEL / import コマンドをログする。
