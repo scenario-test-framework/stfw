@@ -29,6 +29,12 @@ stderr 'forbidden connection config'
 exec stfw validate okgroup
 ! stdout '接続情報を直書き'
 
+# ディレクトリ名 parse error のプロセス (ProcessType="") は接続情報検査の対象外。
+# 構造エラー (exit 6) だけを出し、接続情報直書きの誤検出をしないこと
+execcode 6 stfw validate malformed
+stdout '_10_bad'
+! stdout '接続情報を直書き'
+
 -- stfw.yml --
 stfw:
   project_version: 0.1.0
@@ -87,3 +93,12 @@ stfw:
   process:
     okgroup:
       x: y
+-- scenario/malformed/metadata.yml --
+description:
+-- scenario/malformed/_10_99990101/metadata.yml --
+description:
+-- scenario/malformed/_10_99990101/_10_bad/config/config.yml --
+stfw:
+  process:
+    conns:
+      password: secret123

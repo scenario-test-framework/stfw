@@ -33,6 +33,12 @@ type PluginLocation struct {
 // 解決順はプロジェクト plugins/ → 同梱 assets/plugins/ (v0.2 の
 // stfw.get_installed_plugin_path と同じ順序)。
 func ResolveProcessPlugin(projDir, processType string) (PluginLocation, error) {
+	// 空のプロセスタイプは filepath.Join で plugins/process ディレクトリ自体に
+	// 解決してしまうため明示的に弾く (ディレクトリ名 parse error のプロセスが
+	// processType="" のまま渡ってくるケースへの防御)。
+	if processType == "" {
+		return PluginLocation{}, fmt.Errorf("process-plugin: empty process type")
+	}
 	projPlugin := filepath.Join(projDir, "plugins", "process", processType)
 	if info, err := os.Stat(projPlugin); err == nil && info.IsDir() {
 		return PluginLocation{Dir: projPlugin}, nil

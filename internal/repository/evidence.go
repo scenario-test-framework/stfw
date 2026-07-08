@@ -48,6 +48,12 @@ func CheckForbiddenConnConfig(projDir string, views []scenario.ScenarioView) ([]
 	for _, sv := range views {
 		for _, bv := range sv.Bizdates {
 			for _, pv := range bv.Processes {
+				// ディレクトリ名 parse error のプロセスは ProcessType="" になる。
+				// 構造検証側で別途 error になるため、ここでは検査対象外にする
+				// (空タイプで設定を読むと無関係な誤検出を生むため)。
+				if pv.ProcessType == "" {
+					continue
+				}
 				loc, err := ResolveProcessPlugin(projDir, pv.ProcessType)
 				if err != nil {
 					continue
