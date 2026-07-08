@@ -1,0 +1,54 @@
+# 変更要望: GitHub issue #3 / #4 の v1.0 対応
+
+stfw v1.0 (Go 単一バイナリ・digdag 廃止・サーバレス・組込みプラグイン群) を前提に、
+GitHub の 2 つの enhancement issue を要件として反映する。両 issue は旧 Bash+digdag 版向けに
+書かれているため、v1.0 アーキテクチャに合わせて再解釈する。
+
+前提 (v1.0 で既に実装済みの基盤・再利用する):
+- 接続先ホストのグルーピング: inventory (config/inventory/{file}.yml、stfw_inventory 配下に
+  グループ名→ホスト一覧)。`stfw inventory list {group}` で解決。ティア (web/ap/db 等) で
+  グルーピング可能。
+- パスワードは age で暗号化した secret から `stfw secret show {host} {user}` で読み出す
+  (config への直書き禁止)。
+- ssh のホスト鍵登録は `stfw ssh trust`。
+- 組込みプラグイン実行契約 (env 注入 + リターンコード 0/3/6)、エビデンスディレクトリ規約。
+
+---
+
+## 要望 1 (GitHub issue #3 由来): リモートアクセス系の組込みプラグイン
+
+利用者として、複数ホストを操作するために、ssh 実行と scp put をルール化 (組込みプラグイン化)
+できるようにしたい。テスト対象システムのバウンダリスクリプト実行や外部 IF ファイル配置に使う。
+
+今回のスコープは ssh 実行と scp put の 2 種 (scp get は今回のスコープ外。エビデンス収集用途は
+既存の collectFile/collectLog が担う)。
+
+### sshExec (ssh でリモートスクリプトを一括実行する)
+- 接続先は inventory のグループで指定し、ログインユーザを config で指定する
+  (ホスト+ユーザのグルーピング)。パスワードは secret から読み出す (config 直書き禁止)。
+- プロセスの scripts/ ディレクトリ配下のスクリプトを、解決した各ホストへ ssh 経由で送って
+  昇順に一括実行する。
+- エラー発生時は即時終了する (以降のスクリプトを実行しない・リターンコード 6)。
+
+### scpPut (scp でファイルを配置する)
+- 接続先は inventory のグループで指定し、ログインユーザを config で指定する。
+  パスワードは secret から読み出す。
+- グループ毎に配置先ディレクトリを指定できる。
+- ローカルの target/{グループ} 毎のディレクトリ構成を一括で put する。
+- 一時ディレクトリに scp put した後、指定ディレクトリに mv する (原子的配置)。
+
+## 要望 2 (GitHub issue #4 由来): run 開始時のハウスキープ
+
+利用者として、継続的に利用するために、過去の実行結果を保存期間に従って自動削除 (ハウスキープ)
+したい。旧版の digdag project / digdag db / server の daily job は v1.0 に存在しないため対象外と
+する。v1.0 で run 毎に累積するのは実行ジャーナル (.stfw/runs/{run_id}/) と HTML レポート
+(.stfw/reports/runs/{run_id}.html + index) のみ (エビデンスは scenario 配下の固定パスで毎回
+上書きされ累積しない)。
+
+- stfw.yml で保存期間を指定できること。
+- ハウスキープは専用サブコマンドではなく、`stfw run` の開始時の振る舞いとして自動実行される。
+- 保存期間を過ぎた実行結果 (.stfw/runs/{run_id}) が物理削除されること。
+- 保存期間を過ぎた HTML レポート (.stfw/reports/runs/{run_id}.html) が物理削除され、
+  レポート index が再生成されること (削除済み run が index に残らない)。
+- daily 実行の仕組みは v1.0 (サーバレス) では提供せず、定期実行が必要なら cron 等の外部
+  スケジューラから `stfw run` を回す運用とする (run 都度ハウスキープされるため実質的に維持される)。

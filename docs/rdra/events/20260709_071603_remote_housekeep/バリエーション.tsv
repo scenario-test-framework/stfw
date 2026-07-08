@@ -1,0 +1,3 @@
+コンテキスト	バリエーション	値	説明
+シナリオ構造管理	プロセスタイプ	scripts、collectLog、collectFile、exportMysql / importMysql / clearMysql、exportPostgres / importPostgres / clearPostgres、exportRedis / importRedis / clearRedis、compare、invokeWeb、invokeRest、sshExec / scpPut（プラグイン追加で拡張可）	プロセスの実行方式の種別。プラグインとして追加・拡張でき、scaffold 生成・依存インストール・実行の単位になる。scripts に加えて組込みプラグイン群（収集系・データストア系・検証系・実行系・リモートアクセス系）が提供され、リモートアクセス系は sshExec（ssh でのリモートスクリプト一括実行・Act）と scpPut（scp でのローカルファイル原子的配置・Arrange）を含む。プロダクト固有のプロセスタイプはカスタムプラグインとして追加する
+実行管理	実行結果保存期間設定	保存期間（例: stfw.housekeep.retention: 30d）、未設定（削除しない）	run 開始時の実行結果ハウスキープで削除対象を判定する保存期間の区分。stfw.yml の stfw.housekeep.retention で指定し、保存期間を過ぎた実行ジャーナル（.stfw/runs/{run_id}）と HTML レポート（.stfw/reports/runs/{run_id}.html）を物理削除する。未設定時は削除しない
