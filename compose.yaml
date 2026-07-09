@@ -15,8 +15,12 @@ configs:
 
 services:
   stfw:
+    # 組込みプラグイン (RDBMS/Redis/ssh 系/invokeWeb) を使う場合は全ランタイム同梱の
+    # :full へ差し替える (image: ghcr.io/scenario-test-framework/stfw:full / target: full)
     image: ghcr.io/scenario-test-framework/stfw:latest
-    build: .
+    build:
+      context: .
+      target: runtime
     working_dir: /work
     volumes:
       - ./:/work
@@ -28,7 +32,9 @@ services:
   # nginx が先に起動しても stfw が書き込めるよう、起動順に依存させない
   reports-init:
     image: ghcr.io/scenario-test-framework/stfw:latest
-    build: .
+    build:
+      context: .
+      target: runtime
     user: root
     entrypoint: ["chown", "1000:1000", "/reports"]
     volumes:

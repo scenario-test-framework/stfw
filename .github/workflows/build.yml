@@ -37,4 +37,11 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
+          target: runtime
+          push: false
+      # 全組込みプラグインのランタイム同梱版もビルド検証する
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: full
           push: false

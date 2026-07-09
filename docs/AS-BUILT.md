@@ -803,6 +803,10 @@ stfw_inventory:
 
 ### 10.2 Docker image
 
+マルチステージ 1 Dockerfile で 2 種のイメージを提供する（`--target` で選択。無指定の `docker build` は最終ステージ = full になるため、通常版は `--target runtime` を明示する）。
+
+**stfw（通常版・target: runtime）**
+
 | 項目 | 仕様 |
 |---|---|
 | ベース | ビルド: `golang:1.26` → 実行: `debian:bookworm-slim` |
@@ -810,6 +814,16 @@ stfw_inventory:
 | ユーザー | `stfw`（uid 1000）。`/work/.stfw/reports` を事前作成し所有権を付与 |
 | 実行 | `WORKDIR /work`, `ENTRYPOINT ["stfw"]` |
 | 配布 | `ghcr.io/scenario-test-framework/stfw`（タグ: `latest` + semver。linux/amd64 + linux/arm64） |
+
+**stfw:full（全組込みプラグインのランタイム同梱版・target: full）**
+
+| 項目 | 仕様 |
+|---|---|
+| ベース | runtime ステージからの派生（上記に追加インストール） |
+| 追加パッケージ | sshpass（collect 系 / sshExec / scpPut）、default-mysql-client（MariaDB ベースの `mysql`）、postgresql-client（`psql`）、redis-tools（`redis-cli`）、chromium + fonts-noto-cjk（invokeWeb） |
+| k6 / compare-files / logfilter | イメージに同梱しない（`stfw plugin install` が実行ホストの os_arch 版を永続キャッシュへ取得する既存プロビジョニングを利用） |
+| Chromium 連携 | `K6_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium` と `K6_BROWSER_ARGS=no-sandbox` を ENV で設定（コンテナ内は seccomp で user namespace を作れず Chromium sandbox が起動しないため。K6_BROWSER_ARGS はカンマ区切り・`--` なしの k6 形式 — k6 `browser/env/env.go` / `chromium/browser_type.go` で確認）。**k6 v2.1.0 + 本イメージの chromium で browser テスト（goto + evaluate + check）の E2E 動作を検証済み**。なお素の `chromium --headless --dump-dom` 単体起動は環境により SIGTRAP することがあるが、k6 の起動フラグセット（prepareFlags）経由では発生しない（実利用経路は k6 経由のみ） |
+| 配布 | タグ: `full` + `{semver}-full`（linux/amd64 + linux/arm64） |
 
 ### 10.3 compose.yaml（HTML レポート配信つき）
 
@@ -824,8 +838,8 @@ stfw_inventory:
 | ワークフロー | トリガー | 内容 |
 |---|---|---|
 | `ci.yml` | pull_request | golangci-lint + `go build ./...` + `go test ./...` |
-| `build.yml` | push（master） | `go vet` + `go test` + GoReleaser snapshot（成果物を 7 日保持の artifact 化）+ Docker build（push なし） |
-| `release.yml` | tag `v*` | `go test` + GoReleaser release（GitHub Releases）+ Docker multi-arch build & push（ghcr.io へ semver + latest） |
+| `build.yml` | push（master） | `go vet` + `go test` + GoReleaser snapshot（成果物を 7 日保持の artifact 化）+ Docker build（runtime / full の 2 ターゲット、push なし） |
+| `release.yml` | tag `v*` | `go test` + GoReleaser release（GitHub Releases）+ Docker multi-arch build & push（ghcr.io へ runtime: semver + `latest` / full: `{semver}-full` + `full`。full 側は `flavor: latest=false` で plain latest の自動生成を抑止） |
 
 > 根拠: `.goreleaser.yaml`, `Dockerfile`, `compose.yaml`, `.github/workflows/{ci,build,release}.yml`
 

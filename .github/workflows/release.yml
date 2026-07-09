@@ -47,9 +47,32 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
+          target: runtime
           push: true
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+      # 全組込みプラグインのランタイム同梱版 (stfw:{version}-full / stfw:full)
+      - uses: docker/metadata-action@v5
+        id: meta-full
+        with:
+          images: ghcr.io/scenario-test-framework/stfw
+          tags: |
+            type=semver,pattern={{version}},suffix=-full
+            type=raw,value=full
+          # flavor.latest は既定 auto で semver から plain `latest` を自動生成するため、
+          # full 側が通常版の latest を上書きしないよう明示的に無効化する
+          flavor: |
+            latest=false
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: full
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta-full.outputs.tags }}
+          labels: ${{ steps.meta-full.outputs.labels }}
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}

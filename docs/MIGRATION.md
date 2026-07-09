@@ -86,6 +86,21 @@ $ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 stfw run sample
 - 実行は逐次のみです（旧実装も実質逐次。`max_task_threads` 設定は廃止）
 - run 開始前に validate 相当の静的検証が自動実行されます
 
+### ハウスキープ（digdag daily job の置換）
+
+旧 digdag server の daily job（project / db / server の定期掃除）は v1.0（サーバレス）には存在しません。
+代わりに **`stfw run` の開始時**に、`stfw.yml` の保存日数設定に従って過去の実行結果
+（実行ジャーナル `.stfw/runs/{run_id}` + HTML レポート）が自動削除されます:
+
+```yaml
+stfw:
+  housekeep:
+    retention_days: 30   # 0 で無効 (無期限保存)。既定は 0、stfw init のテンプレートは 30
+```
+
+daily 実行の仕組みは提供しません。定期実行が必要な場合は cron 等の外部スケジューラから
+`stfw run` を回してください（run の都度ハウスキープされるため保存期間は実質的に維持されます）。
+
 ### 環境変数（プラグイン env 契約）
 
 - `STFW_HOME` は廃止されました（単一バイナリ化のため。配布ディレクトリという概念がなくなりました）
