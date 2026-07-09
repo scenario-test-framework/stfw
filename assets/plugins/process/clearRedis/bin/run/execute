@@ -17,6 +17,12 @@ if [ -z "${host_group}" ]; then
   echo "clearRedis: host_group is required" >&2
   exit 6
 fi
+# secret は {host}-{user} で解決するため user は必須 (空では解決不能)。
+# ACL 未使用 (requirepass のみ) の Redis 6+ では default を指定する。
+if [ -z "${user}" ]; then
+  echo "clearRedis: user is required (secret is keyed by {host}-{user}; use 'default' for requirepass-only Redis)" >&2
+  exit 6
+fi
 
 if ! hosts="$(stfw inventory list "${host_group}")"; then
   echo "clearRedis: inventory list failed for group: ${host_group}" >&2

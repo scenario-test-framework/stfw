@@ -3,7 +3,8 @@
 # host_group   : 接続先 Redis ホストを解決する inventory グループ名 (末尾 group で許可)
 # port         : Redis ポート
 # db           : DB 番号 (0-15)
-# user         : ACL ユーザー (空なら AUTH をパスワードのみで行う)
+# user         : 認証ユーザー (必須。secret {host}-{user} で解決。ACL 未使用/requirepass のみの
+#                Redis 6+ では default を指定する)
 # key_patterns : match のみ使用。SCAN の glob パターンに一致するキーを削除する
 #
 # 接続情報 (ホスト・パスワード) を config に直書きしてはならない (禁止契約)。

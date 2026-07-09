@@ -3,7 +3,8 @@
 # host_group   : 接続先 Redis ホストを解決する inventory グループ名 (末尾 group で許可)
 # port         : Redis ポート
 # db           : DB 番号 (0-15)
-# user         : ACL ユーザー (空なら AUTH をパスワードのみで行う)
+# user         : 認証ユーザー (必須。secret {host}-{user} で解決。ACL 未使用/requirepass のみの
+#                Redis 6+ では default を指定する)
 # key_patterns : name のみ使用。入力 CSV は {process}/data/{host}/{name}.csv
 #
 # 入力 CSV: exportRedis の出力形式 (ヘッダー key,type,ttl,value) とラウンドトリップ可能。
