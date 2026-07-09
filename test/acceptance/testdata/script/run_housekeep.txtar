@@ -1,0 +1,123 @@
+# STEP: run 開始時ハウスキープ (REQ-019)
+# stfw.yml の housekeep.retention_days に従い、run 開始時に保存日数を過ぎた
+# 実行結果 (実行ジャーナル + HTML レポート) を物理削除し、index を再生成する。
+
+# --- 有効 (retention_days: 30): 期限切れ run が削除され、保存期間内は残る ---
+cd on
+exec stfw run demo
+
+# 期限切れ (1999 年) の実行ジャーナルと HTML レポートは物理削除される
+! exists .stfw/runs/_19990101000000_1
+! exists .stfw/reports/runs/_19990101000000_1.html
+# 保存期間内 (9999 年 = 未来) の run は残る
+exists .stfw/runs/_99990101000000_2
+# index は再生成され、削除済み run は残らない (今回の run と保存期間内の run は載る)
+! grep '_19990101000000_1' .stfw/reports/index.html
+grep '_99990101000000_2' .stfw/reports/index.html
+grep 'demo' .stfw/reports/index.html
+
+# --- 無効 (未設定 = 既定 0): 何も削除されない ---
+cd ../off
+exec stfw run demo
+exists .stfw/runs/_19990101000000_1
+exists .stfw/reports/runs/_19990101000000_1.html
+
+# --- 不正値 (retention_days: abc): 警告して何も削除しない (本体の実行は継続) ---
+cd ../bad
+exec stfw run demo
+stderr 'housekeep: invalid retention_days'
+exists .stfw/runs/_19990101000000_1
+
+# --- 不正値 (retention_days: -1 負数): 警告して何も削除しない ---
+cd ../neg
+exec stfw run demo
+stderr 'housekeep: invalid retention_days'
+exists .stfw/runs/_19990101000000_1
+
+-- on/stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  housekeep:
+    retention_days: 30
+-- on/.stfw/runs/_19990101000000_1/journal.jsonl --
+-- on/.stfw/runs/_99990101000000_2/journal.jsonl --
+-- on/.stfw/reports/runs/_19990101000000_1.html --
+<html>old report</html>
+-- on/scenario/demo/metadata.yml --
+description:
+-- on/scenario/demo/_10_99990101/metadata.yml --
+description:
+-- on/scenario/demo/_10_99990101/_10_pre_scripts/metadata.yml --
+description:
+-- on/scenario/demo/_10_99990101/_10_pre_scripts/config/config.yml --
+stfw:
+  process:
+    scripts:
+      some_key: value
+-- on/scenario/demo/_10_99990101/_10_pre_scripts/scripts/100_step1 --
+#!/bin/bash
+exit 0
+-- off/stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+-- off/.stfw/runs/_19990101000000_1/journal.jsonl --
+-- off/.stfw/reports/runs/_19990101000000_1.html --
+<html>old report</html>
+-- off/scenario/demo/metadata.yml --
+description:
+-- off/scenario/demo/_10_99990101/metadata.yml --
+description:
+-- off/scenario/demo/_10_99990101/_10_pre_scripts/metadata.yml --
+description:
+-- off/scenario/demo/_10_99990101/_10_pre_scripts/config/config.yml --
+stfw:
+  process:
+    scripts:
+      some_key: value
+-- off/scenario/demo/_10_99990101/_10_pre_scripts/scripts/100_step1 --
+#!/bin/bash
+exit 0
+-- bad/stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  housekeep:
+    retention_days: abc
+-- bad/.stfw/runs/_19990101000000_1/journal.jsonl --
+-- bad/scenario/demo/metadata.yml --
+description:
+-- bad/scenario/demo/_10_99990101/metadata.yml --
+description:
+-- bad/scenario/demo/_10_99990101/_10_pre_scripts/metadata.yml --
+description:
+-- bad/scenario/demo/_10_99990101/_10_pre_scripts/config/config.yml --
+stfw:
+  process:
+    scripts:
+      some_key: value
+-- bad/scenario/demo/_10_99990101/_10_pre_scripts/scripts/100_step1 --
+#!/bin/bash
+exit 0
+-- neg/stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  housekeep:
+    retention_days: -1
+-- neg/.stfw/runs/_19990101000000_1/journal.jsonl --
+-- neg/scenario/demo/metadata.yml --
+description:
+-- neg/scenario/demo/_10_99990101/metadata.yml --
+description:
+-- neg/scenario/demo/_10_99990101/_10_pre_scripts/metadata.yml --
+description:
+-- neg/scenario/demo/_10_99990101/_10_pre_scripts/config/config.yml --
+stfw:
+  process:
+    scripts:
+      some_key: value
+-- neg/scenario/demo/_10_99990101/_10_pre_scripts/scripts/100_step1 --
+#!/bin/bash
+exit 0

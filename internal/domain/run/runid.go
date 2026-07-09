@@ -30,3 +30,12 @@ func ParseRunID(s string) (RunID, error) {
 
 // String は run_id の文字列表現を返す。
 func (r RunID) String() string { return r.value }
+
+// Time は run_id に埋め込まれた採番時刻を返す (ハウスキープの保存期間判定用)。
+// NewRunID がローカル時刻で採番するため、ローカルタイムゾーンで解釈する。
+func (r RunID) Time() (time.Time, error) {
+	if !runIDPattern.MatchString(r.value) {
+		return time.Time{}, fmt.Errorf("%q is not run_id format (_{yyyymmddhhmmss}_{pid})", r.value)
+	}
+	return time.ParseInLocation("20060102150405", r.value[1:15], time.Local)
+}

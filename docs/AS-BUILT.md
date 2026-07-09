@@ -589,6 +589,22 @@ v0.2 の webhook_id 導出規則と同一（余分な `}` を付与していた 
 
 > 根拠: `internal/domain/run/{event,run,steps,status,runid,nodeid}.go`, `internal/repository/journal.go`, `internal/usecase/status/status.go`, `test/acceptance/testdata/script/{run_success,run_error,run_dryrun}.txtar` の `journal_golden.jsonl`
 
+### 5.6 実行結果ハウスキープ（run 開始時・REQ-019）
+
+run 毎に累積する実行結果（実行ジャーナル + HTML レポート）を、`stfw run` の**開始時の振る舞い**として自動削除する（GitHub issue #4。専用サブコマンド・常駐ジョブは設けない）。
+
+| 項目 | 仕様 |
+|---|---|
+| 設定 | stfw.yml の `stfw.housekeep.retention_days`（保存日数）。**未設定・`0` は無効（無期限保存）**。負数・非整数は警告して無効扱い |
+| 実行契機 | `stfw run` の検証ゲート（構造検証 / requires / 接続情報直書き禁止）通過後・run_id 採番前（誤ったコマンドで削除だけが走ることを防ぐ） |
+| 期限判定 | run_id 埋め込みの採番時刻（`RunID.Time()`、ローカルタイムゾーン解釈）が `now - retention_days` より前なら期限切れ。**ファイル mtime に依存しない決定的判定** |
+| 削除対象 | `.stfw/runs/{run_id}/`（ディレクトリごと）と `.stfw/reports/runs/{run_id}.html`（レポート不在は許容） |
+| index 再生成 | 1 件でも削除したらレポート index を再生成する（削除済み run が index に残らない） |
+| 失敗時 | ハウスキープは補助処理のため **best-effort**。個別の削除失敗は残りを止めず、警告ログのみで本体の実行は継続する |
+| 定期実行 | daily 実行の仕組みは提供しない（サーバレス）。定期実行が必要な場合は cron 等の外部スケジューラから `stfw run` を回す運用（run 都度ハウスキープされるため保存期間は実質的に維持される） |
+
+> 根拠: `internal/repository/housekeep.go`, `internal/usecase/runscenario/housekeep.go`, `internal/domain/run/runid.go`（`Time()`）, `test/acceptance/testdata/script/run_housekeep.txtar`
+
 ---
 
 ## 6. OTLP トレースエクスポート
@@ -685,6 +701,7 @@ Error スパンのステータスメッセージ（階層）: `{node_type} {name
 |---|---|---|
 | `stfw.loglevel` | `info` | ○（ログレベル。`--log-level` が優先） |
 | `stfw.timezone` | `Asia/Tokyo` | ×（env 公開のみ。ジャーナル・レポートの時刻はプロセスのローカルタイムゾーン） |
+| `stfw.housekeep.retention_days` | `0`（無効） | ○（run 開始時の実行結果ハウスキープ。§5.6） |
 
 プロジェクトテンプレート（`stfw init` が生成する `stfw.yml`）が追加で持つキー:
 
@@ -692,6 +709,7 @@ Error スパンのステータスメッセージ（階層）: `{node_type} {name
 |---|---|---|
 | `stfw.project_version` | `0.1.0` | ×（env 公開のみ） |
 | `stfw.inventory` | `staging.yml` | ○（`stfw inventory` / `ssh trust` が読む inventory ファイル名） |
+| `stfw.housekeep.retention_days` | `30`（テンプレートで上書き） | ○（run 開始時の実行結果ハウスキープ。§5.6） |
 | `stfw.otel.endpoint` | コメントアウト | ○（OTLP 送信先。§6.1） |
 | `stfw.sample.*` | サンプル | ×（フラット化のデモ） |
 

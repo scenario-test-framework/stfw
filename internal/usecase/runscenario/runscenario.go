@@ -78,6 +78,10 @@ func Run(log *slog.Logger, out, errOut io.Writer, projDir string, cfg *repositor
 		return fmt.Errorf("forbidden connection config in %d place(s)", len(forbidden))
 	}
 
+	// run 開始時のハウスキープ (REQ-019): 保存日数を過ぎた過去の実行結果を削除する。
+	// 検証ゲート通過後に行う (誤ったコマンドで削除だけが走ることを防ぐ)。
+	housekeep(log, projDir, cfg, now)
+
 	// run_id 採番 + ジャーナル作成。同一秒・同一プロセスの再実行 (テスト等) で
 	// run_id が衝突した場合は採番時刻をずらして再採番する。
 	runID := run.NewRunID(now(), os.Getpid())

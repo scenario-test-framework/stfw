@@ -25,6 +25,23 @@ func TestParseRunIDInvalid(t *testing.T) {
 	}
 }
 
+func TestRunIDTime(t *testing.T) {
+	// run_id 埋め込みの採番時刻がラウンドトリップで復元される (ハウスキープの保存期間判定)
+	ts := time.Date(2020, 1, 1, 12, 34, 56, 0, time.Local)
+	got, err := NewRunID(ts, 123).Time()
+	if err != nil {
+		t.Fatalf("Time() error = %v", err)
+	}
+	if !got.Equal(ts) {
+		t.Errorf("Time() = %v, want %v", got, ts)
+	}
+
+	// ゼロ値 RunID は panic せずエラーを返す
+	if _, err := (RunID{}).Time(); err == nil {
+		t.Error("zero RunID Time() should fail")
+	}
+}
+
 func TestNodeIDDerivation(t *testing.T) {
 	// webhook_id 導出規則 (v0.2 の `}` バグは修正済み) と同一の階層 ID
 	runID := NewRunID(time.Date(2020, 1, 1, 12, 0, 0, 0, time.Local), 99)
