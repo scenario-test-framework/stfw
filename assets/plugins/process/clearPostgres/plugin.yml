@@ -1,0 +1,3 @@
+# clearPostgres: PostgreSQL のテーブルを truncate する組込みプラグイン。
+requires:
+  - psql

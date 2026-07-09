@@ -1,0 +1,245 @@
+# STEP: Redis export / import / clear プラグイン
+# redis-cli をモックし、シードした keyspace (型/TTL/JSON 値) を返す。
+# export は各キーの値を stfw plugin redis-encode-row で正規化 + CSV 化する。
+
+env PATH=${WORK}/fakebin:${PATH}
+env STFW_TEST_REDIS=${WORK}/redisdata
+env STFW_TEST_REDIS_LOG=${WORK}/redis.log
+chmod 755 fakebin/redis-cli
+
+# 暗号鍵とシークレット (host-user のパスワード) を用意
+exec stfw secret keygen
+exec stfw secret set redis01 appuser secretpw
+
+# 実行: clear(_10) → import(_20) → export(_30)
+exec stfw run redis
+
+# パスワードがマスクされている
+stderr '\[secret\]'
+! stderr 'secretpw'
+
+# export: 型ごとに正規化された CSV がエビデンス規約どおり出力される
+cmp scenario/redis/_10_99990101/_30_grp_exportRedis/evidence/redis01/demo.csv demo.csv.golden
+
+# clear が SCAN 一致キーを DEL、import が decode コマンドを発行している
+exec cat ${WORK}/redis.log
+stdout 'DEL demo:h'
+stdout 'SET "u:1" "alice"'
+stdout 'DEL "u:1"'
+# importRedis も ACL --user を渡している
+stdout 'IMPORT user=appuser'
+
+# export 失敗 (redis-cli 非 0) は握りつぶさず exit 6
+env STFW_TEST_REDIS_FAIL=1
+execcode 6 stfw run rexp
+stderr 'scan failed'
+env STFW_TEST_REDIS_FAIL=0
+
+# import のソース CSV 不在は exit 6
+execcode 6 stfw run rimp
+stderr 'source csv not found'
+
+# per-key の redis-cli 失敗 (TTL 取得不可) を握りつぶさず exit 6。
+# 事前に前回 run の古い成果物 (bad.csv) を置いておき、失敗した再実行では
+# それが残らない (=成功時のみ再配置) ことも検証する。
+exists scenario/rttlerr/_10_99990101/_10_grp_exportRedis/evidence/redis01/bad.csv
+execcode 6 stfw run rttlerr
+stderr 'TTL failed'
+# 不完全な CSV は成果物として公開しない (古い成果物も削除される)
+! exists scenario/rttlerr/_10_99990101/_10_grp_exportRedis/evidence/redis01/bad.csv
+
+# inventory list の失敗も握りつぶさず exit 6
+cp badstfw.yml stfw.yml
+execcode 6 stfw run rexp
+stderr 'inventory list failed'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  inventory: staging.yml
+-- badstfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  inventory: missing.yml
+-- config/inventory/staging.yml --
+stfw_inventory:
+  - kv:
+    - redis01
+-- redisdata/demo:s.type --
+string
+-- redisdata/demo:s.ttl --
+-1
+-- redisdata/demo:s.json --
+"hello"
+-- redisdata/demo:l.type --
+list
+-- redisdata/demo:l.ttl --
+-1
+-- redisdata/demo:l.json --
+["a","b"]
+-- redisdata/demo:h.type --
+hash
+-- redisdata/demo:h.ttl --
+100
+-- redisdata/demo:h.json --
+["f2","v2","f1","v1"]
+-- redisdata/demo:se.type --
+set
+-- redisdata/demo:se.ttl --
+-1
+-- redisdata/demo:se.json --
+["y","x"]
+-- redisdata/demo:z.type --
+zset
+-- redisdata/demo:z.ttl --
+-1
+-- redisdata/demo:z.json --
+["m2","2","m1","1"]
+-- redisdata/bad:1.type --
+string
+-- redisdata/bad:1.json --
+"x"
+-- demo.csv.golden --
+key,type,ttl,value
+demo:h,hash,100,"{""f1"":""v1"",""f2"":""v2""}"
+demo:l,list,-1,"[""a"",""b""]"
+demo:s,string,-1,hello
+demo:se,set,-1,"[""x"",""y""]"
+demo:z,zset,-1,"[[""m1"",""1""],[""m2"",""2""]]"
+-- scenario/redis/metadata.yml --
+description:
+-- scenario/redis/_10_99990101/metadata.yml --
+description:
+-- scenario/redis/_10_99990101/_10_grp_clearRedis/metadata.yml --
+description:
+-- scenario/redis/_10_99990101/_10_grp_clearRedis/config/config.yml --
+stfw:
+  process:
+    clearRedis:
+      host_group: kv
+      user: appuser
+      key_patterns:
+        - match: 'demo:*'
+-- scenario/redis/_10_99990101/_20_grp_importRedis/metadata.yml --
+description:
+-- scenario/redis/_10_99990101/_20_grp_importRedis/config/config.yml --
+stfw:
+  process:
+    importRedis:
+      host_group: kv
+      user: appuser
+      key_patterns:
+        - name: users
+-- scenario/redis/_10_99990101/_20_grp_importRedis/data/redis01/users.csv --
+key,type,ttl,value
+u:1,string,-1,alice
+u:2,string,-1,bob
+-- scenario/redis/_10_99990101/_30_grp_exportRedis/metadata.yml --
+description:
+-- scenario/redis/_10_99990101/_30_grp_exportRedis/config/config.yml --
+stfw:
+  process:
+    exportRedis:
+      host_group: kv
+      user: appuser
+      key_patterns:
+        - name: demo
+          match: 'demo:*'
+-- scenario/rexp/metadata.yml --
+description:
+-- scenario/rexp/_10_99990101/metadata.yml --
+description:
+-- scenario/rexp/_10_99990101/_10_grp_exportRedis/metadata.yml --
+description:
+-- scenario/rexp/_10_99990101/_10_grp_exportRedis/config/config.yml --
+stfw:
+  process:
+    exportRedis:
+      host_group: kv
+      user: appuser
+      key_patterns:
+        - name: demo
+          match: 'demo:*'
+-- scenario/rimp/metadata.yml --
+description:
+-- scenario/rimp/_10_99990101/metadata.yml --
+description:
+-- scenario/rimp/_10_99990101/_10_grp_importRedis/metadata.yml --
+description:
+-- scenario/rimp/_10_99990101/_10_grp_importRedis/config/config.yml --
+stfw:
+  process:
+    importRedis:
+      host_group: kv
+      user: appuser
+      key_patterns:
+        - name: missing
+-- scenario/rttlerr/metadata.yml --
+description:
+-- scenario/rttlerr/_10_99990101/metadata.yml --
+description:
+-- scenario/rttlerr/_10_99990101/_10_grp_exportRedis/metadata.yml --
+description:
+-- scenario/rttlerr/_10_99990101/_10_grp_exportRedis/config/config.yml --
+stfw:
+  process:
+    exportRedis:
+      host_group: kv
+      user: appuser
+      key_patterns:
+        - name: bad
+          match: 'bad:*'
+-- scenario/rttlerr/_10_99990101/_10_grp_exportRedis/evidence/redis01/bad.csv --
+key,type,ttl,value
+stale:1,string,-1,old-run-leftover
+-- fakebin/redis-cli --
+#!/bin/bash
+# fake redis-cli: シードした keyspace を返し、DEL / import コマンドをログする。
+scan=0
+pattern='*'
+usr=""
+cmd=""
+args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h | -p | -n) shift 2 ;;
+    --user) usr="$2"; shift 2 ;;
+    --no-auth-warning | -2 | -3 | -e | --json | --raw | --no-raw) shift ;;
+    --scan) scan=1; shift ;;
+    --pattern) pattern="$2"; shift 2 ;;
+    *) cmd="$1"; shift; args=("$@"); break ;;
+  esac
+done
+
+# マスキング検証用にあえてパスワードを stderr へ出す
+echo "redis connect pw=${REDISCLI_AUTH:-}" >&2
+
+if [ "${STFW_TEST_REDIS_FAIL:-0}" = "1" ]; then
+  echo "redis: simulated failure" >&2
+  exit 1
+fi
+
+if [ "$scan" = "1" ]; then
+  # 実装側のキーソートを検証するため、あえて降順で返す (未ソートを再現)。
+  for f in "${STFW_TEST_REDIS}"/*.type; do
+    [ -e "$f" ] || continue
+    k="$(basename "$f" .type)"
+    # shellcheck disable=SC2254
+    case "$k" in
+      $pattern) echo "$k" ;;
+    esac
+  done | sort -r
+  exit 0
+fi
+
+case "$cmd" in
+  TYPE) cat "${STFW_TEST_REDIS}/${args[0]}.type" || exit 1 ;;
+  TTL) cat "${STFW_TEST_REDIS}/${args[0]}.ttl" || exit 1 ;; # .ttl 不在時は非 0
+  GET | LRANGE | SMEMBERS | HGETALL | ZRANGE) cat "${STFW_TEST_REDIS}/${args[0]}.json" || exit 1 ;;
+  DEL) echo "DEL ${args[0]}" >> "${STFW_TEST_REDIS_LOG}" ;;
+  "") echo "IMPORT user=${usr}" >> "${STFW_TEST_REDIS_LOG}"; cat >> "${STFW_TEST_REDIS_LOG}" ;;
+  *) echo "redis: unsupported cmd $cmd" >&2; exit 1 ;;
+esac
+exit 0

@@ -1,0 +1,53 @@
+組み込みプラグイン群（REQ-012〜016）の実装に先立ち、名前だけ定義されていた契約 3 点の
+具体規約を確定したので、要求・要件モデルに反映したい（ユーザー確定済み。実装はこの規約に従う）。
+
+## 1. エビデンスディレクトリ規約の具体化（条件「エビデンスディレクトリ規約」の詳細化）
+
+収集系プラグイン（collectFile / collectLog / exportXxx）の出力:
+- 出力ルートは自プロセスディレクトリ配下の evidence/（gitignore 対象）
+- collectFile / collectLog: evidence/{host}/{収集元の絶対パスをそのまま再現}
+- exportMysql / exportPostgres: evidence/{database}/{table}.csv
+- exportRedis: evidence/{host}/{keyパターン名}.csv
+
+compare プラグインのディレクトリ:
+- expect/（git 管理）: 直下に「同一 bizdate 内の収集系 process ディレクトリ名」を置き、
+  その配下は当該 process の evidence/ 配下と同型にする
+- actual/（gitignore・自動生成）: expect と同じ構造で、実体は各収集系 process の
+  evidence/ への symlink
+- result/（gitignore）: compare-files の比較結果出力
+
+この規約はディレクトリ規約・プラグイン env 契約に次ぐ第 3 の互換境界である。
+
+## 2. プラグイン設定スキーマの具体化（情報「Process / Plugin 設定（config.yml）」の詳細化）
+
+- 設定は stfw.process.{type} 配下に置き、既存の env フラット化規則でスクリプトへ公開される
+- 収集系: targets リスト（group: inventory グループ名参照、paths: 収集ファイルパス正規表現リスト）
+- データストア系: host_group（inventory グループ名参照）、port、database、user、
+  tables（テーブル名リスト）等。パスワードは secret の {host}-{user} を自動参照する
+- 接続情報（ホスト・パスワード）を config.yml に直接書くことは禁止
+  （条件「プラグイン接続情報のグループ名参照」の徹底）
+
+## 3. データ形式の具体化（条件「export/import ラウンドトリップ互換」等の詳細化）
+
+- CSV: RFC 4180 準拠（LF・UTF-8・必要時 quote）、1 行目はヘッダー（カラム名）
+- NULL 表現: \N（空文字と区別する。mysqldump 慣行）
+- Redis export: ヘッダー付き CSV（key,type,ttl,value）。string 型は生値、
+  hash/list/set/zset は正規化 JSON（キー順ソート。compare の安定性のため）
+- 時刻フィルタ用 env: stfw_bizdate_start_ts（RFC3339 形式。実行ジャーナルの
+  bizdate node_start イベント時刻。プラグイン env 契約に追加）
+
+## 4. ランタイム依存宣言の具体化（条件「プラグインのランタイム依存宣言と存在チェック」の詳細化）
+
+- プラグインはメタデータファイル plugin.yml に requires（前提コマンドのリスト。
+  例: mysql, scp, k6）を宣言する
+- stfw validate と run 前静的検証が、シナリオで使用するプロセスタイプの requires を
+  コマンド存在チェックで検証する
+
+## 影響範囲（想定）
+
+- 既存条件の詳細化（modify）: エビデンスディレクトリ規約 / プラグイン接続情報のグループ名参照 /
+  export/import ラウンドトリップ互換 / プラグインのランタイム依存宣言と存在チェック
+- 既存情報の詳細化（modify）: Process / Plugin 設定（config.yml）・エビデンス・期待値（expect）・
+  比較結果・プラグイン（plugin.yml メタデータの属性追加）
+- プラグイン env 契約への stfw_bizdate_start_ts 追加（USDM の該当仕様の更新）
+- 新規要求の追加は不要（REQ-012〜016 の仕様の詳細化として反映する）

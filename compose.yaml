@@ -1,0 +1,58 @@
+# stfw を Docker で使う構成。
+#   docker compose up -d nginx                 # レポート配信を起動
+#   docker compose run --rm stfw init          # プロジェクト初期化
+#   docker compose run --rm stfw run sample    # シナリオ実行
+#   open http://localhost:8080                 # HTML レポートを閲覧
+configs:
+  nginx_conf:
+    content: |
+      server {
+        listen 80;
+        root /reports;
+        index index.html;
+        autoindex on;
+      }
+
+services:
+  stfw:
+    # 組込みプラグイン (RDBMS/Redis/ssh 系/invokeWeb) を使う場合は全ランタイム同梱の
+    # :full へ差し替える (image: ghcr.io/scenario-test-framework/stfw:full / target: full)
+    image: ghcr.io/scenario-test-framework/stfw:latest
+    build:
+      context: .
+      target: runtime
+    working_dir: /work
+    volumes:
+      - ./:/work
+      - reports:/work/.stfw/reports
+    # CLI ツールのため常駐しない。docker compose up の対象から外す
+    profiles: ["cli"]
+
+  # reports volume の所有権を stfw 実行ユーザー (uid 1000) に揃える one-shot。
+  # nginx が先に起動しても stfw が書き込めるよう、起動順に依存させない
+  reports-init:
+    image: ghcr.io/scenario-test-framework/stfw:latest
+    build:
+      context: .
+      target: runtime
+    user: root
+    entrypoint: ["chown", "1000:1000", "/reports"]
+    volumes:
+      - reports:/reports
+    restart: "no"
+
+  nginx:
+    image: nginx:1-alpine
+    depends_on:
+      reports-init:
+        condition: service_completed_successfully
+    ports:
+      - "8080:80"
+    volumes:
+      - reports:/reports:ro
+    configs:
+      - source: nginx_conf
+        target: /etc/nginx/conf.d/default.conf
+
+volumes:
+  reports:

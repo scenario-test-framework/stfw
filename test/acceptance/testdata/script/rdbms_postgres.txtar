@@ -1,0 +1,181 @@
+# STEP: PostgreSQL export / import / clear プラグイン
+# psql をモックする。export の \copy ... TO はシード CSV を出力先へコピーして再現する
+# (psql \copy は RFC4180 CSV をネイティブ出力するため変換は不要)。
+
+env PATH=${WORK}/fakebin:${PATH}
+env STFW_TEST_PGDB=${WORK}/fakepg
+env STFW_TEST_PSQL_LOG=${WORK}/psql.log
+chmod 755 fakebin/psql
+
+# 暗号鍵とシークレット (host-user のパスワード) を用意
+exec stfw secret keygen
+exec stfw secret set pg01 appuser secretpw
+
+# 実行: clear(_10) → import(_20) → export(_30)
+exec stfw run pg
+
+# パスワードがマスクされている
+stderr '\[secret\]'
+! stderr 'secretpw'
+
+# export: RFC4180 CSV がエビデンス規約どおり出力される (NULL は \N)
+cmp scenario/pg/_10_99990101/_30_grp_exportPostgres/evidence/pgdb/t1.csv t1.csv.golden
+
+# clear / import が期待した SQL / \copy を発行している
+exec cat ${WORK}/psql.log
+stdout 'TRUNCATE TABLE "t1"'
+stdout 'COPY "t1" FROM STDIN'
+# 識別子内のダブルクオートが二重化エスケープされている
+stdout 'TRUNCATE TABLE "t""x"'
+
+# export 失敗 (psql 非 0) は握りつぶさず exit 6
+env STFW_TEST_PSQL_FAIL=1
+execcode 6 stfw run pgexp
+stderr 'export failed'
+env STFW_TEST_PSQL_FAIL=0
+
+# import のソース CSV 不在は exit 6
+execcode 6 stfw run pgimp
+stderr 'source csv not found'
+
+# inventory list の失敗も握りつぶさず exit 6
+cp badstfw.yml stfw.yml
+execcode 6 stfw run pgexp
+stderr 'inventory list failed'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  inventory: staging.yml
+-- badstfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  inventory: missing.yml
+-- config/inventory/staging.yml --
+stfw_inventory:
+  - pg:
+    - pg01
+-- fakepg/pgdb/t1.csv --
+id,name,note
+1,Alice,hello
+2,,\N
+3,"a,b","""q"""
+-- t1.csv.golden --
+id,name,note
+1,Alice,hello
+2,,\N
+3,"a,b","""q"""
+-- scenario/pg/metadata.yml --
+description:
+-- scenario/pg/_10_99990101/metadata.yml --
+description:
+-- scenario/pg/_10_99990101/_10_grp_clearPostgres/metadata.yml --
+description:
+-- scenario/pg/_10_99990101/_10_grp_clearPostgres/config/config.yml --
+stfw:
+  process:
+    clearPostgres:
+      host_group: pg
+      database: pgdb
+      user: appuser
+      tables:
+        - t1
+        - 't"x'
+-- scenario/pg/_10_99990101/_20_grp_importPostgres/metadata.yml --
+description:
+-- scenario/pg/_10_99990101/_20_grp_importPostgres/config/config.yml --
+stfw:
+  process:
+    importPostgres:
+      host_group: pg
+      database: pgdb
+      user: appuser
+      tables:
+        - t1
+-- scenario/pg/_10_99990101/_20_grp_importPostgres/data/pgdb/t1.csv --
+id,name,note
+1,Alice,hello
+-- scenario/pg/_10_99990101/_30_grp_exportPostgres/metadata.yml --
+description:
+-- scenario/pg/_10_99990101/_30_grp_exportPostgres/config/config.yml --
+stfw:
+  process:
+    exportPostgres:
+      host_group: pg
+      database: pgdb
+      user: appuser
+      tables:
+        - t1
+-- scenario/pgexp/metadata.yml --
+description:
+-- scenario/pgexp/_10_99990101/metadata.yml --
+description:
+-- scenario/pgexp/_10_99990101/_10_grp_exportPostgres/metadata.yml --
+description:
+-- scenario/pgexp/_10_99990101/_10_grp_exportPostgres/config/config.yml --
+stfw:
+  process:
+    exportPostgres:
+      host_group: pg
+      database: pgdb
+      user: appuser
+      tables:
+        - t1
+-- scenario/pgimp/metadata.yml --
+description:
+-- scenario/pgimp/_10_99990101/metadata.yml --
+description:
+-- scenario/pgimp/_10_99990101/_10_grp_importPostgres/metadata.yml --
+description:
+-- scenario/pgimp/_10_99990101/_10_grp_importPostgres/config/config.yml --
+stfw:
+  process:
+    importPostgres:
+      host_group: pg
+      database: pgdb
+      user: appuser
+      tables:
+        - missing
+-- fakebin/psql --
+#!/bin/bash
+# fake psql: --dbname= と --command= を解釈して擬似 DB / ログで再現する。
+db=""
+cmd=""
+for arg in "$@"; do
+  case "$arg" in
+    --dbname=*) db="${arg#--dbname=}" ;;
+    --command=*) cmd="${arg#--command=}" ;;
+  esac
+done
+if [ "${STFW_TEST_PSQL_FAIL:-0}" = "1" ]; then
+  echo "psql: simulated failure" >&2
+  exit 1
+fi
+# マスキング検証用にあえてパスワードを stderr へ出す
+echo "psql connect pw=${PGPASSWORD:-}" >&2
+case "$cmd" in
+  'COPY ('*)
+    # export: COPY (SELECT * FROM "t") TO STDOUT WITH (...) → シードを stdout へ
+    table="$(printf '%s' "$cmd" | grep -oE 'FROM "[^"]+"' | head -n1 | sed -E 's/FROM "([^"]+)"/\1/')"
+    f="${STFW_TEST_PGDB}/${db}/${table}.csv"
+    if [ -f "$f" ]; then
+      cat "$f"
+    else
+      echo "psql: no such table ${table}" >&2
+      exit 1
+    fi
+    ;;
+  'COPY '*)
+    # import: COPY "t" FROM STDIN WITH (...) → stdin を消費してログ
+    cat > /dev/null
+    echo "$cmd" >> "${STFW_TEST_PSQL_LOG}"
+    ;;
+  'TRUNCATE TABLE'*) echo "$cmd" >> "${STFW_TEST_PSQL_LOG}" ;;
+  *)
+    echo "psql: unsupported command: $cmd" >&2
+    exit 1
+    ;;
+esac
+exit 0

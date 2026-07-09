@@ -1,0 +1,157 @@
+#!/bin/bash
+# exportRedis: Redis のキーをヘッダー付き CSV (key,type,ttl,value) でエクスポートする。
+#
+# 設定 (config.yml の stfw.process.exportRedis):
+#   host_group / port / db / user / key_patterns[].{name,match}
+#
+# 処理: match ごとに SCAN でキー列挙 → 各キーの type/ttl/値 (redis-cli -2 --json) を
+#   内部ヘルパ `stfw plugin redis-encode-row` で正規化 + CSV 化する。
+#   value は string=生値、list/set/hash/zset=キー順ソートの正規化 JSON。
+# 出力: ${stfw_process_dir}/evidence/{host}/{name}.csv (エビデンス規約)
+#
+# 値は UTF-8 テキストを対象 (バイナリ値は対象外)。SCAN 出力は改行区切りのため
+# 改行を含むキーは非対応。接続情報は inventory/secret から解決し config に直書きしない。
+set -uo pipefail
+
+evidence_root="${stfw_process_dir}/evidence"
+host_group="${stfw_process_exportRedis_host_group:-}"
+port="${stfw_process_exportRedis_port:-6379}"
+db="${stfw_process_exportRedis_db:-0}"
+user="${stfw_process_exportRedis_user:-}"
+rc=0
+
+if [ -z "${host_group}" ]; then
+  echo "exportRedis: host_group is required" >&2
+  exit 6
+fi
+# secret は {host}-{user} で解決するため user は必須 (空では解決不能)。
+# ACL 未使用 (requirepass のみ) の Redis 6+ では default を指定する。
+if [ -z "${user}" ]; then
+  echo "exportRedis: user is required (secret is keyed by {host}-{user}; use 'default' for requirepass-only Redis)" >&2
+  exit 6
+fi
+
+if ! hosts="$(stfw inventory list "${host_group}")"; then
+  echo "exportRedis: inventory list failed for group: ${host_group}" >&2
+  exit 6
+fi
+# RDBMS/KVS は単一サーバを対象とする。複数解決時は先頭ホストを使い警告する。
+# shellcheck disable=SC2086
+set -- ${hosts}
+host="${1:-}"
+if [ -z "${host}" ]; then
+  echo "exportRedis: no host resolved for group: ${host_group}" >&2
+  exit 6
+fi
+if [ "$#" -gt 1 ]; then
+  echo "exportRedis: group ${host_group} resolves to multiple hosts; using ${host}" >&2
+fi
+
+if ! password="$(stfw secret show "${host}" "${user}")"; then
+  echo "exportRedis: secret not found: ${host}-${user}" >&2
+  exit 6
+fi
+export REDISCLI_AUTH="${password}"
+
+redis_opts=(-h "${host}" -p "${port}" -n "${db}" --no-auth-warning)
+[ -n "${user}" ] && redis_opts+=(--user "${user}")
+
+destdir="${evidence_root}/${host}"
+mkdir -p "${destdir}"
+
+i=0
+while :; do
+  name_var="stfw_process_exportRedis_key_patterns_${i}_name"
+  match_var="stfw_process_exportRedis_key_patterns_${i}_match"
+  name="${!name_var:-}"
+  match="${!match_var:-}"
+  [ -z "${name}" ] && break
+  i=$((i + 1))
+
+  out="${destdir}/${name}.csv"
+  tmp="${out}.tmp.$$"
+  # 「成功時のみ再配置」。開始時に既存成果物を削除し、失敗・クラッシュ時に
+  # 前回 run の古いエビデンスが残らないようにする (再実行での残留防止)。
+  rm -f "${out}"
+  # ヘッダ書き込み失敗 (書込不可等) を握りつぶすと、ヘッダ無し CSV を公開する
+  # おそれがあるため明示検査する。
+  if ! echo 'key,type,ttl,value' > "${tmp}"; then
+    echo "exportRedis: cannot write temp evidence: ${tmp}" >&2
+    rm -f "${tmp}"
+    rc=6
+    continue
+  fi
+
+  # SCAN の返却順は不定なため、CSV 行順を安定させるためキーをソートする
+  # (compare の安定性のため)。pipefail 有効で scan 失敗はパイプ全体の非 0 で検出。
+  if ! keys="$(redis-cli "${redis_opts[@]}" --scan --pattern "${match}" | sort)"; then
+    echo "exportRedis: scan failed for pattern: ${match}" >&2
+    rm -f "${tmp}"
+    rc=6
+    continue
+  fi
+
+  # SCAN 結果を 1 キーずつ処理する (here-string のため while はサブシェルにならず
+  # 変数がループ外へ伝播する)。ループ内の redis-cli は stdin を読まない。
+  # 1 件でも per-key 失敗があれば不完全な CSV を成果物として公開しない。
+  pattern_failed=0
+  while IFS= read -r key; do
+    [ -z "${key}" ] && continue
+    if ! type="$(redis-cli "${redis_opts[@]}" TYPE "${key}")"; then
+      echo "exportRedis: TYPE failed for key ${key}" >&2
+      rc=6
+      pattern_failed=1
+      continue
+    fi
+    [ "${type}" = "none" ] && continue
+    if ! ttl="$(redis-cli "${redis_opts[@]}" TTL "${key}")"; then
+      echo "exportRedis: TTL failed for key ${key}" >&2
+      rc=6
+      pattern_failed=1
+      continue
+    fi
+
+    case "${type}" in
+      string) vcmd=(GET "${key}") ;;
+      list) vcmd=(LRANGE "${key}" 0 -1) ;;
+      set) vcmd=(SMEMBERS "${key}") ;;
+      hash) vcmd=(HGETALL "${key}") ;;
+      zset) vcmd=(ZRANGE "${key}" 0 -1 WITHSCORES) ;;
+      *)
+        echo "exportRedis: unsupported type ${type} for key ${key}" >&2
+        rc=6
+        pattern_failed=1
+        continue
+        ;;
+    esac
+    if ! val="$(redis-cli "${redis_opts[@]}" -2 --json "${vcmd[@]}")"; then
+      echo "exportRedis: value fetch failed for key ${key}" >&2
+      rc=6
+      pattern_failed=1
+      continue
+    fi
+
+    if ! printf '%s' "${val}" | stfw plugin redis-encode-row \
+        --key "${key}" --type "${type}" --ttl "${ttl}" >> "${tmp}"; then
+      echo "exportRedis: encode failed for key ${key}" >&2
+      rc=6
+      pattern_failed=1
+      continue
+    fi
+  done <<< "${keys}"
+
+  if [ "${pattern_failed}" -eq 0 ]; then
+    # 公開フェーズ (mv) 自体の失敗も握りつぶさない。開始時に out を削除済みのため、
+    # mv 失敗を見逃すと「成功報告なのにエビデンス消失」になる。
+    if ! mv "${tmp}" "${out}"; then
+      echo "exportRedis: failed to publish evidence: ${out}" >&2
+      rm -f "${tmp}"
+      rc=6
+    fi
+  else
+    echo "exportRedis: incomplete evidence for pattern ${match}; not publishing ${out}" >&2
+    rm -f "${tmp}"
+  fi
+done
+
+exit ${rc}

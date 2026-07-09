@@ -1,0 +1,2 @@
+コンテキスト	情報	属性	関連情報	状態モデル	バリエーション	説明
+プロジェクト環境管理	プラグイン	プラグイン名（process/{process_type}）、bin/（install・run）、config.yml、template/、スコープ（プロジェクト/組込み）	stfw 本体、プロジェクト、プロセス、Process / Plugin 設定（config.yml）	""	プロセスタイプ、プラグインスコープ	プロセスタイプの実行方式を提供する拡張単位（同梱は scripts のみ）。プロジェクト→組込みの解決順で管理するため

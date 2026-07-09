@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{{- if .InProgress}}
+<meta http-equiv="refresh" content="5">
+{{- end}}
+<title>stfw runs</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", Meiryo, sans-serif; background: #f5f6f8; color: #24292f; }
+a { color: #0969da; text-decoration: none; }
+a:hover { text-decoration: underline; }
+h1 { margin: 0 0 4px; font-size: 20px; }
+.meta { color: #57606a; font-size: 13px; margin-bottom: 16px; }
+.tablewrap { overflow-x: auto; background: #fff; border: 1px solid #d0d7de; border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 6px 12px; text-align: left; border-top: 1px solid #d8dee4; white-space: nowrap; }
+thead th { border-top: none; background: #f6f8fa; color: #57606a; font-weight: 600; }
+.name { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.empty { padding: 16px; color: #57606a; font-size: 13px; }
+.status { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+.st-Success { background: #dafbe1; color: #116329; }
+.st-Error { background: #ffebe9; color: #a40e26; }
+.st-Started { background: #ddf4ff; color: #0550ae; }
+.st-Unknown { background: #eaeef2; color: #57606a; }
+</style>
+</head>
+<body>
+<h1>stfw runs</h1>
+<p class="meta">generated at {{.GeneratedAt}}{{if .InProgress}} (auto refresh: 5s){{end}}</p>
+<div class="tablewrap">
+{{- if .Runs}}
+<table>
+  <thead>
+    <tr><th>run_id</th><th>status</th><th>mode</th><th>params</th><th>start</th><th>end</th><th>processing time</th></tr>
+  </thead>
+  <tbody>
+    {{- range .Runs}}
+    <tr>
+      <td class="name"><a href="runs/{{.RunID}}.html">{{.RunID}}</a></td>
+      <td><span class="status st-{{.Status}}">{{.Status}}</span></td>
+      <td>{{.Mode}}</td>
+      <td>{{.Params}}</td>
+      <td>{{.StartTime}}</td>
+      <td>{{.EndTime}}</td>
+      <td>{{.ProcessingTime}}</td>
+    </tr>
+    {{- end}}
+  </tbody>
+</table>
+{{- else}}
+<p class="empty">no runs</p>
+{{- end}}
+</div>
+</body>
+</html>

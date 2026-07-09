@@ -1,0 +1,35 @@
+stfw:
+  project_version: 0.1.0
+
+  # ログレベル trace | debug | info | warn | error
+  loglevel: "info"
+
+  # タイムゾーン (業務日付判定・レポートの時刻表記に使用)
+  timezone: "Asia/Tokyo"
+
+  # インベントリファイル
+  inventory: staging.yml
+
+  # 実行結果 (実行ジャーナル .stfw/runs / HTML レポート .stfw/reports) のハウスキープ。
+  # stfw run の開始時に、保存日数を過ぎた実行結果を物理削除する。0 で無効 (無期限保存)。
+  # 定期実行が必要な場合は cron 等の外部スケジューラから stfw run を回してください
+  # (run の都度ハウスキープされるため保存期間は実質的に維持されます)。
+  housekeep:
+    retention_days: 30
+
+  # OpenTelemetry (実行状況の OTLP トレースエクスポート)
+  # 送信先は OTel 標準環境変数 OTEL_EXPORTER_OTLP_ENDPOINT でも指定できます (環境変数が優先)。
+  # endpoint と環境変数のどちらも未設定の場合は送信されません。
+  otel:
+    # OTLP/HTTP エンドポイントのベース URL (パス省略時は /v1/traces に送信)
+#    endpoint: http://localhost:4318
+
+  # sample
+  sample:
+    key: value
+    map:
+      key1: map_value1
+      key2: map_value2
+    list:
+      - list_value1
+      - list_value2

@@ -1,0 +1,24 @@
+# collectLog のデフォルト設定。
+#
+# logfilter_version : 取得する logfilter のリリースタグ
+# logfilter_arches  : install 時にダウンロードする {os}_{arch} (スペース区切り)。
+#                     収集先ホストの arch (inventory の arch) に対応する版を送り分ける。
+# targets           : 収集対象 (プロセスの config/config.yml で定義する)
+#   group : inventory グループ名 (ホスト解決)
+#   user  : ログインユーザー (secret {host}-{user} でパスワード解決)
+#   paths : 収集対象ログのパス正規表現 (posix-extended)
+#
+#   stfw:
+#     process:
+#       collectLog:
+#         targets:
+#           - group: web
+#             user: appuser
+#             paths:
+#               - /var/log/app/.*\.log
+stfw:
+  process:
+    collectLog:
+      logfilter_version: v2.0.0
+      logfilter_arches: linux_amd64 linux_arm64 darwin_arm64
+      targets: []

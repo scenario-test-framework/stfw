@@ -1,0 +1,3 @@
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence"
+exit 0

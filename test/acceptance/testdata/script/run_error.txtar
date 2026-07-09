@@ -1,0 +1,141 @@
+# STEP: run エラー系 (2 番目のステップが exit 6 -> 3 番目が Blocked、
+# 後続 process / bizdate は実行されない)
+
+chmod 755 plugins/run/_common/setup/10_mark
+chmod 755 plugins/run/_common/teardown/90_mark
+chmod 755 plugins/scenario/_common/setup/10_mark
+chmod 755 plugins/scenario/_common/teardown/90_mark
+chmod 755 plugins/bizdate/_common/setup/10_mark
+chmod 755 plugins/bizdate/_common/teardown/90_mark
+chmod 755 plugins/process/_common/setup/10_mark
+chmod 755 plugins/process/_common/teardown/90_mark
+
+! exec stfw run demo
+stderr 'finished with status Error'
+
+# Blocked された 3 番目のステップと、後続 process / bizdate のスクリプトは実行されない
+! exists executed_300_after.txt
+! exists executed_20_post.txt
+! exists executed_day2.txt
+
+# ジャーナルのイベント列 (ts 以外) がゴールデン一致
+# (後続 process / bizdate のイベントが存在しないことも固定する)
+normjournal . journal_actual.jsonl
+cmp journal_actual.jsonl journal_golden.jsonl
+
+# teardown フックはエラー時も実行され stfw_run_status=Error が渡る
+cmp hooks.log hooks_golden.log
+
+# status はエラーの階層とステップの Blocked を表示する
+exec stfw status
+stdout 'run \[Error\]'
+stdout '\n      _10_pre_scripts \[Error\]'
+stdout '\n        - 200_fail \[Error\]'
+stdout '\n        - 300_after \[Blocked\]'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  timezone: "Asia/Tokyo"
+-- scenario/demo/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_pre_scripts/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_pre_scripts/config/config.yml --
+stfw:
+  process:
+    scripts:
+      some_key: value defined at scenario
+-- scenario/demo/_10_99990101/_10_pre_scripts/scripts/100_ok --
+#!/bin/bash
+echo "100_ok"
+exit 0
+-- scenario/demo/_10_99990101/_10_pre_scripts/scripts/200_fail --
+#!/bin/bash
+echo "200_fail"
+exit 6
+-- scenario/demo/_10_99990101/_10_pre_scripts/scripts/300_after --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/executed_300_after.txt"
+exit 0
+-- scenario/demo/_10_99990101/_20_post_scripts/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_20_post_scripts/config/config.yml --
+stfw:
+  process:
+    scripts:
+      some_key: value defined at scenario
+-- scenario/demo/_10_99990101/_20_post_scripts/scripts/100_marker --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/executed_20_post.txt"
+exit 0
+-- scenario/demo/_20_99990102/metadata.yml --
+description:
+-- scenario/demo/_20_99990102/_10_pre_scripts/metadata.yml --
+description:
+-- scenario/demo/_20_99990102/_10_pre_scripts/config/config.yml --
+stfw:
+  process:
+    scripts:
+      some_key: value defined at scenario
+-- scenario/demo/_20_99990102/_10_pre_scripts/scripts/100_marker --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/executed_day2.txt"
+exit 0
+-- plugins/run/_common/setup/10_mark --
+#!/bin/bash
+echo "run setup" >>"${STFW_PROJ_DIR}/hooks.log"
+exit 0
+-- plugins/run/_common/teardown/90_mark --
+#!/bin/bash
+echo "run teardown ${stfw_run_status}" >>"${STFW_PROJ_DIR}/hooks.log"
+exit 0
+-- plugins/scenario/_common/setup/10_mark --
+#!/bin/bash
+echo "scenario setup ${stfw_scenario_name}" >>"${STFW_PROJ_DIR}/hooks.log"
+exit 0
+-- plugins/scenario/_common/teardown/90_mark --
+#!/bin/bash
+echo "scenario teardown ${stfw_scenario_name} ${stfw_run_status}" >>"${STFW_PROJ_DIR}/hooks.log"
+exit 0
+-- plugins/bizdate/_common/setup/10_mark --
+#!/bin/bash
+echo "bizdate setup ${stfw_bizdate_dirname}" >>"${STFW_PROJ_DIR}/hooks.log"
+exit 0
+-- plugins/bizdate/_common/teardown/90_mark --
+#!/bin/bash
+echo "bizdate teardown ${stfw_bizdate_dirname} ${stfw_run_status}" >>"${STFW_PROJ_DIR}/hooks.log"
+exit 0
+-- plugins/process/_common/setup/10_mark --
+#!/bin/bash
+echo "process setup ${stfw_process_dirname}" >>"${STFW_PROJ_DIR}/hooks.log"
+exit 0
+-- plugins/process/_common/teardown/90_mark --
+#!/bin/bash
+echo "process teardown ${stfw_process_dirname} ${stfw_run_status} ${stfw_process_retcode}" >>"${STFW_PROJ_DIR}/hooks.log"
+exit 0
+-- hooks_golden.log --
+run setup
+scenario setup demo
+bizdate setup _10_99990101
+process setup _10_pre_scripts
+process teardown _10_pre_scripts Error 6
+bizdate teardown _10_99990101 Error
+scenario teardown demo Error
+run teardown Error
+-- journal_golden.jsonl --
+{"attrs":{"params":"demo","run_id":"RUN_ID","run_mode":"--run"},"event":"node_start","node_id":"RUN_ID+run","node_type":"run","parent_id":"RUN_ID"}
+{"attrs":{"name":"demo"},"event":"node_start","node_id":"RUN_ID+run+demo","node_type":"scenario","parent_id":"RUN_ID+run"}
+{"attrs":{"bizdate":"99990101","dirname":"_10_99990101","seq":"10"},"event":"node_start","node_id":"RUN_ID+run+demo+_10_99990101","node_type":"bizdate","parent_id":"RUN_ID+run+demo"}
+{"attrs":{"dirname":"_10_pre_scripts","group":"pre","process_type":"scripts","seq":"10"},"event":"node_start","node_id":"RUN_ID+run+demo+_10_99990101+_10_pre_scripts","node_type":"process","parent_id":"RUN_ID+run+demo+_10_99990101"}
+{"event":"steps_enumerated","node_id":"RUN_ID+run+demo+_10_99990101+_10_pre_scripts","steps":["100_ok","200_fail","300_after"]}
+{"event":"step_end","exit_code":0,"node_id":"RUN_ID+run+demo+_10_99990101+_10_pre_scripts","status":"Success","step":"100_ok"}
+{"event":"step_end","exit_code":6,"node_id":"RUN_ID+run+demo+_10_99990101+_10_pre_scripts","status":"Error","step":"200_fail"}
+{"event":"step_end","node_id":"RUN_ID+run+demo+_10_99990101+_10_pre_scripts","status":"Blocked","step":"300_after"}
+{"event":"node_end","node_id":"RUN_ID+run+demo+_10_99990101+_10_pre_scripts","status":"Error"}
+{"event":"node_end","node_id":"RUN_ID+run+demo+_10_99990101","status":"Error"}
+{"event":"node_end","node_id":"RUN_ID+run+demo","status":"Error"}
+{"event":"node_end","node_id":"RUN_ID+run","status":"Error"}

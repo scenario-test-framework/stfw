@@ -1,0 +1,66 @@
+#!/bin/bash
+# sshExec: 自プロセスの scripts/ 配下のスクリプトを、解決した各ホストへ ssh で送って
+#   ファイル名昇順に一括実行する (Act)。
+#
+# 設定 (config.yml の stfw.process.sshExec):
+#   host_group : inventory グループ名 (ホスト解決)。必須。
+#   user       : ログインユーザー (secret {host}-{user} でパスワード解決)。必須。
+#
+# 処理: scripts/ 配下の各ファイルを `ssh ... 'bash -s' < script` で stdin パイプ送信して
+#   リモート実行する。接続情報は inventory/secret から解決し config に直書きしない。
+#   パスワードは argv 露出を避けるため SSHPASS 環境変数で渡す (sshpass -e)。
+#   Masker が登録済み secret を出力からマスクする。
+#
+# 終了コード: スクリプトが 1 つでも失敗したら即時終了し、以降のスクリプトは実行しない
+#   (エラーはステップ失敗として exit 6)。全て成功なら exit 0。
+set -uo pipefail
+
+ssh_opts=(-o StrictHostKeyChecking=yes -o ConnectTimeout=10)
+
+host_group="${stfw_process_sshExec_host_group:-}"
+user="${stfw_process_sshExec_user:-}"
+if [ -z "${host_group}" ]; then
+  echo "sshExec: host_group is required" >&2
+  exit 6
+fi
+if [ -z "${user}" ]; then
+  echo "sshExec: user is required" >&2
+  exit 6
+fi
+
+scripts_dir="${stfw_process_dir}/scripts"
+if [ ! -d "${scripts_dir}" ]; then
+  echo "sshExec: scripts directory not found: ${scripts_dir}" >&2
+  exit 6
+fi
+# ファイル名昇順のスクリプト一覧 (直下のファイルのみ・ディレクトリは除外)。
+script_files=()
+while IFS= read -r f; do
+  [ -n "${f}" ] && script_files+=("${f}")
+done < <(find "${scripts_dir}" -maxdepth 1 -type f | sort)
+if [ "${#script_files[@]}" -eq 0 ]; then
+  echo "sshExec: no scripts found in ${scripts_dir}" >&2
+  exit 6
+fi
+
+if ! hosts="$(stfw inventory list "${host_group}")"; then
+  echo "sshExec: inventory list failed for group: ${host_group}" >&2
+  exit 6
+fi
+
+for host in ${hosts}; do
+  if ! password="$(stfw secret show "${host}" "${user}")"; then
+    echo "sshExec: secret not found: ${host}-${user}" >&2
+    exit 6
+  fi
+  export SSHPASS="${password}"
+  for script in "${script_files[@]}"; do
+    name="$(basename "${script}")"
+    if ! sshpass -e ssh "${ssh_opts[@]}" "${user}@${host}" 'bash -s' < "${script}"; then
+      echo "sshExec: script failed on ${host}: ${name}" >&2
+      exit 6
+    fi
+  done
+done
+
+exit 0

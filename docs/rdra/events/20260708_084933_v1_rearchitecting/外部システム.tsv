@@ -1,0 +1,4 @@
+外部システム群	外部システム	役割
+テスト対象システム	テスト対象ホスト群	シナリオテストを適用するテスト対象のホスト群（web/ap/db等）。環境別inventoryでグループ管理され、ホスト×ユーザー単位の暗号化資格情報（age (X25519)）とstfw ssh trustによるSSHサーバキー一括登録の対象となる。実際の操作はプロセスのユーザースクリプトに委ねられる
+配布基盤	配布元（GitHub Releases / ghcr.io）	stfwの配布物の取得元。GitHub Releasesがマルチプラットフォームバイナリ（linux/darwin × amd64/arm64 + windows/amd64）を、ghcr.ioがDocker image / compose.yaml（stfw + nginx）を配布する。tag付与時に開発CI基盤（goreleaser）から公開され、環境管理者が導入時に取得する（旧dl.bintray.comからの依存モジュールダウンロードは廃止）
+開発基盤	開発 CI 基盤（GitHub Actions）	フレームワーク自体の品質保証と配布を担うCI/CD基盤。PRでlint（golangci-lint）+ test（Go単体テスト + testscript受け入れテスト）、masterマージでsnapshotビルド、tag付与でgoreleaserによるリリースとghcr.ioへのDocker image配布を実行する（shunit2 / serverspec / kcov / shellcheck / Travis CIによる検証基盤は廃止）

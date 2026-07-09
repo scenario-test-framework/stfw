@@ -1,0 +1,3 @@
+# importMysql: ヘッダー付き CSV を MySQL のテーブルへインポートする組込みプラグイン。
+requires:
+  - mysql

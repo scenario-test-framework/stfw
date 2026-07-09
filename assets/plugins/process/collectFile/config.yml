@@ -1,0 +1,15 @@
+# collectFile のデフォルト設定。実際の収集対象はプロセスの config/config.yml で
+# targets を定義する (下記は空。プロジェクト側で上書きする)。
+#
+#   stfw:
+#     process:
+#       collectFile:
+#         targets:
+#           - group: web          # inventory グループ名 (ホスト解決)
+#             user: appuser        # ログインユーザー (secret {host}-{user} でパスワード解決)
+#             paths:               # 収集対象ファイルパスの正規表現 (posix-extended)
+#               - /var/log/app/.*\.log
+stfw:
+  process:
+    collectFile:
+      targets: []

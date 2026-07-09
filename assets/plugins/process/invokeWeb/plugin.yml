@@ -1,0 +1,6 @@
+# invokeWeb プラグインのメタデータ。
+# k6 バイナリはキャッシュから絶対パスで起動するため PATH 要求はない
+# (プロビジョニングは install、存在ゲートは is_installed が担う)。
+# install 時の curl / tar / unzip は install 側で確認する。
+# ブラウザモードの実行には Chromium が必要 (stfw:full イメージに同梱)。
+requires: []

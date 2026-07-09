@@ -1,0 +1,5 @@
+コンテキスト	バリエーション	値	説明
+実行管理	実行モード（run_mode）	run、dry-run	シナリオ実行時の動作区分。run は全タスクを実行し、dry-run（stfw run --dry-run）は実タスク（execute / post_execute）をスキップして setup → pre_execute → teardown のみ実行する
+プロジェクト環境管理	対応 OS 種別	linux、darwin（mac）、windows	配布バイナリの対応プラットフォームの区分（linux/darwin × amd64/arm64、windows/amd64）。配布物の選択軸となる（JAVA_HOME 等のランタイム依存分岐は廃止）
+プロジェクト環境管理	プラグインスコープ	プロジェクト、組込み	プラグインの配置場所の区分。同名プラグインはプロジェクト（{proj}/plugins/）→ 組込み（配布物同梱。STFW_HOME 廃止に伴い配置変更）の順に解決され、プロジェクト側が優先される
+プロジェクト環境管理	資格情報暗号化方式	age (X25519)（現行）、S/MIME (RSA+AES256)（旧形式・読み込み専用）	資格情報の暗号化方式の区分。現行は age (X25519) で、旧 S/MIME 形式は読み込み専用でサポートされ stfw secret migrate で一括移行できる

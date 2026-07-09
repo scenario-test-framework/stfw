@@ -1,0 +1,29 @@
+schema_version: "1.0"
+artifact_type: "decision_record"
+skill_type: "architecture"
+artifact_id: "arch-decision-006"
+title: "ティアパターン選定: サーバレス実行エンジン内包（ワークフローエンジン・常駐サーバの廃止）"
+status: "approved"
+generated_at: "2026-07-08T11:41:51"
+context: |
+  旧構成はワークフローエンジン digdag（server 常駐・状態 DB・Java 依存・sh> 呼び戻し）を
+  使用していたが、実態は木構造の逐次実行のみで digdag の機能に対して過剰だった。
+  NFR は model1・可用性 Lv1 であり、常駐サービスを正当化する要求が存在しない。
+decision: |
+  実行エンジン（内蔵ランナー: ツリー走査・逐次実行・エラー時 Blocked 伝播）を CLI バイナリに
+  内包し、常駐サーバ・状態 DB を持たないサーバレス構成とする。ティアは
+  CLI 本体 / プラグイン実行 / ファイルデータストア / レポート配信 / 配布・CI の 5 つで構成する。
+  標準推論のフロントエンド / API Gateway / IdP / 認可サービス / ワーカー / RDB ティアは
+  「外部アクターなし・OAuth 認証なし・バッチ/MQ なし・トランザクション要件なし」のため全て不採用。
+consequences:
+  positive:
+    - "server 起動等の前準備なしに stfw run の 1 コマンドで実行開始できる"
+    - "状態 DB・常駐プロセスの運用負荷が消える"
+  negative:
+    - "実行順序保証・Blocked 伝播をフレームワーク自身が担保する責務を負う（受け入れテスト・ゴールデンテストで固定）"
+    - "v1.0 は逐次実行のみ（並列実行は将来の拡張余地として残す）"
+alternatives_considered:
+  - name: "ワークフローエンジン（digdag 等）の継続利用・更新"
+    reason_rejected: "木構造の逐次実行のみの要求に対して server 管理・状態 DB・ランタイム依存が過剰"
+  - name: "ジョブスケジューラ / CI ランナーへの委譲"
+    reason_rejected: "テスト担当者のローカル・オンデマンド実行（BUC: シナリオ一括自動実行フロー）に合わず、導入の容易さも損なう"

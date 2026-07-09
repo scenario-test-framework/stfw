@@ -1,0 +1,6 @@
+コンテキスト	バリエーション	値	説明
+シナリオ構造管理	プロセスタイプ	scripts、collectLog、collectFile、exportMysql / importMysql / clearMysql、exportPostgres / importPostgres / clearPostgres、exportRedis / importRedis / clearRedis、compare、invokeWeb、invokeRest（プラグイン追加で拡張可）	プロセスの実行方式の種別。プラグインとして追加・拡張でき、scaffold 生成・依存インストール・実行の単位になる。scripts に加えて組込みプラグイン群（収集系・データストア系・検証系・実行系）が提供され、プロダクト固有のプロセスタイプはカスタムプラグインとして追加する
+プロジェクト環境管理	プラグインスコープ	プロジェクト、組込み	プラグインの配置場所の区分。同名プラグインはプロジェクト（{proj}/plugins/）→ 組込み（配布物同梱。STFW_HOME 廃止に伴い配置変更）の順に解決され、プロジェクト側が優先される。組込みプラグイン群が汎用部品を提供し、プロダクト固有のカスタムプラグインをプロジェクト側に配置する 2 層構造を成立させる
+プロジェクト環境管理	プラグインフェーズ	Arrange（準備）、Act（実行）、Collect（収集）、Assert（検証）	1 つの業務日付（bizdate）を構成するパイプラインのフェーズ区分。組み込みプラグインが各フェーズの汎用部品（Arrange / Collect: データストア系、Act: 実行系、Collect: 収集系、Assert: 検証系）を提供し、カスタムプラグインは組み込みプラグインの組み合わせとして実装される
+プロジェクト環境管理	対応データストア製品	MySQL（MariaDB は MySQL 互換として同一プラグインでサポート）、PostgreSQL、Redis（Valkey は Redis 互換として同一プラグインでサポート）	データストア系プラグイン（export / import / clear）の対象製品の区分。代表的な OSS のみを対象とし、public cloud のマネージド製品はまだ対象にしない。将来の製品追加はプラグイン追加で対応する
+プロジェクト環境管理	Docker イメージ構成	最小構成（既存）、依存全部入り（例: stfw:full）	Docker 配布イメージのタグ構成の区分。依存全部入りタグはプラグインのランタイム依存（k6・mysql/psql クライアント・ssh/scp 等）を同梱し、依存準備なしで組込みプラグイン群を利用できるようにする

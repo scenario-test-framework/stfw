@@ -1,0 +1,115 @@
+#!/bin/bash
+# scpPut: ローカルの target/{グループ}/ 配下を、解決した各ホストの配置先へ scp で配置する (Arrange)。
+#
+# 設定 (config.yml の stfw.process.scpPut.targets):
+#   targets[].group : inventory グループ名 (ホスト解決)
+#   targets[].user  : ログインユーザー (secret {host}-{user} でパスワード解決)
+#   targets[].dest  : リモートの配置先ディレクトリ (グループ毎に指定。安全文字のみ)
+#
+# 処理: ${stfw_process_dir}/target/{group}/ 配下のディレクトリ構成を各ホストへ put する。
+#   まず配置先の隣接一時ディレクトリ (dest と同一 FS) へ scp put し、転送成功後に一時ディレクトリを
+#   dest へ mv (同一 FS 上のディレクトリ rename) して原子的に配置する。これにより dest は
+#   「配置前」か「配置後」の完全な状態でのみ観測され、転送途中の不完全なファイルは現れない。
+#   空ディレクトリを含む source のツリー全体が反映され、dest は source 内容で全置換される
+#   (既存 dest は退避後に削除。dest には専用の配置先ディレクトリを指定すること)。
+#   接続情報は inventory/secret から解決し config に直書きしない。
+#   パスワードは argv 露出を避けるため SSHPASS 環境変数で渡す (sshpass -e)。
+#
+# 終了コード: 1 つでも配置に失敗すれば exit 6 (ステップ失敗)。全て成功なら exit 0。
+set -uo pipefail
+
+ssh_opts=(-o StrictHostKeyChecking=yes -o ConnectTimeout=10)
+target_root="${stfw_process_dir}/target"
+rc=0
+
+i=0
+while :; do
+  group_var="stfw_process_scpPut_targets_${i}_group"
+  group="${!group_var:-}"
+  [ -z "${group}" ] && break
+  user_var="stfw_process_scpPut_targets_${i}_user"
+  user="${!user_var:-}"
+  dest_var="stfw_process_scpPut_targets_${i}_dest"
+  dest="${!dest_var:-}"
+  dest="${dest%/}"
+  # 一時ディレクトリ名の衝突を避けるため target 添字を退避してから増分する。
+  idx="${i}"
+  i=$((i + 1))
+
+  if [ -z "${user}" ]; then
+    echo "scpPut: user is required for group: ${group}" >&2
+    rc=6
+    continue
+  fi
+  if [ -z "${dest}" ]; then
+    echo "scpPut: dest is required for group: ${group}" >&2
+    rc=6
+    continue
+  fi
+  # dest はリモートシェルへ渡すため安全文字 (英数 . _ - /) のみ許可する。
+  # シェルメタ文字 (引用符・$・; 等) を排除し、コマンド組み立ての破綻・注入を防ぐ。
+  if [[ ! "${dest}" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+    echo "scpPut: dest contains unsupported characters (allowed: A-Z a-z 0-9 . _ - /): ${dest}" >&2
+    rc=6
+    continue
+  fi
+  src="${target_root}/${group}"
+  if [ ! -d "${src}" ]; then
+    echo "scpPut: source directory not found: ${src}" >&2
+    rc=6
+    continue
+  fi
+
+  # inventory list 失敗時は hosts を空にして for ループを空回りさせ、末尾処理を通す。
+  hosts=""
+  if ! hosts="$(stfw inventory list "${group}")"; then
+    echo "scpPut: inventory list failed for group: ${group}" >&2
+    rc=6
+    hosts=""
+  fi
+  for host in ${hosts}; do
+    if ! password="$(stfw secret show "${host}" "${user}")"; then
+      echo "scpPut: secret not found: ${host}-${user}" >&2
+      rc=6
+      continue
+    fi
+    export SSHPASS="${password}"
+
+    # 配置先の隣接 (同一 FS) 一時ディレクトリ。原子的 mv (rename) のため dest と同じ親に置く。
+    # remote_tmp: put 先 / remote_old: 旧 dest の一時退避先。dest は安全文字検証済みのため
+    # 単一引用符埋め込みで安全。
+    remote_tmp="${dest}.stfw_scpput_$$_${idx}"
+    remote_old="${dest}.stfw_scpput_old_$$_${idx}"
+    if ! sshpass -e ssh "${ssh_opts[@]}" "${user}@${host}" "rm -rf '${remote_tmp}' '${remote_old}' && mkdir -p '${remote_tmp}'"; then
+      echo "scpPut: failed to create remote tmp on ${host}: ${remote_tmp}" >&2
+      rc=6
+      continue
+    fi
+    # ローカル src 配下 (隠しファイル・空ディレクトリ含む) を一時ディレクトリへ再帰 put する。
+    if ! sshpass -e scp "${ssh_opts[@]}" -r "${src}/." "${user}@${host}:${remote_tmp}/"; then
+      echo "scpPut: failed to put files to ${host}: ${remote_tmp}" >&2
+      sshpass -e ssh "${ssh_opts[@]}" "${user}@${host}" "rm -rf '${remote_tmp}'"
+      rc=6
+      continue
+    fi
+    # tmp を dest と原子的に入れ替える (ディレクトリ丸ごとの rename)。
+    #   既存 dest があれば old へ rename 退避 (moved=1) → tmp を dest へ rename → old を削除。
+    #   最終 rename が失敗したら old を dest へ戻して「配置前の完全な状態」へロールバックする。
+    #   ロールバックの mv も失敗する二重障害時は、旧配置を old に保全したまま退避先を stderr へ
+    #   通知する (旧データは失われない。dest は一時的に不在になり得るが old から手動復旧可能)。
+    # 正常時 dest は「配置前」か「配置後」の完全な状態のいずれかで観測され、混在状態や転送途中の
+    # 不完全ファイルは現れない (原子的配置)。空ディレクトリを含むツリー全体をそのまま反映するため、
+    # source のディレクトリ構成が完全に配置される (dest は source 内容で全置換される)。
+    swap_cmd="rm -rf '${remote_old}'; moved=0; if [ -e '${dest}' ]; then mv '${dest}' '${remote_old}' || exit 1; moved=1; fi; if mv '${remote_tmp}' '${dest}'; then rm -rf '${remote_old}'; else if [ \"\${moved}\" = 1 ] && [ ! -e '${dest}' ]; then mv '${remote_old}' '${dest}' || echo 'scpPut: rollback failed; previous dest preserved at ${remote_old}' >&2; fi; exit 1; fi"
+    if ! sshpass -e ssh "${ssh_opts[@]}" "${user}@${host}" "${swap_cmd}"; then
+      echo "scpPut: failed to place files into ${dest} on ${host}" >&2
+      # swap_cmd 内で dest は配置前状態へ復元済み (二重障害時は old に保全され上で通知済み)。
+      # ここでは put 済み tmp のみ掃除する (remote_old は旧配置の退避先なので触らない)。
+      sshpass -e ssh "${ssh_opts[@]}" "${user}@${host}" "rm -rf '${remote_tmp}'"
+      rc=6
+      continue
+    fi
+  done
+done
+
+exit ${rc}

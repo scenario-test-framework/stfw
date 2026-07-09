@@ -1,0 +1,10 @@
+#!/bin/bash
+# 前提コマンド (mysql) が揃っていればインストール済みとみなす。
+for cmd in mysql; do
+  if ! command -v "${cmd}" >/dev/null 2>&1; then
+    echo "${cmd} is not installed."
+    exit 1
+  fi
+done
+echo "true"
+exit 0

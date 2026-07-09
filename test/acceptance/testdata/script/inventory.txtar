@@ -1,0 +1,29 @@
+# STEP: inventory (integration_test.sh STEP4 相当)
+
+exec stfw init
+
+# list (デフォルト: all = 全グループ横断・重複排除・昇順)
+exec stfw inventory list
+cmp stdout all_hosts.txt
+
+# list ap → 127.0.0.1
+exec stfw inventory list ap
+cmp stdout ap_hosts.txt
+
+# 未定義グループは空出力・正常終了
+exec stfw inventory list NOTEXIST
+! stdout .
+
+# exists ap → true
+exec stfw inventory exists ap
+stdout '^true$'
+
+# exists NOTEXIST → false
+exec stfw inventory exists NOTEXIST
+stdout '^false$'
+
+-- all_hosts.txt --
+127.0.0.1
+localhost
+-- ap_hosts.txt --
+127.0.0.1

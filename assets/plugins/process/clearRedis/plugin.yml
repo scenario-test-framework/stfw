@@ -1,0 +1,3 @@
+# clearRedis: Redis のキー (パターン一致) を削除する組込みプラグイン。
+requires:
+  - redis-cli

@@ -1,0 +1,127 @@
+#!/bin/bash
+# collectLog: テスト対象ホストから、業務日付の実行開始日時以降のログ行を収集する。
+#
+# 設定 (config.yml の stfw.process.collectLog.targets):
+#   targets[].group : inventory グループ名 (ホスト解決)
+#   targets[].user  : ログインユーザー (secret {host}-{user} でパスワード解決)
+#   targets[].paths : 収集対象ログのパス正規表現 (posix-extended)
+#
+# 処理: logfilter バイナリ (host の arch 版) を scp 転送 → ssh で実行して
+#   「bizdate の実行開始日時 (stfw_bizdate_start_ts) 以降」のログ行に絞り込み →
+#   scp でローカルへ収集 → 転送したバイナリを削除。
+# 出力: ${stfw_process_dir}/evidence/{host}/{収集元の絶対パスをそのまま再現}
+#
+# 前提: 収集先ホストと stfw 実行ホストの時刻が同期していること。
+set -uo pipefail
+
+evidence_root="${stfw_process_dir}/evidence"
+ssh_opts=(-o StrictHostKeyChecking=yes -o ConnectTimeout=10)
+rc=0
+
+# フィルタ基準時刻: stfw_bizdate_start_ts (RFC3339) を logfilter の
+# -tf 形式 'YYYY-MM-DD HH:MM:SS.000' へ変換 (純 bash・タイムゾーンは実行ホスト基準)。
+from=""
+ts="${stfw_bizdate_start_ts:-}"
+if [ -n "${ts}" ]; then
+  date_part="${ts%%T*}"
+  rest="${ts#*T}"
+  time_part="${rest:0:8}"
+  from="${date_part} ${time_part}.000"
+fi
+
+i=0
+while :; do
+  group_var="stfw_process_collectLog_targets_${i}_group"
+  group="${!group_var:-}"
+  [ -z "${group}" ] && break
+  user_var="stfw_process_collectLog_targets_${i}_user"
+  user="${!user_var:-}"
+
+  # inventory list 失敗時は hosts を空にして for ループを空回りさせ、末尾の
+  # i 増分を必ず通す (continue すると同一 target を無限再試行してしまう)。
+  hosts=""
+  if ! hosts="$(stfw inventory list "${group}")"; then
+    echo "collectLog: inventory list failed for group: ${group}" >&2
+    rc=6
+    hosts=""
+  fi
+  for host in ${hosts}; do
+    if ! arch="$(stfw inventory arch "${host}")"; then
+      echo "collectLog: failed to resolve arch for host: ${host}" >&2
+      rc=6
+      continue
+    fi
+    if [ -z "${arch}" ]; then
+      echo "collectLog: arch is not set for host in inventory: ${host}" >&2
+      rc=6
+      continue
+    fi
+    lfbin="${stfw_plugin_cache_dir}/logfilter/${arch}/logfilter"
+    if [ ! -x "${lfbin}" ]; then
+      echo "collectLog: logfilter for ${arch} is not provisioned (run \`stfw plugin install collectLog\`)" >&2
+      rc=6
+      continue
+    fi
+    if ! password="$(stfw secret show "${host}" "${user}")"; then
+      echo "collectLog: secret not found: ${host}-${user}" >&2
+      rc=6
+      continue
+    fi
+
+    remote_lf="/tmp/stfw_logfilter_$$"
+    if ! sshpass -p "${password}" scp "${ssh_opts[@]}" "${lfbin}" "${user}@${host}:${remote_lf}"; then
+      echo "collectLog: failed to transfer logfilter to ${host}" >&2
+      rc=6
+      continue
+    fi
+    sshpass -p "${password}" ssh "${ssh_opts[@]}" "${user}@${host}" "chmod 755 ${remote_lf}"
+
+    n=0
+    while :; do
+      path_var="stfw_process_collectLog_targets_${i}_paths_${n}"
+      pattern="${!path_var:-}"
+      [ -z "${pattern}" ] && break
+      n=$((n + 1))
+
+      files="$(sshpass -p "${password}" ssh "${ssh_opts[@]}" "${user}@${host}" \
+        "find / -regextype posix-extended -regex '${pattern}' -type f 2>/dev/null")"
+      ssh_rc=$?
+      # ssh 自体の失敗 (接続・認証エラー = 255) はエラー扱い。find の権限エラー
+      # (一部ディレクトリにアクセスできず exit 1) は正常出力として扱う。
+      if [ "${ssh_rc}" -eq 255 ]; then
+        echo "collectLog: ssh failed: ${user}@${host}" >&2
+        rc=6
+        continue
+      fi
+      # 空白を含むパスを壊さないよう 1 行ずつ処理する。ループ本体の ssh/scp が
+      # stdin を消費してループが途中終了しないよう、読み取りは FD 3 を使う。
+      while IFS= read -r f <&3; do
+        [ -z "${f}" ] && continue
+        remote_out="/tmp/stfw_lf_out_$$"
+        if [ -n "${from}" ]; then
+          lf_cmd="${remote_lf} -f -tf '${from}' '${f}' '${remote_out}'"
+        else
+          lf_cmd="${remote_lf} -f '${f}' '${remote_out}'"
+        fi
+        if ! sshpass -p "${password}" ssh "${ssh_opts[@]}" "${user}@${host}" "${lf_cmd}"; then
+          echo "collectLog: logfilter failed on ${host}:${f}" >&2
+          rc=6
+          continue
+        fi
+        destdir="${evidence_root}/${host}$(dirname "${f}")"
+        mkdir -p "${destdir}"
+        if ! sshpass -p "${password}" scp "${ssh_opts[@]}" "${user}@${host}:${remote_out}" "${destdir}/$(basename "${f}")"; then
+          echo "collectLog: failed to collect ${host}:${f}" >&2
+          rc=6
+        fi
+        sshpass -p "${password}" ssh "${ssh_opts[@]}" "${user}@${host}" "rm -f ${remote_out}"
+      done 3<<< "${files}"
+    done
+
+    # 転送した logfilter バイナリを削除
+    sshpass -p "${password}" ssh "${ssh_opts[@]}" "${user}@${host}" "rm -f ${remote_lf}"
+  done
+  i=$((i + 1))
+done
+
+exit ${rc}

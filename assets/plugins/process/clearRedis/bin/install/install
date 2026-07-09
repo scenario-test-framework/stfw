@@ -1,0 +1,3 @@
+#!/bin/bash
+# clearRedis は redis-cli の存在のみが要件で、プロビジョニングは不要。
+exit 0

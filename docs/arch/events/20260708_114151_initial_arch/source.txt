@@ -1,0 +1,5 @@
+RDRA モデルと NFR グレードからの初期アーキテクチャ設計。
+stfw は v1.0 として実装済みのため、白紙からの推論ではなく実装済みの確定事項（Go 単一バイナリ CLI・5 層構成・BC 分割・ファイルベース永続化・OTLP トレース・静的 HTML レポート配信・GitHub Releases / ghcr.io 配布）を as-is 制約として尊重した。
+未実装の組込みプラグイン群（REQ-012〜017 相当: 収集系 / データストア系 / 検証系 / 実行系）は to-be としてアーキテクチャに含めた。
+
+trigger_event: rdra:20260708_103305_builtin_plugin_ecosystem, nfr:20260708_112906_nfr_user_confirm

@@ -1,0 +1,31 @@
+# USDM 逆生成ソース情報
+
+本 requirements.yaml は、変更要望テキストからの分解ではなく、
+既存リポジトリの解析結果（dist-harvest）からの **逆生成** である。
+
+## 解析対象リポジトリ
+
+| 項目 | 値 |
+|------|-----|
+| リポジトリ | stfw |
+| 絶対パス | /Users/suwa_sh/src/github.com/scenario-test-framework/stfw |
+| コミットハッシュ | ed02ba61d48212a49c416e309925bbe0ac825759 |
+| ブランチ | feature/kcov |
+| 解析日時 | 2026-07-07 23:31:36 |
+| 解析モード | dist-harvest 初期構築（event_id: 20260707_233136_harvest_initial） |
+
+## 入力（analysis ドキュメント）
+
+- docs/harvest/events/20260707_233136_harvest_initial/analysis/01-overview.md（システム概要）
+- docs/harvest/events/20260707_233136_harvest_initial/analysis/02-value.md（システム価値: アクター / 外部システム / 要求）
+- docs/harvest/events/20260707_233136_harvest_initial/analysis/03-environment.md（業務 / BUC / アクティビティ）
+- docs/harvest/events/20260707_233136_harvest_initial/analysis/04-boundary.md（UC / 画面 / イベント / タイマー）
+- docs/harvest/events/20260707_233136_harvest_initial/analysis/05-internal.md（情報 / 状態 / 条件 / バリエーション）
+
+## 注意事項
+
+- 各要求・仕様は as-is（現行システムがすでに実現している価値）として記述している。
+- confidence / evidence は拡張フィールド。confidence: low の項目は
+  「コードから読めず LLM がドメイン一般論で補完した推測」であり、ユーザー確認が必要。
+- 要求の理由（reason）の一次記述はリポジトリにほぼ存在しないため、
+  多くの reason はコミット履歴・payload 構造・ドメイン一般論からの推測である。

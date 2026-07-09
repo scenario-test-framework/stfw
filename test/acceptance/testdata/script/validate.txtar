@@ -1,0 +1,35 @@
+# STEP: validate (ディレクトリ規約の静的検証)
+
+exec stfw init
+exec stfw new scenario test
+cd scenario/test
+exec stfw new bizdate 10 99990101
+cd _10_99990101
+exec stfw new process 10 pre scripts
+cd $WORK
+
+# 正常構成は違反なしで pass する
+exec stfw validate test
+! stdout .
+
+# 残存 *.dig は「v1.0 では不要」警告のみ (exit 0)
+cp fixtures/dummy.dig scenario/test/scenario.dig
+cp fixtures/dummy.dig scenario/test/_10_99990101/bizdate.dig
+exec stfw validate test
+stdout 'scenario/test/scenario.dig'
+stdout 'scenario/test/_10_99990101/bizdate.dig'
+stdout 'v1.0'
+
+# 命名規約違反 (seq が数字でない) はエラー (exit 6)
+mkdir scenario/test/_9x_bad
+! exec stfw validate test
+stdout 'scenario/test/_9x_bad'
+stdout 'must be number'
+stderr 'validation failed'
+
+# 存在しないシナリオの指定はエラー
+! exec stfw validate nosuch
+stderr 'nosuch is not exist'
+
+-- fixtures/dummy.dig --
+timezone: Asia/Tokyo

@@ -1,0 +1,32 @@
+schema_version: "1.0"
+artifact_type: "decision_record"
+skill_type: "architecture"
+artifact_id: "arch-decision-007"
+title: "データモデル戦略: 外部データストアなし・追記専用ジャーナル（JSONL）を唯一のソースとする"
+status: "approved"
+generated_at: "2026-07-08T11:41:51"
+context: |
+  実行結果（状態遷移・ステップ結果）の保持先が必要だが、外部データストア（RDB / KVS）の
+  導入は「配置のみで導入完了」という配布要求と衝突する。また実行結果は監査・失敗調査のため
+  事後の書き換えが起きてはならない。
+decision: |
+  永続化は全てプロジェクトディレクトリ配下のファイルとする（外部データストアなし）。
+  実行結果は追記専用 JSONL（journal.jsonl）にイベント（node_start / steps_enumerated /
+  step_end / node_end）として記録し、これを唯一のソースとする。status / report / OTel
+  エクスポートは全てジャーナルのリプレイ・投影として実装する。実行（run）エンティティは
+  event_snapshot 型だが、スナップショットは永続せずリプレイで都度導出する。
+  シナリオ定義（ディレクトリ・スクリプト）はミュータブルなファイル資産とし、
+  実行状態と定義を分離する（状態モデルを持つプロセス / スクリプトも定義自体は resource_mutable）。
+consequences:
+  positive:
+    - "実行結果の完全な履歴が残り、リプレイでいつでも状態を再構成できる"
+    - "外部データストアの導入・運用が不要"
+    - "再実行 = 新 run_id の別実行で冪等性の議論が単純化される"
+  negative:
+    - "journal.jsonl は外部から編集可能なため、リプレイ経路でも生成時と同じ検証が必須"
+    - "ジャーナルイベントスキーマの進化管理が必要"
+alternatives_considered:
+  - name: "組込み RDB（SQLite 等）での状態管理"
+    reason_rejected: "単一実行の逐次処理にトランザクション DB は過剰。テキストファイルの方が調査・差分管理が容易"
+  - name: "スナップショットファイルの永続化（event + snapshot の二重書き込み）"
+    reason_rejected: "リプレイが十分に軽量（1 実行 = 1 ファイル）で、キャッシュの整合性管理コストが利益を上回る"

@@ -1,0 +1,58 @@
+# STEP: HTML レポート (run 中の常時生成 + report コマンドでのオンデマンド再生成)
+
+exec stfw run demo
+
+# run 終了時に index.html と runs/{run_id}.html が生成される
+exists .stfw/reports/index.html
+grep 'demo' .stfw/reports/index.html
+latestrun . RUN_ID
+grep '>demo<' .stfw/reports/runs/$RUN_ID.html
+grep '100_step1' .stfw/reports/runs/$RUN_ID.html
+grep 'Success' .stfw/reports/runs/$RUN_ID.html
+
+# 終了済み run のページに meta refresh は入らない
+! grep 'http-equiv="refresh"' .stfw/reports/runs/$RUN_ID.html
+! grep 'http-equiv="refresh"' .stfw/reports/index.html
+
+# report コマンド: 任意ディレクトリへのオンデマンド再生成 (省略時は最新 run)
+exec stfw report --out out
+stdout 'report: '
+exists out/index.html
+exists out/runs/$RUN_ID.html
+grep '100_step1' out/runs/$RUN_ID.html
+
+# 実行中 (run 階層の node_end 未記録) の run は meta refresh 付きで生成される
+mkdir .stfw/runs/_20200101000000_99
+cp inprogress.jsonl .stfw/runs/_20200101000000_99/journal.jsonl
+exec stfw report _20200101000000_99
+grep 'http-equiv="refresh"' .stfw/reports/runs/_20200101000000_99.html
+grep 'Started' .stfw/reports/runs/_20200101000000_99.html
+grep 'http-equiv="refresh"' .stfw/reports/index.html
+
+# dry-run でもレポートは生成される (実行計画の可視化)
+exec stfw run --dry-run demo
+latestrun . DRYRUN_ID
+grep 'Pending' .stfw/reports/runs/$DRYRUN_ID.html
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  timezone: "Asia/Tokyo"
+-- scenario/demo/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_pre_scripts/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_pre_scripts/config/config.yml --
+stfw:
+  process:
+    scripts:
+      some_key: value
+-- scenario/demo/_10_99990101/_10_pre_scripts/scripts/100_step1 --
+#!/bin/bash
+echo "step1 day1"
+exit 0
+-- inprogress.jsonl --
+{"event":"node_start","ts":"2020-01-01T00:00:00+09:00","node_id":"_20200101000000_99+run","parent_id":"_20200101000000_99","node_type":"run","attrs":{"run_id":"_20200101000000_99","run_mode":"--run","params":"demo"}}

@@ -1,0 +1,36 @@
+schema_version: "1.0"
+artifact_type: "decision_record"
+skill_type: "architecture"
+artifact_id: "arch-decision-010"
+title: "2 層プラグインエコシステム（to-be）: 組込みプラグイン群 + カスタムプラグイン"
+status: "approved"
+generated_at: "2026-07-08T11:41:51"
+context: |
+  シナリオテストにはデータ準備・実行・エビデンス収集・期待値比較の汎用処理が必要だが、
+  プロダクト固有の処理（業務日付更新・ジョブ起動・マスタ投入等）の知識は利用者側にしか無い。
+  トリガーイベント rdra:20260708_103305_builtin_plugin_ecosystem で組込みプラグイン群の
+  要求（REQ-012〜017 相当）が追加された。本領域は未実装のため to-be 設計（confidence: medium）。
+decision: |
+  プラグインを 2 層で構成する:
+  - 組込みプラグイン群（配布物同梱）: 収集系 collectLog / collectFile、データストア系
+    export / import / clear（MySQL / PostgreSQL / Redis。互換製品は同一プラグインで対応）、
+    検証系 compare、実行系 invokeWeb / invokeRest。Arrange / Act / Collect / Assert の
+    フェーズ区分で汎用部品を提供する。
+  - カスタムプラグイン（プロジェクト側）: 組込みプラグインの組み合わせとして利用者が実装。
+    フレームワークは実装ガイドの文書化のみを提供する。
+  外部ツール（logfilter / compare-files / grafana k6・DB クライアント・ssh / scp）は
+  ランタイム依存として宣言し、validate / run 前静的検証で存在チェックする。
+  接続先は inventory のホストグループ名参照のみとし、資格情報は secret 既存機構を使う。
+  エビデンスディレクトリ規約を第 3 の互換境界として文書化する。
+consequences:
+  positive:
+    - "プロダクト固有知識をフレームワークに持ち込まず、汎用部品の再利用で拡張できる"
+    - "依存全部入りイメージタグ（例: stfw:full）で依存準備なしの利用が可能"
+  negative:
+    - "エビデンスディレクトリ規約の具体的な命名は設計フェーズ（dist-design 以降）で確定が必要"
+    - "組込みプラグイン群は未実装であり、本設計は to-be（実装時に差分が出る可能性がある）"
+alternatives_considered:
+  - name: "プロダクト固有パターン（updateBizDate 等）も組込みプラグインとして提供"
+    reason_rejected: "プロダクト固有の知識は利用者側にしか無く、フレームワーク側での維持が不可能"
+  - name: "プラグイン機構なし（全てユーザースクリプト）"
+    reason_rejected: "収集・比較・データストア操作の定型処理が毎プロジェクトで重複実装される"

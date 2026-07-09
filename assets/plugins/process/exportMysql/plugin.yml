@@ -1,0 +1,4 @@
+# exportMysql: MySQL のテーブルをヘッダー付き CSV でエクスポートする組込みプラグイン。
+# mysql クライアントで SELECT した結果を stfw の内部ヘルパで RFC4180 CSV へ変換する。
+requires:
+  - mysql

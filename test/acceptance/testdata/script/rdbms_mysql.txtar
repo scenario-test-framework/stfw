@@ -1,0 +1,189 @@
+# STEP: MySQL export / import / clear プラグイン
+# mysql クライアントをモックし、擬似 DB (pipe 区切りシード → tab 変換) で --batch 出力を再現する。
+# export は SELECT 出力を `stfw plugin mysql-tsv-to-csv` で RFC4180 CSV へ変換してエビデンス出力する。
+
+env PATH=${WORK}/fakebin:${PATH}
+env STFW_TEST_DB=${WORK}/fakedb
+env STFW_TEST_MYSQL_LOG=${WORK}/mysql.log
+chmod 755 fakebin/mysql
+
+# 暗号鍵とシークレット (host-user のパスワード) を用意
+exec stfw secret keygen
+exec stfw secret set db01 appuser secretpw
+
+# 実行: clear(_10) → import(_20) → export(_30)
+exec stfw run db
+
+# パスワードがマスクされている (RegisterAll + プラグイン出力の Masker 経由化)
+stderr '\[secret\]'
+! stderr 'secretpw'
+
+# export: RFC4180 CSV へ変換されてエビデンス規約どおり出力される
+cmp scenario/db/_10_99990101/_30_grp_exportMysql/evidence/testdb/t1.csv t1.csv.golden
+exists scenario/db/_10_99990101/_30_grp_exportMysql/evidence/testdb/t2.csv
+
+# clear / import が期待した SQL を発行している
+exec cat ${WORK}/mysql.log
+stdout 'TRUNCATE TABLE `t1`'
+stdout 'LOAD DATA LOCAL INFILE'
+stdout 'INTO TABLE `t1`'
+# 識別子内のバッククオートが二重化エスケープされている
+stdout 'TRUNCATE TABLE `t``x`'
+# ファイルパス内のバックスラッシュが SQL 文字列として二重化されている (identifier 側は単一のまま)
+stdout 't\\\\x\.csv'
+
+# export 失敗 (mysql 非 0) は握りつぶさず exit 6
+env STFW_TEST_MYSQL_FAIL=1
+execcode 6 stfw run exp
+stderr 'export failed'
+env STFW_TEST_MYSQL_FAIL=0
+
+# import のソース CSV 不在は exit 6
+execcode 6 stfw run imp
+stderr 'source csv not found'
+
+# inventory list の失敗 (inventory ファイル不在) も握りつぶさず exit 6
+cp badstfw.yml stfw.yml
+execcode 6 stfw run exp
+stderr 'inventory list failed'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  inventory: staging.yml
+-- badstfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  inventory: missing.yml
+-- config/inventory/staging.yml --
+stfw_inventory:
+  - db:
+    - db01
+-- fakedb/testdb/t1.seed --
+id|name|note
+1|Alice|hello
+2||NULL
+3|a,b|"q"
+-- fakedb/testdb/t2.seed --
+k|v
+x|1
+-- t1.csv.golden --
+id,name,note
+1,Alice,hello
+2,,\N
+3,"a,b","""q"""
+-- scenario/db/metadata.yml --
+description:
+-- scenario/db/_10_99990101/metadata.yml --
+description:
+-- scenario/db/_10_99990101/_10_grp_clearMysql/metadata.yml --
+description:
+-- scenario/db/_10_99990101/_10_grp_clearMysql/config/config.yml --
+stfw:
+  process:
+    clearMysql:
+      host_group: db
+      database: testdb
+      user: appuser
+      tables:
+        - t1
+        - "t`x"
+-- scenario/db/_10_99990101/_20_grp_importMysql/metadata.yml --
+description:
+-- scenario/db/_10_99990101/_20_grp_importMysql/config/config.yml --
+stfw:
+  process:
+    importMysql:
+      host_group: db
+      database: testdb
+      user: appuser
+      tables:
+        - t1
+        - 't\x'
+-- scenario/db/_10_99990101/_20_grp_importMysql/data/testdb/t1.csv --
+id,name,note
+1,Alice,hello
+-- scenario/db/_10_99990101/_20_grp_importMysql/data/testdb/t\x.csv --
+id,name,note
+9,Zoe,world
+-- scenario/db/_10_99990101/_30_grp_exportMysql/metadata.yml --
+description:
+-- scenario/db/_10_99990101/_30_grp_exportMysql/config/config.yml --
+stfw:
+  process:
+    exportMysql:
+      host_group: db
+      database: testdb
+      user: appuser
+      tables:
+        - t1
+        - t2
+-- scenario/exp/metadata.yml --
+description:
+-- scenario/exp/_10_99990101/metadata.yml --
+description:
+-- scenario/exp/_10_99990101/_10_grp_exportMysql/metadata.yml --
+description:
+-- scenario/exp/_10_99990101/_10_grp_exportMysql/config/config.yml --
+stfw:
+  process:
+    exportMysql:
+      host_group: db
+      database: testdb
+      user: appuser
+      tables:
+        - t1
+-- scenario/imp/metadata.yml --
+description:
+-- scenario/imp/_10_99990101/metadata.yml --
+description:
+-- scenario/imp/_10_99990101/_10_grp_importMysql/metadata.yml --
+description:
+-- scenario/imp/_10_99990101/_10_grp_importMysql/config/config.yml --
+stfw:
+  process:
+    importMysql:
+      host_group: db
+      database: testdb
+      user: appuser
+      tables:
+        - missing
+-- fakebin/mysql --
+#!/bin/bash
+# fake mysql: --database= と --execute= を解釈し、擬似 DB / ログで再現する。
+db=""
+sql=""
+for arg in "$@"; do
+  case "$arg" in
+    --database=*) db="${arg#--database=}" ;;
+    --execute=*) sql="${arg#--execute=}" ;;
+  esac
+done
+if [ "${STFW_TEST_MYSQL_FAIL:-0}" = "1" ]; then
+  echo "mysql: simulated failure" >&2
+  exit 1
+fi
+# マスキング検証用にあえてパスワードを stderr へ出す (Masker で除去される想定)
+echo "mysql connect pw=${MYSQL_PWD:-}" >&2
+table="$(printf '%s' "$sql" | grep -oE '`[^`]+`' | head -n1 | tr -d '`')"
+case "$sql" in
+  "SELECT "*)
+    f="${STFW_TEST_DB}/${db}/${table}.seed"
+    if [ -f "$f" ]; then
+      # pipe 区切りシードを tab 区切り (mysql --batch 形式) に変換して出力
+      tr '|' '\t' < "$f"
+    else
+      echo "mysql: no such table ${table}" >&2
+      exit 1
+    fi
+    ;;
+  "LOAD DATA"*) echo "$sql" >> "${STFW_TEST_MYSQL_LOG}" ;;
+  "TRUNCATE TABLE"*) echo "$sql" >> "${STFW_TEST_MYSQL_LOG}" ;;
+  *)
+    echo "mysql: unsupported sql: $sql" >&2
+    exit 1
+    ;;
+esac
+exit 0

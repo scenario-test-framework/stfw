@@ -1,0 +1,77 @@
+stfw v1.0 リアーキテクティング（実装確定済み）を要求・要件モデルに反映したい。
+以下はすべて実装・検証済みの確定事項である（feature/v1-go-rearch ブランチ、docs/MIGRATION.md 参照）。
+
+## 1. 実行エンジンの内包化（digdag 廃止）
+
+- Go 単一バイナリに逐次実行ランナーを内蔵し、外部ワークフローエンジン digdag を廃止した
+- これに伴い以下は存在しなくなった:
+  - digdag server の起動・停止・再起動・状態確認（旧 REQ-004「実行基盤（digdag server）の制御」は要求ごと消滅）
+  - server 稼働状態（pid ファイル管理）、server 多重起動禁止
+  - 「run 実行の前提条件」のうち「digdag server が起動中であること」（対象シナリオの存在チェック等は run 開始前の自動静的検証に統合）
+  - digdag の状態 DB と DB モード（memory/database）設定、max_task_threads 設定
+  - attempt_id（digdag 固有）。run_id 採番（_{YYYYMMDDHHMMSS}_{PID}）は維持
+  - stfw.yml の stfw.server.* 設定（読み込み時に廃止警告を表示）
+- 実行順序保証・エラー時停止・Blocked 伝播は内蔵ランナーが同一仕様で提供する
+
+## 2. ワークフロー定義（dig）生成の廃止
+
+- run.dig / scenario.dig / bizdate.dig の生成は廃止（旧 REQ-002 の dig 自動生成仕様は消滅）
+- 静的検証は新コマンド stfw validate に分離した（ディレクトリ規約・プラグイン解決可否・
+  config.yml の検証。残存 *.dig ファイルは不要と警告）
+- dry-run は「execute / post_execute をスキップして実行」の意味に整理した
+- run 開始前には validate 相当の静的検証が自動実行される
+
+## 3. 実行ジャーナル中心の結果確認（旧 REQ-006 の実現手段変更）
+
+- 実行結果の唯一のソースは実行ジャーナル（.stfw/runs/{run_id}/journal.jsonl、
+  追記専用 JSONL。node_start / steps_enumerated / step_end / node_end イベント）
+- digdag Web UI・ログ追従による確認は廃止し、以下に置換:
+  - stfw status [run_id]: ジャーナルをリプレイして階層ツリー + ステータスを表示
+  - stfw report [run_id]: 静的 HTML レポート（.stfw/reports/ に index + run 詳細）を生成。
+    実行中も process 終了ごとに増分再生成され、準リアルタイムに閲覧できる
+  - Docker Compose 構成では nginx サービスが reports 共有 volume を配信し、
+    ブラウザ (http://localhost:8080) でレポートを閲覧できる
+- OTel トレース（反映済み）もジャーナルイベントの投影である
+
+## 4. 導入・配布方式の変更（旧 REQ-001 の実現手段変更）
+
+- tar.gz 展開 + install スクリプト（dl.bintray.com からの依存ダウンロード）を廃止
+- マルチプラットフォームバイナリ（GitHub Releases: linux/darwin × amd64/arm64 + windows/amd64）、
+  Docker image（ghcr.io）、compose.yaml（stfw + nginx）で配布する
+- 依存モジュール（digdag jar / Tukubai / Parsrs / yaml2json）は存在しない。JVM / Python 2 / Ruby 不要
+- STFW_HOME（配布ディレクトリ）概念は廃止。プラグイン env 契約（stfw_* / STFW_PROJ_DIR 系）は維持
+
+## 5. 資格情報管理の刷新（旧 REQ-007 の実現手段変更）
+
+- 暗号化方式を openssl RSA + S/MIME(AES256) から age (X25519) に変更
+- コマンドは stfw secret keygen / set / show に再編（鍵再生成抑止・重複登録禁止・
+  ログのシークレットマスキングは同一仕様で維持）
+- stfw secret migrate を新設: 旧 S/MIME 形式を読み込み専用でサポートし age へ一括変換（旧ファイルは .bak 退避）
+- SSH サーバキーの known_hosts 登録は stfw ssh trust <host|group> として正式コマンド化
+  （inventory グループ指定で一括登録。旧実装では未配線だった機能の配線）
+
+## 6. CLI 体系の刷新（v1.0）
+
+- scaffold: stfw new scenario / new bizdate / new process（旧 scenario -i / bizdate -i / process -i）
+- 検証: stfw validate（新設）
+- 実行: stfw run [--dry-run]（server start → run -f の 2 段階が 1 コマンドに）
+- 確認: stfw status / stfw report（新設）
+- inventory list / exists（出力互換）、plugin list / install（解決順互換）
+- 廃止: server 系全コマンド、stfw digdag、install スクリプト
+
+## 7. 開発・品質保証基盤（保守性）
+
+- フレームワーク自体の検証は Go の単体テスト + testscript 受け入れテスト + golangci-lint に変更
+  （shunit2 / serverspec / kcov / shellcheck / Travis CI は廃止）
+- CI/CD は GitHub Actions（PR: lint+test、master: snapshot、tag: goreleaser + ghcr.io 配布）
+
+## 影響範囲（想定）
+
+- 要求: REQ-001/002/006/007 の仕様更新、REQ-004 の廃止、必要に応じて新要求
+  （status/report による確認、バイナリ/Docker 配布等）の追加
+- RDRA: 外部システム「digdag」「dl.bintray.com」の削除、「開発 CI 基盤」相当の更新、
+  状態モデル「server 稼働状態」の削除、server/dig/attempt_id 系の条件・バリエーション削除、
+  情報「ワークフロー定義（dig）」「状態 DB」「digdag 管理情報」「依存モジュール」の削除、
+  情報「HTML レポート」の追加（実行ジャーナルは登録済み）、
+  BUC「実行基盤制御フロー」の廃止、「ワークフロー定義生成・検証フロー」→ 静的検証フローへの再編、
+  各 BUC のアクティビティ・UC の新 CLI 体系への更新

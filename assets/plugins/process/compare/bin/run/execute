@@ -1,0 +1,108 @@
+#!/bin/bash
+# compare: 期待値 (expect/) と収集エビデンス (actual/) を compare-files で突合する (Assert)。
+#
+# ディレクトリ規約 (エビデンスディレクトリ規約・第3の互換境界):
+#   expect/  : git 管理。直下に「同一 bizdate 内の収集系 process ディレクトリ名」を置き、
+#              その配下は当該 process の evidence/ 配下と同型にする。
+#   actual/  : gitignore・自動生成。expect と同じ構造で、実体は各収集系 process の
+#              evidence/ 配下の各ファイルへの symlink。
+#   result/  : gitignore。compare-files の比較結果 (CompareSummary.csv 等) の出力先。
+#
+# 【actual を file-level symlink で組み立てる理由】
+#   compare-files はディレクトリ比較で filepath.WalkDir を使い、ディレクトリへの symlink を
+#   辿らない (symlink はファイル扱いになり配下が列挙されない)。そのため actual/ は
+#   evidence 配下のツリーを実ディレクトリで再現し、各「ファイル」を evidence 実体への
+#   symlink とする (ファイル比較時の os.Open は symlink を辿るため比較は成立する)。
+#
+# 終了コード: compare-files は 0=一致 / 3=差分 (NG/LeftOnly/RightOnly) / 6=エラー を返す。
+#   本プラグインは「比較不一致はステップ失敗」(SPEC-014-02) に従い、非 0 を一律 exit 6 とする。
+#   起動設定 (compare_files.json)・比較レイアウト (compare_layout/) は作業ディレクトリ
+#   (プロセスディレクトリ) の ./config から自動探索される (無ければバイナリ同梱デフォルト)。
+#
+# 制約: evidence 配下のファイル名に改行を含むケースは非対応 (find の行区切り前提)。
+set -uo pipefail
+
+os=""
+case "$(uname -s)" in
+  Linux) os=linux ;;
+  Darwin) os=darwin ;;
+  *) echo "compare: unsupported OS: $(uname -s)" >&2; exit 6 ;;
+esac
+arch=""
+case "$(uname -m)" in
+  x86_64 | amd64) arch=amd64 ;;
+  aarch64 | arm64) arch=arm64 ;;
+  *) echo "compare: unsupported arch: $(uname -m)" >&2; exit 6 ;;
+esac
+bin="${stfw_plugin_cache_dir}/compare-files/${os}_${arch}/compare_files"
+if [ ! -x "${bin}" ]; then
+  echo "compare: compare_files not provisioned: ${bin} (run \`stfw plugin install compare\`)" >&2
+  exit 6
+fi
+
+expect_dir="${stfw_process_dir}/expect"
+actual_dir="${stfw_process_dir}/actual"
+result_dir="${stfw_process_dir}/result"
+
+# 比較準備の先頭 (全 expect 検証・早期 exit より前) で actual/ と result/ を掃除する。
+# expect 不在・expect 空・evidence 不在・find 失敗・ln 失敗のいずれで失敗しても、
+# 前回 run の古い比較結果が残らないようにする (古い成果物を今回の結果と誤認させない)。
+rm -rf "${actual_dir}" "${result_dir}"
+mkdir -p "${actual_dir}"
+
+if [ ! -d "${expect_dir}" ]; then
+  echo "compare: expect directory not found: ${expect_dir}" >&2
+  exit 6
+fi
+
+# expect 直下のエントリ (収集系 process ディレクトリ名) を列挙。1 件も無ければエラー。
+shopt -s nullglob
+entries=("${expect_dir}"/*/)
+shopt -u nullglob
+if [ "${#entries[@]}" -eq 0 ]; then
+  echo "compare: expect has no process directories: ${expect_dir}" >&2
+  exit 6
+fi
+
+for entry in "${entries[@]}"; do
+  name="$(basename "${entry}")"
+  src="${stfw_bizdate_dir}/${name}/evidence"
+  if [ ! -d "${src}" ]; then
+    echo "compare: evidence not found for expect entry '${name}': ${src}" >&2
+    exit 6
+  fi
+  # actual/{name} は evidence が空でも作る (actual は expect と同じ構造を再現する)。
+  mkdir -p "${actual_dir}/${name}"
+
+  # evidence 配下の全ファイルを列挙する。process substitution だと find の失敗
+  # (読取不能ディレクトリ等) を取りこぼすため、コマンド置換で終了コードを確認する。
+  if ! filelist="$(cd "${src}" && find . -type f)"; then
+    echo "compare: failed to enumerate evidence: ${src}" >&2
+    exit 6
+  fi
+  # evidence 配下の各ファイルを、actual/{name}/ に同じ相対パスで symlink する
+  # (find 出力が空なら here-string は空行 1 つになるので skip する)。
+  while IFS= read -r rel; do
+    [ -z "${rel}" ] && continue
+    rel="${rel#./}"
+    dst="${actual_dir}/${name}/${rel}"
+    if ! mkdir -p "$(dirname "${dst}")" || ! ln -s "${src}/${rel}" "${dst}"; then
+      echo "compare: failed to link evidence file: ${src}/${rel}" >&2
+      exit 6
+    fi
+  done <<< "${filelist}"
+done
+
+# 比較実行。cwd はプロセスディレクトリ (実行契約)。左=期待値 expect / 右=実績値 actual。
+"${bin}" -od "${result_dir}" "${expect_dir}" "${actual_dir}"
+cf_rc=$?
+
+if [ "${cf_rc}" -eq 0 ]; then
+  exit 0
+fi
+if [ "${cf_rc}" -eq 3 ]; then
+  echo "compare: mismatch detected (差分あり)。詳細は ${result_dir}/ を参照" >&2
+else
+  echo "compare: compare-files failed (exit ${cf_rc})。詳細は ${result_dir}/ を参照" >&2
+fi
+exit 6

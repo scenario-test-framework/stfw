@@ -1,0 +1,20 @@
+# sshExec のデフォルト設定。
+#
+# host_group : inventory グループ名 (ホスト解決)。必須。
+# user       : ログインユーザー (secret {host}-{user} でパスワード解決)。必須。
+#
+# 処理: 自プロセスの scripts/ ディレクトリ配下のスクリプトを、解決した各ホストへ
+#   ssh 経由で送り (stdin パイプ)、ファイル名昇順に一括実行する。
+#   接続情報は inventory/secret から解決し config に直書きしない。
+#   エラー (リターンコード 6) 発生時は即時終了し、以降のスクリプトを実行しない。
+#
+#   stfw:
+#     process:
+#       sshExec:
+#         host_group: web
+#         user: appuser
+stfw:
+  process:
+    sshExec:
+      host_group: ""
+      user: ""

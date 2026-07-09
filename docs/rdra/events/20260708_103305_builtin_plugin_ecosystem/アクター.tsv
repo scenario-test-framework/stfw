@@ -1,0 +1,2 @@
+アクター群	アクター	役割	社内外	立場	主担当業務
+テスト担当者	シナリオ作成者	scenario > bizdate > process の3階層 scaffold 生成（stfw new）とテストスクリプト配置でテストシナリオを記述し、静的検証（stfw validate）・dry-run 検証とプロセスプラグインの追加・拡張を行う。組み込みプラグイン群（収集系 collectLog / collectFile・データストア系 export / import / clear・検証系 compare・実行系 invokeWeb / invokeRest）でデータ準備・実行・エビデンス収集・期待値比較をシナリオに組み込め、カスタムプラグイン実装ガイドを参照してプロダクト固有のカスタムプラグイン（updateBizDate / invokeJob / importMaster 等）を組み込みプラグインの組み合わせで実装できる	社内	提供者	プロセスプラグイン拡張フロー

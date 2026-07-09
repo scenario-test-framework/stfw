@@ -1,0 +1,19 @@
+# exportRedis の既定設定。プロジェクト側 config で上書きする。
+#
+# host_group   : 接続先 Redis ホストを解決する inventory グループ名 (末尾 group で許可)
+# port         : Redis ポート
+# db           : DB 番号 (0-15)
+# user         : 認証ユーザー (必須。secret {host}-{user} で解決。ACL 未使用/requirepass のみの
+#                Redis 6+ では default を指定する)
+# key_patterns : エクスポート対象。name=出力ファイル名 (evidence/{host}/{name}.csv)、
+#                match=SCAN の glob パターン
+#
+# 接続情報 (ホスト・パスワード) を config に直書きしてはならない (禁止契約)。
+stfw:
+  process:
+    exportRedis:
+      host_group: ""
+      port: "6379"
+      db: "0"
+      user: ""
+      key_patterns: []

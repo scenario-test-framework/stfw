@@ -1,0 +1,28 @@
+schema_version: "1.0"
+artifact_type: "decision_record"
+skill_type: "architecture"
+artifact_id: "arch-decision-008"
+title: "認証方式選定: 専用認証基盤を持たず OS / SSH / 暗号化ファイルへ委譲"
+status: "approved"
+generated_at: "2026-07-08T11:41:51"
+context: |
+  アクターは全員社内のテスト担当者 4 ロールで、外部アクター・マルチテナントが存在しない
+  （NFR モデルシステム = model1、E.5.1.1 認証方式 Lv1 / E.5.2.1 アクセス制御 Lv1）。
+  一方でテスト対象ホストへの接続資格情報を扱うため、秘匿情報の保護は必須。
+decision: |
+  IdP・API Gateway・認可サービスは導入せず、以下へ委譲する:
+  - 利用者の認証・認可: OS 実行ユーザーの権限とファイルパーミッション
+  - テスト対象ホストへの接続: SSH（stfw ssh trust による known_hosts 検証で中間者リスク回避）
+  - 資格情報の保管: age (X25519) による暗号化ファイル（平文保管禁止・ログはマスキング）
+  - レポート配信: 読み取り専用・ローカル / 閉域前提（WAF・IDS/IPS なし）
+consequences:
+  positive:
+    - "認証基盤の構築・運用コストがゼロになり、サーバレス CLI の特性と整合する"
+    - "資格情報のライフサイクル（生成・保管・参照・移行）が secret コマンドに一元化される"
+  negative:
+    - "マルチユーザーでの権限分離はファイルパーミッション頼みで、将来チーム共有サーバで運用する場合は再設計が必要"
+alternatives_considered:
+  - name: "RBAC + アプリ内認可の作り込み"
+    reason_rejected: "単一ユーザー・ローカル実行の CLI にロール概念が存在せず、実装しても検証面が無い"
+  - name: "外部 IdP / セルフホスト IdP の導入"
+    reason_rejected: "外部アクター・Web アプリケーション面が存在しないため過剰"

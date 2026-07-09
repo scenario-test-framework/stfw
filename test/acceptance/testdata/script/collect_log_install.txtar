@@ -1,0 +1,61 @@
+# STEP: collectLog の provisioning エラーパス
+# - 一部 arch のみキャッシュ済み → is_installed=false → 補修 install で欠けを埋める
+# - ダウンロード失敗 → install は非 0 (exit 6) で終了し、成功扱いにしない
+
+env PATH=${WORK}/fakebin:${PATH}
+chmod 755 fakebin/curl
+chmod 755 fakebin/ssh
+chmod 755 fakebin/scp
+chmod 755 fakebin/sshpass
+chmod 755 fakebin/fakelogfilter
+
+# logfilter リリース tarball フィクスチャ
+mkdir lfsrc
+mkdir lfsrc/logfilter_v2.0.0_x
+cp fakebin/fakelogfilter lfsrc/logfilter_v2.0.0_x/logfilter
+exec tar czf lf.tar.gz -C lfsrc logfilter_v2.0.0_x
+env STFW_TEST_LF_TARBALL=${WORK}/lf.tar.gz
+
+# --- 一部 arch (linux_amd64) だけ存在する半端な状態 ---
+env STFW_PROJ_DIR=${WORK}/p1
+chmod 755 p1/.stfw/cache/plugins/collectLog/logfilter/linux_amd64/logfilter
+# is_installed は要求 arch (linux_amd64 linux_arm64 darwin_arm64) 全ての存在を要求するため
+# 「already installed」にならず install が走り、欠けを補修する
+env STFW_TEST_CURL_FAIL=0
+exec stfw plugin install collectLog
+exists p1/.stfw/cache/plugins/collectLog/logfilter/linux_arm64/logfilter
+exists p1/.stfw/cache/plugins/collectLog/logfilter/darwin_arm64/logfilter
+
+# --- ダウンロード失敗は install を失敗させる (成功扱いにしない) ---
+env STFW_PROJ_DIR=${WORK}/p2
+env STFW_TEST_CURL_FAIL=1
+execcode 6 stfw plugin install collectLog
+stderr 'download failed'
+! exists p2/.stfw/cache/plugins/collectLog/logfilter/linux_amd64/logfilter
+
+-- p1/.stfw/cache/plugins/collectLog/logfilter/linux_amd64/logfilter --
+prebuilt linux_amd64 logfilter
+-- fakebin/fakelogfilter --
+#!/bin/bash
+exit 0
+-- fakebin/curl --
+#!/bin/bash
+if [ "${STFW_TEST_CURL_FAIL:-}" = "1" ]; then
+  exit 22
+fi
+out=""
+while [ $# -gt 0 ]; do
+  case "$1" in -o) out="$2"; shift 2;; *) shift;; esac
+done
+cp "${STFW_TEST_LF_TARBALL}" "${out}"
+exit 0
+-- fakebin/ssh --
+#!/bin/bash
+exit 0
+-- fakebin/scp --
+#!/bin/bash
+exit 0
+-- fakebin/sshpass --
+#!/bin/bash
+if [ "$1" = "-p" ]; then shift 2; fi
+exec "$@"

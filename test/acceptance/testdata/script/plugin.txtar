@@ -1,0 +1,48 @@
+# STEP: plugin list / install (旧 process -l / -I 相当)
+
+exec stfw init
+
+# 同梱プラグインが一覧に出る。`_` 始まり (共通処理) は出ない
+exec stfw plugin list
+stdout 'scripts'
+! stdout '_common'
+
+# プロジェクトプラグインも一覧に出る (プロジェクト + 同梱の和集合・昇順)
+mkdir plugins/process/myproc
+exec stfw plugin list
+stdout '(?s)myproc.*scripts'
+
+# プロジェクトプラグインのインストール (bin/install/install の実行)
+chmod 755 plugins/process/dummy/bin/install/is_installed
+chmod 755 plugins/process/dummy/bin/install/install
+exec stfw plugin install dummy
+exists plugins/process/dummy/installed_marker
+
+# インストール済みプラグインへの再インストールは警告終了 (v0.2 互換, exit 3)
+chmod 755 plugins/process/installed/bin/install/is_installed
+! exec stfw plugin install installed
+stderr 'already installed'
+
+# 同梱プラグインは .stfw/ 配下へ展開してから判定される
+# (scripts の is_installed は find/sed の存在確認のみのためインストール済み扱い)
+! exec stfw plugin install scripts
+stderr 'already installed'
+exists .stfw/plugins/process/scripts/bin/install/is_installed
+exists .stfw/plugins/process/scripts/template/scripts/100_1st_step
+
+# 未知のプラグインはエラー
+! exec stfw plugin install unknown
+stderr 'process-plugin: unknown is not installed'
+
+-- plugins/process/dummy/bin/install/is_installed --
+#!/bin/bash
+echo "false"
+exit 0
+-- plugins/process/dummy/bin/install/install --
+#!/bin/bash
+touch installed_marker
+exit 0
+-- plugins/process/installed/bin/install/is_installed --
+#!/bin/bash
+echo "true"
+exit 0

@@ -1,0 +1,13 @@
+コンテキスト	バリエーション	値	説明
+実行管理	実行モード（run_mode）	run、dry-run	シナリオ実行時の動作区分。run は全タスクを実行し、dry-run は実タスク（execute / post_execute）を実行せず setup → pre_execute → teardown のみでワークフロー定義を検証する
+シナリオ構造管理	dig 生成モード	self、cascade	ワークフロー定義（dig）の生成範囲の区分。self は自階層の dig のみ生成し、cascade は配下の bizdate.dig まで連鎖生成する
+通知管理	階層タイプ（webhook type）	run、scenario、bizdate、process	webhook payload のテンプレート合成と id 導出の軸となる実行階層の区分。run > scenario > bizdate > process の親子ツリーを構成する
+通知管理	webhook イベント種別	start、end	webhook 通知の契機となるイベントの区分。各階層の開始時に start、終了時に end を通知し、end の status は Success / Error で確定する
+通知管理	webhook 通知設定	on_start、on_success、on_error（各 true / false）	webhook 通知のイベント種別ごとの ON/OFF 設定。start 通知・正常終了通知・エラー終了通知を個別に抑制できる
+実行管理	ログレベル	trace、debug、info、warn、error	実行ログの出力詳細度の区分。プロジェクト設定（stfw.yml）またはコマンドオプションで変更でき、デフォルトは info
+実行管理	DB モード	memory、database	digdag server の状態 DB の保持方式の区分。memory はインメモリ保持、database は指定ディレクトリ（既定 .stfw/db）への永続化
+プロジェクト環境管理	ホストグループ	web、ap、db（名称は任意定義）、all（全グループ横断の予約値）	環境別 inventory におけるテスト対象ホストのグルーピング単位。all は全グループのホストを横断対象とする予約値
+シナリオ構造管理	プロセスタイプ	scripts（同梱はこれのみ。プラグイン追加で拡張可）	プロセスの実行方式の種別。プラグインとして追加・拡張でき、scaffold 生成・依存インストール・実行の単位になる
+プロジェクト環境管理	プラグインスコープ	プロジェクト、組込み	プラグインの配置場所の区分。同名プラグインはプロジェクト（{proj}/plugins/）→ 組込み（STFW_HOME/plugins/）の順に解決され、プロジェクト側が優先される
+通知管理	終了コード	0（SUCCESS）、3（WARN）、6（ERROR）	スクリプト・コマンド共通の終了コード体系。ステップ実行結果の Success / Error 判定と後続 Blocked 判定の基準になる
+プロジェクト環境管理	対応 OS 種別	linux、mac	stfw 実行ホストの OS 依存設定（JAVA_HOME 等）の分岐軸となる区分

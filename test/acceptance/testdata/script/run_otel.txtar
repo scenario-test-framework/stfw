@@ -1,0 +1,45 @@
+# STEP: OTLP トレースエクスポート (SPEC-009-03)
+# 送信先は OTel 標準環境変数を優先し、stfw.yml の stfw.otel.endpoint でも指定できる。
+# どちらも未設定なら一切送信しない。
+
+otlpserver OTLP_URL_ENV otlp_env.log
+otlpserver OTLP_URL_CONFIG otlp_config.log
+
+# 送信先未設定 (stfw.yml の ${STFW_OTEL_ENDPOINT} は未定義で空) なら HTTP 送信は発生しない
+exec stfw run demo
+! exists otlp_env.log
+! exists otlp_config.log
+
+# OTEL_EXPORTER_OTLP_ENDPOINT 設定で /v1/traces へ POST される
+env OTEL_EXPORTER_OTLP_ENDPOINT=$OTLP_URL_ENV
+exec stfw run demo
+grep 'POST /v1/traces application/x-protobuf' otlp_env.log
+
+# 環境変数未設定時は stfw.yml の stfw.otel.endpoint で送信される
+env OTEL_EXPORTER_OTLP_ENDPOINT=
+env STFW_OTEL_ENDPOINT=$OTLP_URL_CONFIG
+exec stfw run demo
+grep 'POST /v1/traces application/x-protobuf' otlp_config.log
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  timezone: "Asia/Tokyo"
+  otel:
+    endpoint: ${STFW_OTEL_ENDPOINT}
+-- scenario/demo/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_pre_scripts/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_pre_scripts/config/config.yml --
+stfw:
+  process:
+    scripts:
+      some_key: value
+-- scenario/demo/_10_99990101/_10_pre_scripts/scripts/100_step1 --
+#!/bin/bash
+echo "step1 day1"
+exit 0

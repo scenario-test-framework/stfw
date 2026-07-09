@@ -1,0 +1,75 @@
+#!/bin/bash
+# importRedis: exportRedis 形式の CSV を Redis へインポートする (Arrange)。
+#
+# 設定 (config.yml の stfw.process.importRedis): host_group / port / db / user / key_patterns[].name
+# 入力: ${stfw_process_dir}/data/{host}/{name}.csv (exportRedis 出力形式)
+# 処理: 内部ヘルパ `stfw plugin redis-decode` で CSV を redis-cli コマンド列へ変換し、
+#   redis-cli の標準入力へ渡して投入する (各キーは DEL 後に再作成し ttl>0 は EXPIRE)。
+#
+# 接続情報は inventory/secret から解決し config に直書きしない。
+set -uo pipefail
+
+data_root="${stfw_process_dir}/data"
+host_group="${stfw_process_importRedis_host_group:-}"
+port="${stfw_process_importRedis_port:-6379}"
+db="${stfw_process_importRedis_db:-0}"
+user="${stfw_process_importRedis_user:-}"
+rc=0
+
+if [ -z "${host_group}" ]; then
+  echo "importRedis: host_group is required" >&2
+  exit 6
+fi
+# secret は {host}-{user} で解決するため user は必須 (空では解決不能)。
+# ACL 未使用 (requirepass のみ) の Redis 6+ では default を指定する。
+if [ -z "${user}" ]; then
+  echo "importRedis: user is required (secret is keyed by {host}-{user}; use 'default' for requirepass-only Redis)" >&2
+  exit 6
+fi
+
+if ! hosts="$(stfw inventory list "${host_group}")"; then
+  echo "importRedis: inventory list failed for group: ${host_group}" >&2
+  exit 6
+fi
+# shellcheck disable=SC2086
+set -- ${hosts}
+host="${1:-}"
+if [ -z "${host}" ]; then
+  echo "importRedis: no host resolved for group: ${host_group}" >&2
+  exit 6
+fi
+if [ "$#" -gt 1 ]; then
+  echo "importRedis: group ${host_group} resolves to multiple hosts; using ${host}" >&2
+fi
+
+if ! password="$(stfw secret show "${host}" "${user}")"; then
+  echo "importRedis: secret not found: ${host}-${user}" >&2
+  exit 6
+fi
+export REDISCLI_AUTH="${password}"
+
+redis_opts=(-h "${host}" -p "${port}" -n "${db}" --no-auth-warning -e)
+[ -n "${user}" ] && redis_opts+=(--user "${user}")
+
+i=0
+while :; do
+  name_var="stfw_process_importRedis_key_patterns_${i}_name"
+  name="${!name_var:-}"
+  [ -z "${name}" ] && break
+  i=$((i + 1))
+
+  src="${data_root}/${host}/${name}.csv"
+  if [ ! -f "${src}" ]; then
+    echo "importRedis: source csv not found: ${src}" >&2
+    rc=6
+    continue
+  fi
+
+  # pipefail 有効。decode か redis-cli のいずれかが失敗すればパイプは非 0。
+  if ! stfw plugin redis-decode < "${src}" | redis-cli "${redis_opts[@]}"; then
+    echo "importRedis: import failed: ${host}/${name}" >&2
+    rc=6
+  fi
+done
+
+exit ${rc}

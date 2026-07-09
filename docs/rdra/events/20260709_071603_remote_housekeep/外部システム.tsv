@@ -1,0 +1,2 @@
+外部システム群	外部システム	役割
+テスト対象システム	テスト対象ホスト群	シナリオテストを適用するテスト対象のホスト群（web/ap/db等）。環境別inventoryでグループ管理され、ホスト×ユーザー単位の暗号化資格情報（age (X25519)）とstfw ssh trustによるSSHサーバキー一括登録の対象となる。実際の操作はプロセスのユーザースクリプトに委ねられるほか、組み込みプラグインによるscp/ssh経由のログ・ファイル収集（collectLog / collectFile）、sshでのリモートスクリプト一括実行（sshExec）とscpでのローカルファイル原子的配置（scpPut）、grafana k6による画面・APIでの取引入力・検証（invokeWeb / invokeRest）の対象となる。リモートアクセス系（sshExec / scpPut）の接続先もinventoryのグループ名参照で指定され、資格情報はsecret（age暗号化）の{host}-{user}自動参照・SSHホストキーはssh trust（known_hosts）の既存機構を再利用する

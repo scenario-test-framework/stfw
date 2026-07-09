@@ -1,0 +1,56 @@
+package repository
+
+import (
+	"os"
+	"path/filepath"
+	"sort"
+)
+
+// metadataFileName は各階層に置くメタ情報ファイル名 (v0.2 の FILENAME_META と同じ)。
+const metadataFileName = "metadata.yml"
+
+// metadataContent は metadata.yml の初期内容 (v0.2 の metadata_repository と同じ)。
+const metadataContent = "description:\n\nrequirement_specifications:\n\n"
+
+// CreateNodeScaffold は scenario / bizdate 階層の scaffold を生成する。
+// ディレクトリが無ければ作成し、metadata.yml を (再) 生成する
+// (v0.2 の scenario/bizdate initialize と同じ冪等な挙動。dig は生成しない)。
+// 作成したファイルの絶対パス一覧を返す。
+func CreateNodeScaffold(parentDir, dirName string) ([]string, error) {
+	dir := filepath.Join(parentDir, dirName)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+	metaPath := filepath.Join(dir, metadataFileName)
+	if err := os.WriteFile(metaPath, []byte(metadataContent), 0o644); err != nil {
+		return nil, err
+	}
+	return []string{metaPath}, nil
+}
+
+// CreateProcessScaffold はプロセス階層の scaffold を生成する。
+// 既存ディレクトリは削除して作り直し、プラグインの template/ を展開して
+// metadata.yml を生成する (v0.2 の process initialize と同じ挙動)。
+// 作成したファイルの絶対パス一覧 (昇順) を返す。
+func CreateProcessScaffold(loc PluginLocation, parentDir, dirName string) ([]string, error) {
+	dir := filepath.Join(parentDir, dirName)
+	if err := os.RemoveAll(dir); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+
+	created, err := CopyPluginTemplate(loc, dir)
+	if err != nil {
+		return nil, err
+	}
+
+	metaPath := filepath.Join(dir, metadataFileName)
+	if err := os.WriteFile(metaPath, []byte(metadataContent), 0o644); err != nil {
+		return nil, err
+	}
+	created = append(created, metaPath)
+	sort.Strings(created)
+	return created, nil
+}

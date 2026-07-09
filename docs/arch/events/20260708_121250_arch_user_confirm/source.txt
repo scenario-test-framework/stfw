@@ -1,0 +1,7 @@
+初期構築イベント 20260708_114151_initial_arch の確認推奨項目 5 件に対するユーザー回答の反映（全項目「推奨案（Option A）」で確定）。
+
+1. システム概要.json の齟齬 → RDRA 変更イベント rdra:20260708_120928_update_system_overview で解消済み（docs/todo.md DIST-001 を解決済みへ更新）
+2. AG-002 シナリオ集約 = 仮説のまま dist-spec へ引き継ぐ（confidence: user）
+3. AG-003 プロジェクト集約 = 仮説のまま引き継ぐ（confidence: user）
+4. E-019 OTel トレースのストレージ分類 = cache（confidence: user）
+5. BC team_ownership = null のまま（現状値維持）

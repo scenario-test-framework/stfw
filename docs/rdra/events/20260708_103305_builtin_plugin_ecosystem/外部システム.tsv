@@ -1,0 +1,7 @@
+外部システム群	外部システム	役割
+テスト対象システム	テスト対象ホスト群	シナリオテストを適用するテスト対象のホスト群（web/ap/db等）。環境別inventoryでグループ管理され、ホスト×ユーザー単位の暗号化資格情報（age (X25519)）とstfw ssh trustによるSSHサーバキー一括登録の対象となる。実際の操作はプロセスのユーザースクリプトに委ねられるほか、組み込みプラグインによるscp/ssh経由のログ・ファイル収集（collectLog / collectFile）と、grafana k6による画面・APIでの取引入力・検証（invokeWeb / invokeRest）の対象となる
+テスト対象システム	テスト対象データストア（MySQL / PostgreSQL / Redis）	データストア系プラグイン（export / import / clear）の接続先となるテスト対象のデータストア。対象製品は代表的なOSSのみ（MySQL（MariaDBはMySQL互換として同一プラグインでサポート）、PostgreSQL、Redis（ValkeyはRedis互換として同一プラグインでサポート））とし、public cloudのマネージド製品はまだ対象にしない（将来の製品追加はプラグイン追加で対応）。接続先はinventoryのホストグループ名参照、資格情報はsecret（age暗号化）の既存機構で管理される
+テスト支援ツール	logfilter（ログ収集 OSS）	collectLogプラグインが利用するログ収集OSSバイナリ（scenario-test-framework/logfilter、別リポジトリ）。scpで収集先ホストへ転送され、sshでの実行により「bizdateの実行開始日時」（プラグインenv契約 stfw_bizdate_start_ts 等）以降のログ行にフィルタし、フィルタ結果はscpでローカルのエビデンスディレクトリへ収集される。収集完了後に転送したバイナリは削除される
+テスト支援ツール	compare-files（ファイル比較 OSS）	compareプラグインが利用するファイル比較OSS（scenario-test-framework/compare-files、別リポジトリ）。起動設定・比較レイアウトはstfwプロジェクトごとに保持し、期待値（expect）とエビデンス（actual）のディレクトリ比較を実行して比較結果を出力する
+テスト支援ツール	grafana k6	invokeWeb（ブラウザモード）/ invokeRestプラグインが利用するテスト実行OSS。画面での取引入力と画面操作での検証（invokeWeb）、APIでの取引入力とレスポンス検証（invokeRest）を実行する
+配布基盤	配布元（GitHub Releases / ghcr.io）	stfwの配布物の取得元。GitHub Releasesがマルチプラットフォームバイナリ（linux/darwin × amd64/arm64 + windows/amd64）を、ghcr.ioがDocker image / compose.yaml（stfw + nginx）を配布する。Docker imageは既存の最小構成に加えて、プラグインのランタイム依存（k6・mysql/psqlクライアント・ssh/scp等）全部入りのタグ（例: stfw:full）を提供する。tag付与時に開発CI基盤（goreleaser）から公開され、環境管理者が導入時に取得する（旧dl.bintray.comからの依存モジュールダウンロードは廃止）

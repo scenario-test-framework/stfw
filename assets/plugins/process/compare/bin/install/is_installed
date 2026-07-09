@@ -1,0 +1,24 @@
+#!/bin/bash
+# 実行ホストの os_arch 版 compare_files がキャッシュ済みならインストール済みとみなす。
+# 欠けていれば false を返し、stfw plugin install compare で補修できるようにする。
+os=""
+case "$(uname -s)" in
+  Linux) os=linux ;;
+  Darwin) os=darwin ;;
+  *) echo "compare: unsupported OS: $(uname -s)"; exit 1 ;;
+esac
+arch=""
+case "$(uname -m)" in
+  x86_64 | amd64) arch=amd64 ;;
+  aarch64 | arm64) arch=arm64 ;;
+  *) echo "compare: unsupported arch: $(uname -m)"; exit 1 ;;
+esac
+os_arch="${os}_${arch}"
+
+if [ ! -x "${stfw_plugin_cache_dir}/compare-files/${os_arch}/compare_files" ]; then
+  echo "compare_files for ${os_arch} is not provisioned (run \`stfw plugin install compare\`)."
+  exit 1
+fi
+
+echo "true"
+exit 0

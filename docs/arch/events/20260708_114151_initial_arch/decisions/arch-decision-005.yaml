@@ -1,0 +1,29 @@
+schema_version: "1.0"
+artifact_type: "decision_record"
+skill_type: "architecture"
+artifact_id: "arch-decision-005"
+title: "テクノロジースタック: Go 単一バイナリ + 標準ライブラリ中心（プラグインは任意言語）"
+status: "approved"
+generated_at: "2026-07-08T11:41:51"
+context: |
+  旧実装（Bash + digdag 0.9.24）は Java 8 / Python 2 / Ruby / 廃止済み配布元（dl.bintray.com）
+  への依存で配布と CI が事実上停止し、Bash 実装の保守限界に達していた。
+  導入の容易さ（NFR F.1.1.1 対応 OS Lv3・D.2.1.1 移行方式）が最重要の品質特性。
+decision: |
+  CLI 本体は Go で実装し、cobra / yaml.v3 / log/slog / html/template + go:embed /
+  filippo.io/age / OpenTelemetry SDK / testscript 以外は標準ライブラリに寄せる。
+  マルチプラットフォーム（linux/darwin × amd64/arm64 + windows/amd64）の単一バイナリとして
+  配布し、追加ランタイムを不要にする。プラグイン・ステップは env 契約 + 終了コードのみに
+  依存する任意言語スクリプトとし、本体の言語選定から独立させる。
+consequences:
+  positive:
+    - "配布物の配置のみで導入が完了する（ランタイム依存ゼロ）"
+    - "クロスコンパイルにより対応 OS 拡大が容易"
+    - "プラグインは任意言語で書けるため利用者の技術選択を制約しない"
+  negative:
+    - "Go 未経験の貢献者には本体開発の学習コストが発生する"
+alternatives_considered:
+  - name: "Bash 実装の継続改修"
+    reason_rejected: "パッケージ・型システムが無く保守限界。依存配布元の廃止で再現実行も不能"
+  - name: "スクリプト言語での再実装"
+    reason_rejected: "ランタイム依存が残り「配置のみで導入」の要求（stfw導入フロー）を満たせない"

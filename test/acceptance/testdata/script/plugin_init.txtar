@@ -1,0 +1,37 @@
+# STEP: stfw init のプラグイン自動プロビジョニング + --skip-plugin-init
+# 各プラグインの bin/install/install が init 時に自動実行され、成果物を
+# 永続キャッシュ .stfw/cache/plugins/{type}/ へ配置できることを確認する。
+
+# --- 自動プロビジョニング ---
+mkdir auto
+env STFW_PROJ_DIR=$WORK/auto
+chmod 755 auto/plugins/process/provplug/bin/install/install
+chmod 755 auto/plugins/process/provplug/bin/install/is_installed
+exec stfw init
+# provplug の install が cache dir へマーカーを書き込む
+exists auto/.stfw/cache/plugins/provplug/provisioned
+
+# --- --skip-plugin-init はプロビジョニングを行わない ---
+mkdir skip
+env STFW_PROJ_DIR=$WORK/skip
+chmod 755 skip/plugins/process/provplug/bin/install/install
+chmod 755 skip/plugins/process/provplug/bin/install/is_installed
+exec stfw init --skip-plugin-init
+! exists skip/.stfw/cache/plugins/provplug/provisioned
+
+-- auto/plugins/process/provplug/bin/install/install --
+#!/bin/bash
+touch "${stfw_plugin_cache_dir}/provisioned"
+exit 0
+-- auto/plugins/process/provplug/bin/install/is_installed --
+#!/bin/bash
+if [ -f "${stfw_plugin_cache_dir}/provisioned" ]; then echo true; else echo false; fi
+exit 0
+-- skip/plugins/process/provplug/bin/install/install --
+#!/bin/bash
+touch "${stfw_plugin_cache_dir}/provisioned"
+exit 0
+-- skip/plugins/process/provplug/bin/install/is_installed --
+#!/bin/bash
+if [ -f "${stfw_plugin_cache_dir}/provisioned" ]; then echo true; else echo false; fi
+exit 0

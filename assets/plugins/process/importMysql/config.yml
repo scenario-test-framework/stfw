@@ -1,0 +1,19 @@
+# importMysql の既定設定。プロジェクト側 config で上書きする。
+#
+# host_group : 接続先 DB ホストを解決する inventory グループ名 (末尾 group で許可)
+# port       : MySQL ポート
+# database   : 対象データベース名
+# user       : 接続ユーザー (パスワードは secret {host}-{user} で解決)
+# tables     : インポート対象テーブル名のリスト
+#
+# 入力 CSV: ${stfw_process_dir}/data/{database}/{table}.csv (テスト作者が用意・git 管理)。
+#   exportMysql の出力形式 (ヘッダー付き CSV・NULL は \N) とラウンドトリップ可能。
+# 接続情報 (ホスト・パスワード) を config に直書きしてはならない (禁止契約)。
+stfw:
+  process:
+    importMysql:
+      host_group: ""
+      port: "3306"
+      database: ""
+      user: ""
+      tables: []

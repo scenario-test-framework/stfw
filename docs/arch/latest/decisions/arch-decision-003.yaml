@@ -1,0 +1,29 @@
+schema_version: "1.0"
+artifact_type: "decision_record"
+skill_type: "architecture"
+artifact_id: "arch-decision-003"
+title: "コンテキストマップ統合方式: ジャーナルイベントを Published Language とし BC 跨ぎの直接ファイルアクセスを禁止"
+status: "approved"
+generated_at: "2026-07-08T11:41:51"
+context: |
+  run（実行管理）の結果を notify（OTel トレース・HTML レポート）と status / report が
+  参照する必要がある。参照方式を各機能が実行中の内部状態や散在ファイルに直接依存させると、
+  通知経路の障害がテスト実行を巻き込み、機能追加のたびに実行エンジンへの変更が波及する。
+decision: |
+  実行ジャーナル（journal.jsonl）のイベントスキーマ（node_start / steps_enumerated /
+  step_end / node_end）を公開言語（Published Language）とし、notify BC は下流としてイベントを
+  スパンツリー・HTML レポートへ投影する。BC 間の共有は「ID とイベントのみ」とし、
+  BC 跨ぎの直接ファイルアクセスは禁止する。
+  run→scenario / run→project / scenario→project は Customer-Supplier とする
+  （上流の規約・設定解決が下流の要求と協調して決まる自前 BC 同士の関係）。
+consequences:
+  positive:
+    - "通知・レポート・status が全て投影となり、OTel 送信失敗を非致命にできる"
+    - "投影の追加（新しい通知先等）が実行エンジンの変更なしで可能"
+  negative:
+    - "ジャーナルイベントスキーマの変更は互換性影響が大きく、スキーマ進化の管理が必要"
+alternatives_considered:
+  - name: "Conformist（notify が run の内部モデルをそのまま参照）"
+    reason_rejected: "run の内部変更が通知・レポートに直接波及し、投影の独立性が失われる"
+  - name: "同期呼び出しで通知（実行中に notify を直接呼ぶ・旧 webhook 方式）"
+    reason_rejected: "通知経路の障害がテスト実行を止めるリスク。ジャーナル経由の投影で非致命化する方針（OTel エクスポート失敗の非致命扱い）と矛盾"

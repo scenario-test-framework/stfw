@@ -1,0 +1,180 @@
+# STEP: invoke プラグイン (invokeRest / invokeWeb を grafana k6 で実行する Act)
+# curl(DL) はモックし、フェイク k6 で実行を再現する。
+# k6 のリリース資産は OS で形式が異なる (linux=tar.gz / macos=zip) ため、
+# 実行 OS に合わせてフィクスチャを作り分ける。
+#
+# 検証内容:
+#   - install が実行ホストの os_arch 版 k6 をキャッシュする
+#   - host が __ENV.stfw_target_host へ、パスワードが環境変数で注入されマスクされる
+#   - k6 exit 0 → Success / k6 exit 99 (閾値失敗) → exit 6 / スクリプト不在 → exit 6
+#   - invokeWeb はブラウザを既定ヘッドレスにする
+
+env PATH=${WORK}/fakebin:${PATH}
+chmod 755 fakebin/curl
+chmod 755 fakebin/fakek6
+
+# k6 リリース資産のフィクスチャ (k6src/k6 に fake バイナリ)。OS で形式を作り分ける。
+mkdir k6src
+cp fakebin/fakek6 k6src/k6
+chmod 755 k6src/k6
+[linux] exec tar czf k6.tar.gz -C . k6src
+[linux] env STFW_TEST_K6_ARCHIVE=${WORK}/k6.tar.gz
+[darwin] exec zip -q -r k6.zip k6src
+[darwin] env STFW_TEST_K6_ARCHIVE=${WORK}/k6.zip
+
+# プロビジョニング (curl はモック)。invokeRest / invokeWeb それぞれ k6 をキャッシュ
+exec stfw plugin install invokeRest
+exec stfw plugin install invokeWeb
+
+# 資格情報 (host-user のパスワード)
+exec stfw secret keygen
+exec stfw secret set api01 appuser secretpw
+
+# --- 正常系 (invokeRest): k6 exit 0 → Success ---
+exec stfw run inv
+stdout 'run_id: _'
+# host が -e で __ENV へ注入される
+stdout 'stfw_target_host=api01'
+# end-of-test サマリがエビデンスへ出力される
+exists scenario/inv/_10_99990101/_10_act_invokeRest/evidence/summary.json
+# パスワードは環境変数で渡され、マスクされる (argv には載らない)
+stderr '\[secret\]'
+! stderr 'secretpw'
+
+# --- 閾値失敗 (k6 exit 99) を握りつぶさず exit 6 ---
+env STFW_TEST_K6_EXIT=99
+execcode 6 stfw run inv
+stderr 'k6 run failed \(exit 99\)'
+env STFW_TEST_K6_EXIT=0
+
+# --- スクリプト不在 → exit 6 ---
+execcode 6 stfw run invnoscript
+stderr 'k6 script not found'
+
+# --- user のみ指定 (host_group 無し) は無言で無認証にせず exit 6 ---
+execcode 6 stfw run invnohost
+stderr 'user requires host_group'
+
+# --- invokeWeb: ブラウザは既定ヘッドレス ---
+exec stfw run invweb
+stdout 'K6_BROWSER_HEADLESS=true'
+exists scenario/invweb/_10_99990101/_10_act_invokeWeb/evidence/summary.json
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  inventory: staging.yml
+-- config/inventory/staging.yml --
+stfw_inventory:
+  - api:
+    - api01
+-- scenario/inv/metadata.yml --
+description:
+-- scenario/inv/_10_99990101/metadata.yml --
+description:
+-- scenario/inv/_10_99990101/_10_act_invokeRest/metadata.yml --
+description:
+-- scenario/inv/_10_99990101/_10_act_invokeRest/config/config.yml --
+stfw:
+  process:
+    invokeRest:
+      host_group: api
+      user: appuser
+      script: script.js
+-- scenario/inv/_10_99990101/_10_act_invokeRest/script.js --
+// fake k6 は内容を解釈しない (存在確認用)
+export default function () {}
+-- scenario/invnoscript/metadata.yml --
+description:
+-- scenario/invnoscript/_10_99990101/metadata.yml --
+description:
+-- scenario/invnoscript/_10_99990101/_10_act_invokeRest/metadata.yml --
+description:
+-- scenario/invnoscript/_10_99990101/_10_act_invokeRest/config/config.yml --
+stfw:
+  process:
+    invokeRest:
+      script: script.js
+-- scenario/invnohost/metadata.yml --
+description:
+-- scenario/invnohost/_10_99990101/metadata.yml --
+description:
+-- scenario/invnohost/_10_99990101/_10_act_invokeRest/metadata.yml --
+description:
+-- scenario/invnohost/_10_99990101/_10_act_invokeRest/config/config.yml --
+stfw:
+  process:
+    invokeRest:
+      user: appuser
+      script: script.js
+-- scenario/invnohost/_10_99990101/_10_act_invokeRest/script.js --
+export default function () {}
+-- scenario/invweb/metadata.yml --
+description:
+-- scenario/invweb/_10_99990101/metadata.yml --
+description:
+-- scenario/invweb/_10_99990101/_10_act_invokeWeb/metadata.yml --
+description:
+-- scenario/invweb/_10_99990101/_10_act_invokeWeb/config/config.yml --
+stfw:
+  process:
+    invokeWeb:
+      script: script.js
+-- scenario/invweb/_10_99990101/_10_act_invokeWeb/script.js --
+// fake k6 browser script (存在確認用)
+export const options = { scenarios: {} }
+-- fakebin/curl --
+#!/bin/bash
+# curl -fsSL <url> -o <out> をフィクスチャ archive のコピーで再現する。
+# install の資産名計算 (k6-{version}-{os}-{arch}.{ext}) を検証するため、
+# 期待資産名を uname から組み立てて URL と照合する。不一致なら失敗させる。
+url=""
+out=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o) out="$2"; shift 2 ;;
+    -*) shift ;;
+    *) url="$1"; shift ;;
+  esac
+done
+case "$(uname -s)" in
+  Linux) eos=linux; eext=tar.gz ;;
+  Darwin) eos=macos; eext=zip ;;
+  *) echo "fake curl: unsupported OS" >&2; exit 1 ;;
+esac
+case "$(uname -m)" in
+  x86_64 | amd64) earch=amd64 ;;
+  aarch64 | arm64) earch=arm64 ;;
+  *) echo "fake curl: unsupported arch" >&2; exit 1 ;;
+esac
+expected="k6-v2.1.0-${eos}-${earch}.${eext}"
+case "${url}" in
+  *"${expected}") ;;
+  *) echo "fake curl: unexpected asset url: ${url} (want *${expected})" >&2; exit 22 ;;
+esac
+cp "${STFW_TEST_K6_ARCHIVE}" "${out}"
+exit 0
+-- fakebin/fakek6 --
+#!/bin/bash
+# fake k6: run [flags] script。--summary-export にダミー JSON を書き、
+# STFW_TEST_K6_EXIT で終了コードを模擬する。-e KEY=VALUE を収集して echo する。
+summary=""
+eflags=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    run) shift ;;
+    --summary-export) summary="$2"; shift 2 ;;
+    -e) eflags+=("$2"); shift 2 ;;
+    *) shift ;;
+  esac
+done
+echo "fake k6: env_flags=${eflags[*]}"
+echo "fake k6: K6_BROWSER_HEADLESS=${K6_BROWSER_HEADLESS:-unset}"
+# パスワードは環境変数で渡される (argv には載らない) → マスキング検証用に stderr へ
+echo "fake k6: target_pw=${stfw_target_password:-none}" >&2
+if [ -n "${summary}" ]; then
+  mkdir -p "$(dirname "${summary}")"
+  echo '{"metrics":{}}' > "${summary}"
+fi
+exit "${STFW_TEST_K6_EXIT:-0}"

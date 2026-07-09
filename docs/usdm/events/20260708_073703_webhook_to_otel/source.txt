@@ -1,0 +1,38 @@
+stfw の実行結果通知を webhook から OpenTelemetry (OTel) に置き換えたい。
+
+## 背景
+
+現行の REQ-005 は「webhook による実行結果通知」で、各階層 (run / scenario / bizdate / process) の
+開始・終了時に JSON payload を設定済み URL へ HTTP POST している。
+受信側の実装・保守が必要で、可視化・分析には別途仕組みが要る。
+OpenTelemetry の標準プロトコル (OTLP) でトレースを送信すれば、Jaeger / Grafana Tempo /
+Datadog 等の既存のオブザーバビリティ基盤でそのまま可視化・分析できる。
+
+## 変更内容
+
+1. webhook 通知機能は完全に廃止する (併存させない)。
+   - stfw.yml の stfw.webhooks.* 設定 (urls / on_start / on_success / on_error) は廃止
+   - webhook payload JSON スキーマの互換維持要求も廃止
+2. 代わりに OTLP トレースエクスポートを実装する。シグナルはトレースのみ (ログ・メトリクスは送らない)。
+   - 階層実行をスパンツリーにマップする:
+     run = ルートスパン、scenario / bizdate / process = 子スパン、step = 末端スパン
+   - スパン属性に実行コンテキストを載せる: run_id、階層タイプ、bizdate、seq、group、
+     プロセスタイプ、終了コード等 (旧 webhook payload が持っていた情報を引き継ぐ)
+   - 実行ステータス Error はスパンステータス Error にマップする。Blocked ステップは
+     属性で表現する
+   - スパンの開始・終了時刻は実行ジャーナル (journal.jsonl) のイベント時刻と一致させる。
+     実行ジャーナルが唯一のソースであるという現行設計は維持し、OTel エクスポートは
+     ジャーナルイベントの投影として実装する
+3. 送信先設定:
+   - OTel 標準の環境変数 (OTEL_EXPORTER_OTLP_ENDPOINT 等) を尊重する
+   - stfw.yml でも設定できるようにする (stfw.otel.endpoint 等)
+   - 送信先が未設定の場合は送信しない (現行 webhook の「URL 未設定なら送信しない」と同じ)
+4. 送信失敗は実行を失敗させない (ログ警告のみ)。現行 webhook と同じ方針。
+
+## 影響範囲 (想定)
+
+- 要求: REQ-005 (webhook による実行結果通知) を「OTel トレースによる実行結果通知」に置換
+- 通知管理 BC: webhook payload / 送信判定 (on_start 等) の情報・条件・バリエーションを
+  OTel トレース (スパンツリー / スパン属性 / エクスポート設定) に置換
+- 外部システム: 「webhook 受信先」を「OTLP 受信先 (OpenTelemetry Collector / 互換バックエンド)」に置換
+- UC13「実行状況を通知する」の実現手段が OTLP エクスポートに変わる (UC 自体は維持)

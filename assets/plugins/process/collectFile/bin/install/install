@@ -1,0 +1,4 @@
+#!/bin/bash
+# collectFile は前提コマンド (ssh / scp / sshpass) の存在のみが要件で、
+# ダウンロード等のプロビジョニングは不要。
+exit 0

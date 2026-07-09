@@ -1,0 +1,27 @@
+# STEP: project init (integration_test.sh STEP2 相当)
+
+# 初期化前は stfw.yml が存在しない
+! exists stfw.yml
+
+# 初期化に成功し、作成ファイル一覧が出力される
+exec stfw init
+stdout 'stfw.yml'
+stdout 'config/inventory/staging.yml'
+stdout 'scenario/sample/_10_99990101/_10_pre_scripts/scripts/100_1st_step'
+
+# テンプレートが展開されている
+exists stfw.yml
+exists config/inventory/staging.yml
+exists plugins/run/_common/setup/10_run_setup_step1
+exists scenario/sample/_20_99990102/_10_pre_scripts/scripts/200_2nd_step
+
+# dig ファイルは v1.0 では生成されない
+! exists scenario/sample/scenario.dig
+
+# stfw.yml に webhook 設定 (v1.0 で廃止) は含まれず、otel 設定の雛形がある (SPEC-010-01)
+! grep 'webhooks' stfw.yml
+grep 'otel' stfw.yml
+
+# 再初期化は禁止 (v0.2 互換の条件)
+! exec stfw init
+stderr 'already initialized'
