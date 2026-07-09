@@ -199,7 +199,7 @@ func RunPluginInstall(pluginDir string, env []string, out, errOut io.Writer) (in
 
 // copyFSTree は fsys の root 配下を destDir へコピーし、
 // 作成したファイルの絶対パス一覧 (昇順) を返す。
-// go:embed はファイルモードを保持しないため、shebang (#!) で始まる
+// 埋め込み (go:embed) はファイルモードを保持しないため、shebang (#!) で始まる
 // ファイルには実行権限を付与する。
 func copyFSTree(fsys fs.FS, root, destDir string) ([]string, error) {
 	var created []string

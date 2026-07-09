@@ -64,7 +64,7 @@ func ScanHostKey(host, knownHostsPath string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if _, err := f.Write(stdout.Bytes()); err != nil {
 		return fmt.Errorf("failed to add SSH server key for %s: %w", host, err)
 	}

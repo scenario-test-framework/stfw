@@ -31,22 +31,22 @@ func WriteHTML(path, tmplName string, data any) error {
 		return err
 	}
 	if _, err := tmp.Write(buf.Bytes()); err != nil {
-		tmp.Close()
-		os.Remove(tmp.Name())
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
 		return err
 	}
 	if err := tmp.Close(); err != nil {
-		os.Remove(tmp.Name())
+		_ = os.Remove(tmp.Name())
 		return err
 	}
 	// CreateTemp は 0600 で作成するため、別ユーザーの配信プロセス (nginx 等)
 	// が読めるよう 0644 に揃えてから公開する
 	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
-		os.Remove(tmp.Name())
+		_ = os.Remove(tmp.Name())
 		return err
 	}
 	if err := os.Rename(tmp.Name(), path); err != nil {
-		os.Remove(tmp.Name())
+		_ = os.Remove(tmp.Name())
 		return err
 	}
 	return nil

@@ -23,9 +23,11 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	os.Exit(testscript.RunMain(m, map[string]func() int{
-		"stfw": cli.Execute,
-	}))
+	// testscript.Main は内部で os.Exit する。stfw コマンドは exit code を返すため
+	// os.Exit でラップして登録する (RunMain は非推奨)。
+	testscript.Main(m, map[string]func(){
+		"stfw": func() { os.Exit(cli.Execute()) },
+	})
 }
 
 func TestAcceptance(t *testing.T) {
@@ -85,7 +87,7 @@ func cmdOTLPServer(ts *testscript.TestScript, neg bool, args []string) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		fmt.Fprintf(f, "%s %s %s\n", req.Method, req.URL.Path, req.Header.Get("Content-Type"))
 		w.WriteHeader(http.StatusOK)
 	}))

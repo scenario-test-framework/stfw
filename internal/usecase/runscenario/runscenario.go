@@ -96,7 +96,7 @@ func Run(log *slog.Logger, out, errOut io.Writer, projDir string, cfg *repositor
 		}
 		runID = run.NewRunID(now().Add(time.Duration(i+1)*time.Second), os.Getpid())
 	}
-	defer journal.Close()
+	defer func() { _ = journal.Close() }()
 
 	// OTLP トレースは run 終了時に flush の完了を待つ (エラー時も待つ)
 	notifier := newOTelNotifier(log, cfg, version)

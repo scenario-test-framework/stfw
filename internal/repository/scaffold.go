@@ -14,7 +14,7 @@ const templateRoot = "template"
 
 // MaterializeTemplate は同梱テンプレートを projDir へ展開し、
 // 作成したファイルの相対パス一覧 (昇順) を返す。
-// go:embed はファイルモードを保持しないため、shebang (#!) で始まる
+// 埋め込み (go:embed) はファイルモードを保持しないため、shebang (#!) で始まる
 // ファイルには実行権限を付与する。
 func MaterializeTemplate(projDir string) ([]string, error) {
 	var created []string
