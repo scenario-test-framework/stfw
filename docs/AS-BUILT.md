@@ -4,7 +4,7 @@
 すべての記述は実コード・テスト・ゴールデンファイルを根拠とし、各節末尾に「根拠」としてファイルパスを記載します。
 
 - 読者: stfw を利用するテスト担当者 / stfw を保守する開発者
-- 位置付け: 実装契約（互換境界・スキーマ・規約）の正確な定義の集約。利用手順は [README.md](../README.md)、v0.2 からの移行は [docs/MIGRATION.md](MIGRATION.md) を参照
+- 位置付け: 実装契約（互換境界・スキーマ・規約）の正確な定義の集約。利用手順は [README.md](../README.md) を参照
 
 ---
 
@@ -800,7 +800,7 @@ stfw_inventory:
 |---|---|
 | 対応プラットフォーム | linux / darwin × amd64 / arm64、windows / amd64（windows/arm64 は除外） |
 | ビルド | `CGO_ENABLED=0`, `-trimpath`, `-ldflags "-s -w -X ...cli.Version={{.Version}}"` |
-| アーカイブ | `stfw_{version}_{os}_{arch}.tar.gz`（windows は zip）。LICENSE / README.md / docs/MIGRATION.md を同梱 |
+| アーカイブ | `stfw_{version}_{os}_{arch}.tar.gz`（windows は zip）。LICENSE / README.md を同梱 |
 | チェックサム | `checksums.txt` |
 | リリース先 | GitHub Releases（`scenario-test-framework/stfw`） |
 
@@ -850,16 +850,16 @@ stfw_inventory:
 
 ## 11. v0.2 からの主な変更
 
-詳細は [docs/MIGRATION.md](MIGRATION.md) を参照。要点のみ:
+v0.2（Bash + digdag）系にユーザーはおらず移行ガイドは廃止した。設計判断の背景として要点のみ残す:
 
 - **全面再実装**（Bash + digdag → Go 単一バイナリ）。維持される互換境界は (1) ディレクトリ規約（§3）、(2) プラグイン実行契約（env + リターンコード 0/3/6、§4）、(3) エビデンスディレクトリ規約（§4.7）
-- **webhook 通知の廃止** → OTLP トレースエクスポートへ置換（§6。属性マッピング表は MIGRATION.md 参照）
+- **webhook 通知の廃止** → OTLP トレースエクスポートへ置換（§6）
 - **dig 生成の廃止** → `stfw validate` の静的検証へ昇格。`stfw server` / digdag 系コマンドの廃止
-- コマンド体系の整理（`scenario -i` → `new scenario` 等。対応表は MIGRATION.md）
+- コマンド体系の整理（`scenario -i` → `new scenario` 等）
 - secret の保存形式を openssl S/MIME → age (X25519) へ変更（`stfw secret migrate` で一括変換、§9.2）
 - `STFW_HOME` の廃止、bizdate の実在日付検証の追加、run_id 採番規則は互換維持
 
-> 根拠: `docs/MIGRATION.md`, `README.md`
+> 根拠: `README.md`
 
 ---
 

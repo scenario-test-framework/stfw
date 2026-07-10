@@ -33,9 +33,6 @@ convention and run them automatically from a single binary.
 - **Housekeeping**: `stfw run` automatically deletes results older than the retention window
   (`stfw.housekeep.retention_days`) at the start of a run.
 
-> ⚠️ The v0.2 line (Bash + digdag implementation) is frozen at tag [`v0.2.0`](../../tree/v0.2.0).
-> See [docs/MIGRATION.md](docs/MIGRATION.md) for the migration guide and breaking changes.
-
 > ℹ️ Internal documentation (`docs/`) and in-code comments are written in Japanese.
 
 ## Install
