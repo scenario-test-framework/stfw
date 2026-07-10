@@ -67,7 +67,7 @@ func TestScaffoldFromSpec(t *testing.T) {
 	projDir := newTestProject(t)
 	var out bytes.Buffer
 
-	if err := ScaffoldFromSpec(testLogger(), &out, projDir, sampleSpec(), false, false); err != nil {
+	if err := ScaffoldFromSpec(testLogger(), &out, projDir, sampleSpec(), false); err != nil {
 		t.Fatalf("ScaffoldFromSpec: %v", err)
 	}
 
@@ -109,26 +109,26 @@ func TestScaffoldFromSpec(t *testing.T) {
 	}
 }
 
-// 既存シナリオディレクトリがあると既定 (force=false) はエラーになる。
-func TestScaffoldFromSpecExistingDirWithoutForce(t *testing.T) {
+// 既存シナリオディレクトリがあると既定 (sync=false) はエラーになる。
+func TestScaffoldFromSpecExistingDirWithoutSync(t *testing.T) {
 	projDir := newTestProject(t)
 	var out bytes.Buffer
-	if err := ScaffoldFromSpec(testLogger(), &out, projDir, sampleSpec(), false, false); err != nil {
+	if err := ScaffoldFromSpec(testLogger(), &out, projDir, sampleSpec(), false); err != nil {
 		t.Fatalf("1st ScaffoldFromSpec: %v", err)
 	}
 
-	err := ScaffoldFromSpec(testLogger(), &out, projDir, sampleSpec(), false, false)
+	err := ScaffoldFromSpec(testLogger(), &out, projDir, sampleSpec(), false)
 	if err == nil {
-		t.Fatal("2nd ScaffoldFromSpec (force=false) should fail")
+		t.Fatal("2nd ScaffoldFromSpec (sync=false) should fail")
 	}
 }
 
-// --force は既存ディレクトリでも再生成でき、かつ手動で追加した葉 (data/scripts/expect) を
-// 温存する (CreateSpecNode は削除しない)。
-func TestScaffoldFromSpecForceOverwritePreservesLeaves(t *testing.T) {
+// --sync は既存ディレクトリを更新し、spec にある process 配下に手動で追加した葉
+// (data/scripts/expect) は温存する (spec に無い process のみを削除するため)。
+func TestScaffoldFromSpecSyncPreservesLeavesOfKeptProcess(t *testing.T) {
 	projDir := newTestProject(t)
 	var out bytes.Buffer
-	if err := ScaffoldFromSpec(testLogger(), &out, projDir, sampleSpec(), false, false); err != nil {
+	if err := ScaffoldFromSpec(testLogger(), &out, projDir, sampleSpec(), false); err != nil {
 		t.Fatalf("1st ScaffoldFromSpec: %v", err)
 	}
 
@@ -143,12 +143,12 @@ func TestScaffoldFromSpecForceOverwritePreservesLeaves(t *testing.T) {
 
 	spec := sampleSpec()
 	spec.Description = "updated description"
-	if err := ScaffoldFromSpec(testLogger(), &out, projDir, spec, true, false); err != nil {
-		t.Fatalf("2nd ScaffoldFromSpec (force=true): %v", err)
+	if err := ScaffoldFromSpec(testLogger(), &out, projDir, spec, true); err != nil {
+		t.Fatalf("2nd ScaffoldFromSpec (sync=true): %v", err)
 	}
 
 	if _, err := os.Stat(leaf); err != nil {
-		t.Errorf("manually added leaf was removed by --force: %v", err)
+		t.Errorf("spec にある process 配下の手動の葉が --sync で削除された: %v", err)
 	}
 	meta, err := repository.ReadNodeMetadata(filepath.Join(projDir, "scenario", "daily-balance"))
 	if err != nil {
@@ -167,7 +167,7 @@ func TestScaffoldFromSpecValidationError(t *testing.T) {
 	spec := sampleSpec()
 	spec.Bizdates[0].Processes[0].Group = "pre_group"
 
-	err := ScaffoldFromSpec(testLogger(), &out, projDir, spec, false, false)
+	err := ScaffoldFromSpec(testLogger(), &out, projDir, spec, false)
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
@@ -188,7 +188,7 @@ func TestScaffoldFromSpecDuplicateBizdateDir(t *testing.T) {
 		Bizdate: "20240101",
 	})
 
-	err := ScaffoldFromSpec(testLogger(), &out, projDir, spec, false, false)
+	err := ScaffoldFromSpec(testLogger(), &out, projDir, spec, false)
 	if err == nil {
 		t.Fatal("expected duplicate bizdate directory error")
 	}
@@ -213,7 +213,7 @@ func TestScaffoldFromSpecDuplicateProcessDir(t *testing.T) {
 		Type:  "clearPostgres",
 	})
 
-	err := ScaffoldFromSpec(testLogger(), &out, projDir, spec, false, false)
+	err := ScaffoldFromSpec(testLogger(), &out, projDir, spec, false)
 	if err == nil {
 		t.Fatal("expected duplicate process directory error")
 	}
@@ -231,7 +231,7 @@ func TestScaffoldFromSpecRoundtrip(t *testing.T) {
 	var out bytes.Buffer
 	spec := sampleSpec()
 
-	if err := ScaffoldFromSpec(testLogger(), &out, projDir, spec, false, false); err != nil {
+	if err := ScaffoldFromSpec(testLogger(), &out, projDir, spec, false); err != nil {
 		t.Fatalf("ScaffoldFromSpec: %v", err)
 	}
 
@@ -252,12 +252,12 @@ func TestScaffoldFromSpecRoundtrip(t *testing.T) {
 	}
 }
 
-// --prune は spec との差分同期: spec に無い bizdate/process ディレクトリを
+// --sync は spec との差分同期: spec に無い bizdate/process ディレクトリを
 // (実装済みの葉ごと) 削除し、spec にある process 配下の葉は温存する。
-func TestScaffoldFromSpecPruneSyncsTree(t *testing.T) {
+func TestScaffoldFromSpecSyncPrunesTree(t *testing.T) {
 	projDir := newTestProject(t)
 	var out bytes.Buffer
-	if err := ScaffoldFromSpec(testLogger(), &out, projDir, sampleSpec(), false, false); err != nil {
+	if err := ScaffoldFromSpec(testLogger(), &out, projDir, sampleSpec(), false); err != nil {
 		t.Fatalf("1st ScaffoldFromSpec: %v", err)
 	}
 
@@ -300,8 +300,8 @@ func TestScaffoldFromSpecPruneSyncsTree(t *testing.T) {
 	}
 
 	out.Reset()
-	if err := ScaffoldFromSpec(testLogger(), &out, projDir, sampleSpec(), false, true); err != nil {
-		t.Fatalf("prune ScaffoldFromSpec: %v", err)
+	if err := ScaffoldFromSpec(testLogger(), &out, projDir, sampleSpec(), true); err != nil {
+		t.Fatalf("sync ScaffoldFromSpec: %v", err)
 	}
 
 	// spec に無い bizdate/process は削除される

@@ -31,25 +31,22 @@ stdout 'scripts: \{\}'
 # --- 既存シナリオへの再 scaffold は既定でエラー ---
 ! exec stfw scenario scaffold spec.yml
 stderr 'already exists'
-stderr 'force'
+stderr 'sync'
 
-# --force で再生成できる (手動追加した葉は温存される)
+# --- --sync は spec との差分同期 (追加/維持/削除。spec に無いディレクトリを削除、葉は温存) ---
+# spec にある process 配下に手動の葉を追加 (維持されるべき)
 mkdir scenario/built/_10_20240101/_10_pre_scripts/scripts
 exec touch scenario/built/_10_20240101/_10_pre_scripts/scripts/100_manual
-exec stfw scenario scaffold --force spec.yml
-exists scenario/built/_10_20240101/_10_pre_scripts/scripts/100_manual
-
-# --- --prune は spec との差分同期 (spec に無いディレクトリを削除、葉は温存) ---
-# spec に無い余分な bizdate / process を葉つきで追加
+# spec に無い余分な bizdate / process を葉つきで追加 (削除されるべき)
 mkdir scenario/built/_20_29991231/_10_extra_scripts
 exec touch scenario/built/_20_29991231/_10_extra_scripts/leaf
 mkdir scenario/built/_10_20240101/_99_extra_scripts
 exec touch scenario/built/_10_20240101/_99_extra_scripts/leaf
-# 規約外のディレクトリ (prune 対象外)
+# 規約外のディレクトリ (同期対象外)
 mkdir scenario/built/notes
 exec touch scenario/built/notes/memo
 
-exec stfw scenario scaffold --prune spec.yml
+exec stfw scenario scaffold --sync spec.yml
 stdout 'removed: scenario/built/_20_29991231'
 stdout 'removed: scenario/built/_10_20240101/_99_extra_scripts'
 

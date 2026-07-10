@@ -9,7 +9,7 @@ import (
 )
 
 // PruneScenarioTree はシナリオ配下から、spec に含まれない bizdate / process
-// ディレクトリを削除する (spec との差分同期。`scenario scaffold --prune` の削除相当)。
+// ディレクトリを削除する (spec との差分同期。`scenario scaffold --sync` の削除相当)。
 //
 //   - keptBizdates: 残す bizdate ディレクトリ名の集合
 //   - keptProcesses[bizdateDir]: 各 bizdate 配下で残す process ディレクトリ名の集合

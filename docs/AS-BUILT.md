@@ -91,7 +91,7 @@ BC 間の共有は ID とジャーナルイベントのみである。notify・H
 | `stfw new process <seq> <group> <type>` | seq, group, type | カレントが業務日付ディレクトリであることを要求。プラグインを解決し `_{seq}_{group}_{type}/` を**削除して作り直し**、プラグイン `template/` を展開 + `metadata.yml` 生成 |
 | `stfw scenario doc <name> [-o, --out <file>]` | name | シナリオを Markdown ドキュメントへ投影 (tree → doc)。`--out` 省略時は stdout |
 | `stfw scenario spec <name> [-o, --out <file>]` | name | シナリオを spec yaml へ export (tree → spec、§12 往復の出口)。`--out` 省略時は stdout |
-| `stfw scenario scaffold <spec.yml> [-f, --force] [--prune]` | spec ファイルパス | spec (structured yaml) からシナリオ骨格を生成 (spec → tree、§12 往復の入口)。既存シナリオディレクトリはエラー (`--force` で再生成、`--prune` で spec に無いディレクトリを削除して差分同期) |
+| `stfw scenario scaffold <spec.yml> [--sync]` | spec ファイルパス | spec (structured yaml) からシナリオ骨格を生成 (spec → tree、§12 往復の入口)。既存シナリオディレクトリはエラー (`--sync` で差分同期: 追加/維持/削除) |
 | `stfw validate [scenario...]` | 省略時は全シナリオ | ディレクトリ規約・プラグイン解決可否・`config/config.yml` 存在を静的検証。エラー違反があれば exit 6、警告のみは exit 0 |
 | `stfw run [-d, --dry-run] <scenario...>` | 1 つ以上のシナリオ名 | 内蔵ランナーで実行（§4, §5）。実行前に validate 相当の静的検証を自動実行。dry-run は execute / post_execute をスキップ |
 | `stfw status [run_id]` | 省略時は最新 run | ジャーナルをリプレイして階層ツリーとステータスを表示 |
@@ -876,23 +876,23 @@ tree からの読み取り専用の投影」。
 |---|---|---|
 | `stfw scenario doc <name> [-o, --out <file>]` | tree → doc | シナリオを Markdown へ投影。`--out` 省略時は stdout |
 | `stfw scenario spec <name> [-o, --out <file>]` | tree → spec | シナリオを spec yaml へ export（往復の出口）。`--out` 省略時は stdout |
-| `stfw scenario scaffold <spec.yml> [-f, --force] [--prune]` | spec → tree | spec からディレクトリ骨格（`metadata.yml` + `config/config.yml`）を生成（往復の入口）。`--prune` で spec との差分同期 |
+| `stfw scenario scaffold <spec.yml> [--sync]` | spec → tree | spec からディレクトリ骨格（`metadata.yml` + `config/config.yml`）を生成（往復の入口）。`--sync` で spec との差分同期 |
 
 - `<name>` は `scenario/{name}`。いずれもプロジェクトルート（`stfw.yml` のある dir）で実行する。
-- `scenario scaffold` はシナリオディレクトリが既に存在すると既定でエラーにする（誤上書き防止）。
-  差分同期の挙動は次のとおり（bizdate / process の各ディレクトリ単位）:
+- `scenario scaffold` は新規シナリオを生成する。シナリオディレクトリが既に存在すると既定でエラーにし
+  （誤上書き防止）、`--sync` 指定時のみ spec との差分同期を行う。差分同期の挙動は次のとおり
+  （bizdate / process の各ディレクトリ単位）:
 
   | spec | disk | 挙動 |
   |---|---|---|
   | あり | なし | **追加** |
   | あり | あり | **維持**（`metadata.yml` / `config/config.yml` は spec で上書き、`data/`・`scripts/`・`expect/` 等の葉は温存） |
-  | なし | あり | 既定（`--force`）は**温存**、`--prune` 指定時のみ**削除**（実装済みの葉ごと。破壊的） |
+  | なし | あり | **削除**（実装済みの葉ごと。破壊的） |
 
-  - `--force` は既存シナリオの再生成を許可するが、削除は一切しない（追加・上書きのみ）。
-  - `--prune` は spec との差分同期で、spec に無い bizdate/process ディレクトリを実装済みの葉ごと削除する
-    （`--force` を含意）。削除対象は命名規約（`ParseBizdateDirName` / `ParseProcessDirName`）に合致する
-    ディレクトリのみで、規約外のファイル・ディレクトリ（README 等）には触れない。削除したディレクトリは
-    `removed: {path}` 行で標準出力に列挙する（`internal/repository/scaffoldprune.go`）。
+  - `--sync` は既存シナリオを spec に合わせて更新する。spec に無い bizdate/process ディレクトリを
+    実装済みの葉ごと削除する。削除対象は命名規約（`ParseBizdateDirName` / `ParseProcessDirName`）に
+    合致するディレクトリのみで、規約外のファイル・ディレクトリ（README 等）には触れない。削除した
+    ディレクトリは `removed: {path}` 行で標準出力に列挙する（`internal/repository/scaffoldprune.go`）。
 - `doc` / `spec` の出力は決定論的（同一 tree → 同一バイト列）。`spec` の YAML は
   `gopkg.in/yaml.v3` の map マーシャルがキーを昇順で確定するため、`config` サブツリーの
   キー順も安定する。

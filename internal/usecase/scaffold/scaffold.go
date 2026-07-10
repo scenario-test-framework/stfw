@@ -103,15 +103,12 @@ func Process(log *slog.Logger, out io.Writer, projDir, cwd, seqStr, groupStr, pr
 // ディレクトリ骨格 (metadata.yml + config/config.yml) を生成する (spec → tree、往復の入口)。
 // data/scripts/expect 等の葉は生成しない (往復対象は骨格のみ。plan §0)。
 //
-// 差分同期の挙動:
+// 新規シナリオはそのまま生成する。既存シナリオに対しては sync=false ならエラーにし
+// (誤上書き防止。既定は fail-safe)、sync=true なら spec との差分同期を行う:
 //   - spec にあり disk に無い: 追加
 //   - 両方にある: 維持 (metadata.yml / config.yml は spec で上書き、葉は温存)
-//   - disk にあり spec に無い: force のみでは温存、prune 指定時のみ削除 (破壊的)
-//
-// シナリオディレクトリが既に存在する場合、force / prune いずれも false ならエラーに
-// する (誤上書き防止。既定は fail-safe)。prune は spec に無い bizdate/process ディレクトリを
-// 実装済みの葉ごと削除するため force を含意する。
-func ScaffoldFromSpec(log *slog.Logger, out io.Writer, projDir string, spec repository.ScenarioSpec, force, prune bool) error {
+//   - disk にあり spec に無い: 削除 (実装済みの葉ごと。破壊的)
+func ScaffoldFromSpec(log *slog.Logger, out io.Writer, projDir string, spec repository.ScenarioSpec, sync bool) error {
 	plan, err := planFromSpec(spec)
 	if err != nil {
 		return err
@@ -124,8 +121,8 @@ func ScaffoldFromSpec(log *slog.Logger, out io.Writer, projDir string, spec repo
 
 	scenarioDir := filepath.Join(root, plan.name)
 	existed := repository.DirExists(scenarioDir)
-	if existed && !force && !prune {
-		return fmt.Errorf("%s already exists (use --force to regenerate, --prune to sync)", scenarioDir)
+	if existed && !sync {
+		return fmt.Errorf("%s already exists (use --sync to update)", scenarioDir)
 	}
 
 	created, err := writeSpecPlan(scenarioDir, plan)
@@ -134,14 +131,14 @@ func ScaffoldFromSpec(log *slog.Logger, out io.Writer, projDir string, spec repo
 	}
 	printCreated(out, projDir, created)
 
-	// prune: spec に無い bizdate/process ディレクトリを削除する (追加・上書きの後に実施)。
-	if prune && existed {
+	// 差分同期: spec に無い bizdate/process ディレクトリを削除する (追加・上書きの後に実施)。
+	if sync && existed {
 		removed, err := repository.PruneScenarioTree(scenarioDir, keptBizdateDirs(plan), keptProcessDirs(plan))
 		if err != nil {
-			return fmt.Errorf("scenario scaffold prune: %w", err)
+			return fmt.Errorf("scenario scaffold sync: %w", err)
 		}
 		printRemoved(out, projDir, removed)
-		log.Info("scenario scaffold pruned", "scenario", plan.name, "removed", len(removed))
+		log.Info("scenario scaffold synced", "scenario", plan.name, "removed", len(removed))
 	}
 
 	log.Info("scenario scaffold generated", "scenario", plan.name, "bizdates", len(plan.bizdates))

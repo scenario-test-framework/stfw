@@ -81,14 +81,13 @@ func newScenarioSpecCmd(a *app) *cobra.Command {
 }
 
 func newScenarioScaffoldCmd(a *app) *cobra.Command {
-	var force bool
-	var prune bool
+	var sync bool
 	cmd := &cobra.Command{
 		Use:   "scaffold <spec.yml>",
 		Short: "generate scenario scaffold from spec yaml (spec -> tree, roundtrip entry point)",
 		Long: "spec (structured yaml) からシナリオのディレクトリ骨格 (metadata.yml + config/config.yml) を生成する。\n" +
-			"data/scripts/expect 等の葉は生成しない。既存シナリオは既定でエラー (--force で再生成)。\n" +
-			"--prune は spec との差分同期: spec に無い bizdate/process ディレクトリを実装済みの葉ごと削除する (破壊的・--force を含意)。",
+			"data/scripts/expect 等の葉は生成しない。既存シナリオは既定でエラー。\n" +
+			"--sync は spec との差分同期: spec に無い bizdate/process ディレクトリを実装済みの葉ごと削除する (破壊的)。",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			raw, err := os.ReadFile(args[0])
@@ -101,15 +100,14 @@ func newScenarioScaffoldCmd(a *app) *cobra.Command {
 				a.log.Error(err.Error())
 				return &exitError{code: run.ExitError, err: err}
 			}
-			if err := scaffold.ScaffoldFromSpec(a.log, cmd.OutOrStdout(), a.projDir, spec, force, prune); err != nil {
+			if err := scaffold.ScaffoldFromSpec(a.log, cmd.OutOrStdout(), a.projDir, spec, sync); err != nil {
 				a.log.Error(err.Error())
 				return &exitError{code: run.ExitError, err: err}
 			}
 			return nil
 		},
 	}
-	cmd.Flags().BoolVarP(&force, "force", "f", false, "regenerate even if the scenario directory already exists")
-	cmd.Flags().BoolVar(&prune, "prune", false, "sync with spec: delete bizdate/process directories not in the spec (destructive; removes implemented leaves; implies --force)")
+	cmd.Flags().BoolVar(&sync, "sync", false, "sync an existing scenario with the spec: add missing, overwrite skeleton, and delete bizdate/process directories not in the spec (destructive; removes implemented leaves)")
 	return cmd
 }
 

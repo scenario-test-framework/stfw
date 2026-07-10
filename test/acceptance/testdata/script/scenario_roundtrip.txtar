@@ -1,12 +1,12 @@
 # STEP: scenario roundtrip (spec -> tree -> spec の往復セマンティクス、plan §7)
-# `scenario spec` (tree -> spec) → `scenario scaffold --force` (spec -> tree') →
+# `scenario spec` (tree -> spec) → `scenario scaffold --sync` (spec -> tree') →
 # 再度 `scenario spec` (tree' -> spec') で spec == spec' (バイト完全一致) を固定する。
 # 既存シナリオ (init テンプレートの sample) を対象に、tree に手を加えず往復させる。
 
 exec stfw init --skip-plugin-init
 
 exec stfw scenario spec sample --out spec1.yml
-exec stfw scenario scaffold --force spec1.yml
+exec stfw scenario scaffold --sync spec1.yml
 exec stfw scenario spec sample --out spec2.yml
 cmp spec1.yml spec2.yml
 
@@ -17,7 +17,7 @@ exec stfw scenario scaffold custom.spec.yml
 exec stfw scenario spec custom --out custom.spec1.yml
 grep 'カスタムシナリオ' custom.spec1.yml
 grep 'SPEC-013-01' custom.spec1.yml
-exec stfw scenario scaffold --force custom.spec1.yml
+exec stfw scenario scaffold --sync custom.spec1.yml
 exec stfw scenario spec custom --out custom.spec2.yml
 cmp custom.spec1.yml custom.spec2.yml
 
