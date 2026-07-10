@@ -12,7 +12,7 @@ import (
 )
 
 // BuildDocFromTree は走査済みシナリオ (ScenarioView) + metadata.yml + config/config.yml から
-// `stfw scenario doc` のレンダリング用データ (scenario.DocData) を組み立てる (tree → doc の投影)。
+// `stfw scenario reverse` のレンダリング用データ (scenario.DocData) を組み立てる (tree → doc の投影)。
 func BuildDocFromTree(projDir string, view scenario.ScenarioView) (scenario.DocData, error) {
 	scenarioDir := filepath.Join(projDir, scenario.RootDirName, view.Name)
 	meta, err := ReadNodeMetadata(scenarioDir)

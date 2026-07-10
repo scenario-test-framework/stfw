@@ -204,27 +204,28 @@ compare-files（compare）を使うシナリオは、事前に `stfw plugin inst
 
 ここまでの `daily-balance` はディレクトリを直接編集して作りました。既存シナリオを
 レビュー用に文書化したい場合や、似た構造のシナリオを別名で量産したい場合は
-`stfw scenario doc/spec/scaffold` を使います。方式は「**tree（ディレクトリ構造）が
+`stfw scenario reverse/scaffold` を使います。方式は「**tree（ディレクトリ構造）が
 真実の源**・spec（構造化 YAML）は tree と可逆・doc（Markdown）は tree からの
 読み取り専用の投影」です（`stfw new scenario` の対話的な単一ノード生成とは別物）。
 
 ```sh
 cd examples/daily-balance/stfw
 
-# tree -> doc: シナリオをレビュー用 Markdown へ投影 (--out 省略時は stdout)
-stfw scenario doc daily-balance --out /tmp/daily-balance.md
-
-# tree -> spec: シナリオを構造化 YAML へ export (往復の出口)
-stfw scenario spec daily-balance --out /tmp/daily-balance.spec.yml
+# tree -> spec + doc: リバース生成 (spec .yml + doc .md をセット出力。既定出力先 docs/)
+stfw scenario reverse daily-balance
+#   -> docs/daily-balance.yml  (spec: ツリーと可逆な YAML)
+#   -> docs/daily-balance.md   (doc:  要求トレーサビリティ表つきのレビュー資料)
+# 出力先を変えるなら -o
+stfw scenario reverse daily-balance -o /tmp/out
 
 # spec -> tree: spec からシナリオ骨格 (metadata.yml + config/config.yml) を生成 (往復の入口)
-# 別名にコピーしてから量産する例 (scenario: の値を書き換えてから使う)
-stfw scenario scaffold /tmp/daily-balance-2.spec.yml
+# 別名で量産する例 (spec の scenario: の値を書き換えてから使う)
+stfw scenario scaffold /tmp/daily-balance-2.yml
 ```
 
-`doc` は要求トレーサビリティ表（`requirement_specifications` を全 process から集約）と
-業務日付ごとの process 一覧・設定を並べた読み取り専用のレビュー資料です。
-`spec` ⇄ `scaffold` は往復可能ですが、対象は**骨格のみ**です。
+`reverse` は spec（`.yml`）と doc（`.md`）を常にセットで生成します。doc は要求トレーサビリティ表
+（`requirement_specifications` を全 process から集約）と業務日付ごとの process 一覧・設定を並べた
+読み取り専用のレビュー資料です。`reverse`（spec）⇄ `scaffold` は往復可能ですが、対象は**骨格のみ**です。
 
 | 対象 | 往復可否 |
 |---|---|
@@ -236,7 +237,7 @@ spec を編集した後、tree をそれに揃えたい場合は `--sync` で差
 
 ```sh
 # 既存シナリオを spec に合わせて同期する (追加 / 維持 / 削除)
-stfw scenario scaffold --sync daily-balance.spec.yml
+stfw scenario scaffold --sync docs/daily-balance.yml
 # 削除したディレクトリは `removed: ...` 行で表示される
 ```
 
@@ -251,7 +252,7 @@ stfw scenario scaffold --sync daily-balance.spec.yml
 > `--sync` は spec から消えた bizdate/process を実装済みの葉（`data/`・`scripts/`・`expect/`）ごと
 > 削除する破壊的操作です。規約に合致しないディレクトリ（`notes/` 等）には触れません。
 
-詳細は [`docs/AS-BUILT.md`](AS-BUILT.md) §12（シナリオ doc/spec 投影と往復）を参照してください。
+詳細は [`docs/AS-BUILT.md`](AS-BUILT.md) §12（シナリオ reverse/scaffold 投影と往復）を参照してください。
 
 ## 参考
 

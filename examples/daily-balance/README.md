@@ -69,26 +69,26 @@ docker compose run --rm stfw run daily-balance   # compare が差分を検出し
 
 ## ドキュメント / spec（ラウンドトリップ）
 
-シナリオのツリー（=正）から、人が読む**ドキュメント**と、機械可読な **spec** を投影できます。
+シナリオのツリー（=正）から、機械可読な **spec** と人が読む**ドキュメント**をまとめて生成できます
+（リバース生成）。逆に spec からツリーを再生成することもできます。
 
 | コマンド | 生成物 | 用途 |
 |---|---|---|
-| `stfw scenario doc daily-balance` | [`stfw/docs/daily-balance.doc.md`](stfw/docs/daily-balance.doc.md) | フェーズ推定・**要求トレーサビリティ表**つきの Markdown |
-| `stfw scenario spec daily-balance` | [`stfw/docs/daily-balance.spec.yml`](stfw/docs/daily-balance.spec.yml) | ツリーと可逆な YAML（往復の出口） |
-| `stfw scenario scaffold <spec.yml>` | ディレクトリ骨格 | spec からツリーを再生成（往復の入口） |
+| `stfw scenario reverse daily-balance` | [`stfw/docs/daily-balance.yml`](stfw/docs/daily-balance.yml) + [`.md`](stfw/docs/daily-balance.md) | tree → spec (`.yml`) + doc (`.md`) をセット生成 |
+| `stfw scenario scaffold <spec.yml> [--sync]` | ディレクトリ骨格 | spec からツリーを生成／差分同期（往復の入口） |
 
-- doc / spec は各階層の `metadata.yml`（`description` / `requirement_specifications`）と
+- `reverse` は各階層の `metadata.yml`（`description` / `requirement_specifications`）と
   `config/config.yml` を読み取ります。本例では assert プロセスに `REQ-01` / `REQ-02` を紐づけ、
-  doc の「要求トレーサビリティ」表に「どの要求をどの process が検証するか」が出力されます。
-- `spec → scaffold → spec` は**完全一致**（骨格：seq / bizdate / group / type / description /
-  requirement_specifications / config.yml のサブツリー）。data CSV・script・expect などの葉は
-  対象外です。
+  doc（`.md`）の「要求トレーサビリティ」表に「どの要求をどの process が検証するか」が出力されます。
+- spec（`.yml`）はツリーと可逆で、`reverse → scaffold → reverse` は**完全一致**（骨格：seq /
+  bizdate / group / type / description / requirement_specifications / config.yml のサブツリー）。
+  data CSV・script・expect などの葉は対象外です。
 
-同梱の `stfw/docs/*.md` / `stfw/docs/*.spec.yml` は上記コマンドで生成した実出力です。手元で再生成するには（stfw サービスの作業ディレクトリ `/work` が `stfw/` にマウントされます）:
+同梱の `stfw/docs/daily-balance.{yml,md}` は上記コマンドで生成した実出力です。手元で再生成するには
+（stfw サービスの作業ディレクトリ `/work` が `stfw/` にマウントされます。既定出力先は `docs/`）:
 
 ```sh
-docker compose run --rm stfw scenario doc  daily-balance --out docs/daily-balance.doc.md
-docker compose run --rm stfw scenario spec daily-balance --out docs/daily-balance.spec.yml
+docker compose run --rm stfw scenario reverse daily-balance
 ```
 
 > 詳細は [`../../docs/GUIDE.md` §8](../../docs/GUIDE.md) を参照。
@@ -106,9 +106,9 @@ examples/daily-balance/
 └── stfw/               # stfw プロジェクト (stfw init 相当 + シナリオ)
     ├── stfw.yml
     ├── config/inventory/local.yml
-    ├── docs/               # ラウンドトリップ生成物 (doc / spec の実出力例)
-    │   ├── daily-balance.doc.md
-    │   └── daily-balance.spec.yml
+    ├── docs/               # リバース生成物 (spec + doc の実出力例)
+    │   ├── daily-balance.yml
+    │   └── daily-balance.md
     └── scenario/daily-balance/
         ├── _10_20240101/   # Day1: arrange→arrange→act→collect→assert
         └── _20_20240102/   # Day2: act→collect→assert (繰越)

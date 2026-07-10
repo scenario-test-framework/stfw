@@ -1,6 +1,6 @@
 package scenario
 
-// DocData は `stfw scenario doc` (tree → doc の投影) のレンダリング用データ。
+// DocData は `stfw scenario reverse` (tree → doc の投影) のレンダリング用データ。
 // ScenarioView 同様、tree 走査 + metadata.yml / config.yml 読取 (repository の責務) の
 // 結果を保持するだけの値オブジェクトであり、組み立てロジックは持たない。
 type DocData struct {

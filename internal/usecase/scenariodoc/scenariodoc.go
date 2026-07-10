@@ -1,6 +1,6 @@
-// Package scenariodoc は stfw scenario doc / spec のビジネスフローを制御する
-// (tree → doc・tree → spec の投影。tree が真実の源で doc/spec はその投影という
-// 方式に基づく。往復の入口 (spec → tree) は usecase/scaffold が担う)。
+// Package scenariodoc は stfw scenario reverse (tree → spec + doc) のビジネスフローを
+// 制御する (tree が真実の源で spec/doc はその投影という方式に基づく。往復の入口
+// spec → tree は usecase/scaffold が担う)。
 package scenariodoc
 
 import (
@@ -32,6 +32,25 @@ func ExportSpec(projDir, name string) (repository.ScenarioSpec, error) {
 		return repository.ScenarioSpec{}, err
 	}
 	return repository.BuildSpecFromTree(projDir, view)
+}
+
+// Reverse はシナリオ 1 つを spec YAML と doc Markdown の両方へ投影する
+// (tree → spec + doc のリバース生成)。`stfw scenario reverse` の中身で、
+// spec (往復の媒体) と doc (レビュー資料) を常にセットで返す。
+func Reverse(projDir, name string) (specYAML string, docMD string, err error) {
+	docMD, err = RenderDoc(projDir, name)
+	if err != nil {
+		return "", "", err
+	}
+	spec, err := ExportSpec(projDir, name)
+	if err != nil {
+		return "", "", err
+	}
+	raw, err := repository.MarshalSpec(spec)
+	if err != nil {
+		return "", "", err
+	}
+	return string(raw), docMD, nil
 }
 
 // loadScenarioView は projDir 配下のシナリオ name を走査して ScenarioView を返す。

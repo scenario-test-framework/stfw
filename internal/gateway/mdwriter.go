@@ -8,8 +8,8 @@ import (
 )
 
 // RenderScenarioDoc は scenario.DocData を Markdown へレンダリングする
-// (`stfw scenario doc` の tree → doc 投影)。データの組み立て (metadata.yml /
-// config.yml の読取・フェーズ推定・要求トレーサビリティ集約) は repository 層で
+// (`stfw scenario reverse` の tree → doc 投影)。データの組み立て (metadata.yml /
+// config.yml の読取・グループ抽出・要求トレーサビリティ集約) は repository 層で
 // 完了済みで、ここでは文字列の組み立てのみを担う (htmlwriter.go のテンプレート
 // レンダラに相当する役割)。golden テストで完全一致比較できるよう、テーブル・
 // コードブロックの改行制御を text/template の空白トリムに頼らず直接組み立てる。

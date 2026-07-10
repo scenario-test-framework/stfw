@@ -151,7 +151,7 @@ func (t *ScenarioTree) Validate(installedTypes []string) Violations {
 
 // StructureViolations はディレクトリ名規約 (`_{seq}_{bizdate}` / `_{seq}_{group}_{type}`) の
 // parse エラーのみを列挙する。Validate とは異なり、プラグイン解決可否・config.yml 存在・
-// 残存 *.dig は対象にしない (scenario doc/spec の投影はプラグイン未インストールでも
+// 残存 *.dig は対象にしない (scenario reverse の投影はプラグイン未インストールでも
 // 行えるべきだが、seq/group/type が空のまま壊れた doc/spec を出すのは避けたいため)。
 func (t *ScenarioTree) StructureViolations() Violations {
 	var vs Violations

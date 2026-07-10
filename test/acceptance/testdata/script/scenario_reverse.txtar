@@ -1,31 +1,34 @@
-# STEP: scenario doc (tree -> doc の投影)
+# STEP: scenario reverse (tree -> spec + doc のリバース生成)
 # metadata.yml / config/config.yml 済みの小さいシナリオを手書きし、
-# `stfw scenario doc` の出力が golden (期待 Markdown) と完全一致することを固定する。
+# `stfw scenario reverse` が spec (<name>.yml) と doc (<name>.md) をセット生成することを固定する。
+# doc は golden (期待 Markdown) と完全一致、spec はシナリオ名を含むことを確認する。
 
-exec stfw scenario doc mini
-cmp stdout mini.doc.md
+# 既定の出力先は docs/。spec (.yml) と doc (.md) の両方を生成する。
+exec stfw scenario reverse mini
+stdout '^docs/mini\.yml$'
+stdout '^docs/mini\.md$'
+exists docs/mini.yml
+cmp docs/mini.md mini.doc.md
+grep 'scenario: mini' docs/mini.yml
 
-# --out はファイルへ書き出し、書き出し先パスを stdout へ出力する
-exec stfw scenario doc mini --out mini.doc.out.md
-stdout '^mini.doc.out.md$'
-cmp mini.doc.out.md mini.doc.md
+# -o で出力先ディレクトリを指定できる (無ければ作成)
+exec stfw scenario reverse mini -o out
+exists out/mini.yml
+cmp out/mini.md mini.doc.md
 
 # 存在しないシナリオはエラー (exit 6)
-! exec stfw scenario doc nosuch
+! exec stfw scenario reverse nosuch
 stderr 'nosuch is not exist'
 
-# --- ディレクトリ命名規約違反は doc/spec とも失敗する (壊れた出力を成功扱いにしない) ---
-! exec stfw scenario doc badstruct
-stderr '_xx_bad_scripts'
-! exec stfw scenario spec badstruct
+# --- ディレクトリ命名規約違反は失敗する (壊れた出力を成功扱いにしない) ---
+! exec stfw scenario reverse badstruct
 stderr '_xx_bad_scripts'
 
-# --- 未インストールのプラグイン type・config.yml 不在は doc/spec を妨げない
-#     (プラグイン解決可否・config 存在は `stfw validate` の責務であって doc/spec の責務ではない) ---
-exec stfw scenario doc uninstalled
-stdout '_10_pre_customPlugin'
-exec stfw scenario spec uninstalled
-stdout 'customPlugin'
+# --- 未インストールのプラグイン type・config.yml 不在は reverse を妨げない
+#     (プラグイン解決可否・config 存在は `stfw validate` の責務であって reverse の責務ではない) ---
+exec stfw scenario reverse uninstalled
+grep '_10_pre_customPlugin' docs/uninstalled.md
+grep 'customPlugin' docs/uninstalled.yml
 
 -- stfw.yml --
 stfw:

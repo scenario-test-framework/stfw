@@ -101,7 +101,7 @@ func TestScenarioTreeValidateViolations(t *testing.T) {
 }
 
 // StructureViolations はディレクトリ命名規約違反のみを対象とし、プラグイン解決可否・
-// config.yml 存在・残存 *.dig は無視する (scenario doc/spec がプラグイン未インストールでも
+// config.yml 存在・残存 *.dig は無視する (scenario reverse がプラグイン未インストールでも
 // 投影できるべきという要件を固定する)。
 func TestScenarioTreeStructureViolations(t *testing.T) {
 	raw := RawDir{

@@ -8,7 +8,7 @@ import (
 	"github.com/scenario-test-framework/stfw/internal/domain/scenario"
 )
 
-// ScenarioSpec は scenario ⇄ tree 往復の構造化 YAML (`scenario.spec.yml`) の DTO。
+// ScenarioSpec は scenario ⇄ tree 往復の構造化 YAML (`{name}.yml`) の DTO。
 // tree が真実の源であり、spec は往復可能な骨格のみを持つ (data/scripts/expect 等の葉は
 // 対象外)。ディレクトリ構造ではなく DTO であるため domain には置かない。
 type ScenarioSpec struct {

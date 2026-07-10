@@ -89,8 +89,7 @@ BC 間の共有は ID とジャーナルイベントのみである。notify・H
 | `stfw new scenario <name>` | name | `{proj}/scenario/{name}/` を作成し `metadata.yml` を生成（冪等）。`scenario/` ディレクトリと stfw.yml の存在が前提 |
 | `stfw new bizdate <seq> <bizdate>` | seq, bizdate（YYYYMMDD） | カレントがシナリオディレクトリであることを要求。`_{seq}_{bizdate}/metadata.yml` を生成（冪等） |
 | `stfw new process <seq> <group> <type>` | seq, group, type | カレントが業務日付ディレクトリであることを要求。プラグインを解決し `_{seq}_{group}_{type}/` を**削除して作り直し**、プラグイン `template/` を展開 + `metadata.yml` 生成 |
-| `stfw scenario doc <name> [-o, --out <file>]` | name | シナリオを Markdown ドキュメントへ投影 (tree → doc)。`--out` 省略時は stdout |
-| `stfw scenario spec <name> [-o, --out <file>]` | name | シナリオを spec yaml へ export (tree → spec、§12 往復の出口)。`--out` 省略時は stdout |
+| `stfw scenario reverse <name> [-o, --out-dir <dir>]` | name | シナリオから spec (`<name>.yml`) + doc (`<name>.md`) をセット生成 (tree → spec + doc、§12)。既定出力先 `docs/` |
 | `stfw scenario scaffold <spec.yml> [--sync]` | spec ファイルパス | spec (structured yaml) からシナリオ骨格を生成 (spec → tree、§12 往復の入口)。既存シナリオディレクトリはエラー (`--sync` で差分同期: 追加/維持/削除) |
 | `stfw validate [scenario...]` | 省略時は全シナリオ | ディレクトリ規約・プラグイン解決可否・`config/config.yml` 存在を静的検証。エラー違反があれば exit 6、警告のみは exit 0 |
 | `stfw run [-d, --dry-run] <scenario...>` | 1 つ以上のシナリオ名 | 内蔵ランナーで実行（§4, §5）。実行前に validate 相当の静的検証を自動実行。dry-run は execute / post_execute をスキップ |
@@ -110,7 +109,7 @@ BC 間の共有は ID とジャーナルイベントのみである。notify・H
 | `stfw plugin redis-encode-row` | `--key/--type/--ttl`（stdin→stdout） | 隠しコマンド。redis 値を正規化し CSV 1 行へ変換する組込み Redis プラグイン用ヘルパ（§4.10） |
 | `stfw plugin redis-decode` | なし（stdin→stdout） | 隠しコマンド。export CSV を redis-cli コマンド列へ変換する組込み Redis プラグイン用ヘルパ（§4.10） |
 
-> 根拠: `internal/presentation/cli/*.go`（全コマンド定義）, `internal/domain/run/exitcode.go`, `internal/presentation/logger/logger.go`, `test/acceptance/testdata/script/{init,new,validate,status,report,inventory,secret,ssh_trust,plugin,scenario_doc,scenario_scaffold,scenario_roundtrip}.txtar`
+> 根拠: `internal/presentation/cli/*.go`（全コマンド定義）, `internal/domain/run/exitcode.go`, `internal/presentation/logger/logger.go`, `test/acceptance/testdata/script/{init,new,validate,status,report,inventory,secret,ssh_trust,plugin,scenario_reverse,scenario_scaffold,scenario_roundtrip}.txtar`
 
 ---
 
@@ -863,19 +862,18 @@ stfw_inventory:
 
 ---
 
-## 12. シナリオ doc/spec 投影と往復（scenario doc/spec/scaffold）
+## 12. シナリオ reverse/scaffold 投影と往復（scenario reverse/scaffold）
 
 `stfw new scenario`（対話・単一ノード生成）とは別に、tree（ディレクトリ構造）を
-Markdown ドキュメント・構造化 YAML (spec) へ投影し、spec からディレクトリ骨格を
-再生成できる。方式は「**tree が真実の源**・spec は tree と可逆な媒体・doc は
+構造化 YAML (spec) + Markdown ドキュメントへ投影し（`reverse`）、spec からディレクトリ骨格を
+再生成できる（`scaffold`）。方式は「**tree が真実の源**・spec は tree と可逆な媒体・doc は
 tree からの読み取り専用の投影」。
 
 ### 12.1 コマンド契約
 
 | コマンド | 方向 | 動作 |
 |---|---|---|
-| `stfw scenario doc <name> [-o, --out <file>]` | tree → doc | シナリオを Markdown へ投影。`--out` 省略時は stdout |
-| `stfw scenario spec <name> [-o, --out <file>]` | tree → spec | シナリオを spec yaml へ export（往復の出口）。`--out` 省略時は stdout |
+| `stfw scenario reverse <name> [-o, --out-dir <dir>]` | tree → spec + doc | シナリオから spec (`<name>.yml`) と doc (`<name>.md`) を**セット生成**する。出力先ディレクトリは `-o`（既定: `docs/`）。ファイル名はシナリオ名固定・stdout は使わない |
 | `stfw scenario scaffold <spec.yml> [--sync]` | spec → tree | spec からディレクトリ骨格（`metadata.yml` + `config/config.yml`）を生成（往復の入口）。`--sync` で spec との差分同期 |
 
 - `<name>` は `scenario/{name}`。いずれもプロジェクトルート（`stfw.yml` のある dir）で実行する。
@@ -962,12 +960,12 @@ process 一覧表・詳細節の「グループ」列は、ディレクトリ名
 
 `metadata.yml` は `stfw new`（scenario/bizdate/process の scaffold）が空スタブ
 （`description:` / `requirement_specifications:` とも空）を生成するのみで、v1.0 は
-これまで読み取り側を持たなかった（生成専用）。`stfw scenario doc` / `stfw scenario spec` が
+これまで読み取り側を持たなかった（生成専用）。`stfw scenario reverse` が
 `internal/repository/metadata.go` の `ReadNodeMetadata` を介して読む最初の consumer になる
 （ファイル不在・空値はゼロ値として許容し、既存の空スタブと後方互換）。
 
 > 根拠: `internal/presentation/cli/scenario.go`, `internal/usecase/scaffold/scaffold.go`
-> (`ScaffoldFromSpec`), `internal/usecase/scenariodoc/scenariodoc.go`,
-> `internal/repository/{metadata,processconfig,scenariospec,scenariodoc}.go`,
-> `internal/gateway/mdwriter.go`, `internal/domain/scenario/{phase,docview}.go`,
-> `test/acceptance/testdata/script/{scenario_doc,scenario_scaffold,scenario_roundtrip}.txtar`
+> (`ScaffoldFromSpec`), `internal/usecase/scenariodoc/scenariodoc.go` (`Reverse`),
+> `internal/repository/{metadata,processconfig,scenariospec,scenariodoc,scaffoldprune}.go`,
+> `internal/gateway/mdwriter.go`, `internal/domain/scenario/docview.go`,
+> `test/acceptance/testdata/script/{scenario_reverse,scenario_scaffold,scenario_roundtrip}.txtar`

@@ -1,25 +1,25 @@
 # STEP: scenario roundtrip (spec -> tree -> spec の往復セマンティクス、plan §7)
-# `scenario spec` (tree -> spec) → `scenario scaffold --sync` (spec -> tree') →
-# 再度 `scenario spec` (tree' -> spec') で spec == spec' (バイト完全一致) を固定する。
+# `scenario reverse` (tree -> spec+doc) → `scenario scaffold --sync` (spec -> tree') →
+# 再度 `scenario reverse` (tree' -> spec') で spec == spec' (バイト完全一致) を固定する。
 # 既存シナリオ (init テンプレートの sample) を対象に、tree に手を加えず往復させる。
 
 exec stfw init --skip-plugin-init
 
-exec stfw scenario spec sample --out spec1.yml
-exec stfw scenario scaffold --sync spec1.yml
-exec stfw scenario spec sample --out spec2.yml
-cmp spec1.yml spec2.yml
+exec stfw scenario reverse sample -o r1
+exec stfw scenario scaffold --sync r1/sample.yml
+exec stfw scenario reverse sample -o r2
+cmp r1/sample.yml r2/sample.yml
 
 # config/description/requirement_specifications を含むシナリオでも往復が安定する
 # (custom.spec.yml の手書きインデントと MarshalSpec の正規化インデントは異なりうるため、
 # ここでは「意味的な往復」= 2 回目以降の spec が完全一致することのみを固定する)
 exec stfw scenario scaffold custom.spec.yml
-exec stfw scenario spec custom --out custom.spec1.yml
-grep 'カスタムシナリオ' custom.spec1.yml
-grep 'SPEC-013-01' custom.spec1.yml
-exec stfw scenario scaffold --sync custom.spec1.yml
-exec stfw scenario spec custom --out custom.spec2.yml
-cmp custom.spec1.yml custom.spec2.yml
+exec stfw scenario reverse custom -o c1
+grep 'カスタムシナリオ' c1/custom.yml
+grep 'SPEC-013-01' c1/custom.yml
+exec stfw scenario scaffold --sync c1/custom.yml
+exec stfw scenario reverse custom -o c2
+cmp c1/custom.yml c2/custom.yml
 
 -- custom.spec.yml --
 scenario: custom
