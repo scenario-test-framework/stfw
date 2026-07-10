@@ -1,6 +1,6 @@
 description: |
   シナリオ共通の口座名義マスタ (users) を投入する (seed)。
   カスタムプラグイン importMasterData の実装例。共通データ
-  config/plugins/importMasterData/data/appdb/users.csv を読み、組込み importPostgres へ委譲する。
+  config/plugins/process/importMasterData/data/appdb/users.csv を読み、組込み importPostgres へ委譲する。
 
 requirement_specifications:

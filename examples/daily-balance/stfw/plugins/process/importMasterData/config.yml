@@ -2,7 +2,7 @@
 #
 # 複数シナリオで共有するテスト共通のマスタ/参照データを投入するためのカスタムプラグイン。
 # 共通データの置き場 (シナリオ非依存・プロジェクト共通):
-#   config/plugins/importMasterData/data/{database}/{table}.csv
+#   config/plugins/process/importMasterData/data/{database}/{table}.csv
 #
 # 接続系は組込み importPostgres と同じ:
 #   host_group : 接続先 DB ホストを解決する inventory グループ名
@@ -11,7 +11,7 @@
 #   user       : 接続ユーザー (パスワードは secret {host}-{user} で解決)
 #
 # tables : 取り込む共通データ (テーブル名) のリスト。プラグインが
-#   config/plugins/importMasterData/data/{database}/{table}.csv を解決する。
+#   config/plugins/process/importMasterData/data/{database}/{table}.csv を解決する。
 #
 # 接続情報 (ホスト・パスワード) を config に直書きしてはならない (禁止契約)。
 stfw:

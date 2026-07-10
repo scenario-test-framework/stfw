@@ -3,7 +3,7 @@
 # マスタデータを投入する Arrange。
 #
 # 共通データの置き場 (シナリオ非依存・プロジェクト共通):
-#   config/plugins/importMasterData/data/{database}/{table}.csv
+#   config/plugins/process/importMasterData/data/{database}/{table}.csv
 # 任意のシナリオの importMasterData プロセスが tables に名前を宣言するだけで取り込める。
 #
 # 主眼は「カスタムプラグインは組込みプラグインを部品として再利用できる」こと。
@@ -23,7 +23,7 @@ if [ -z "${database}" ]; then
 fi
 
 # シナリオ共通のマスタデータ置き場 (STFW_PROJ_DIR_CONFIG = {projDir}/config)
-shared_root="${STFW_PROJ_DIR_CONFIG}/plugins/importMasterData/data/${database}"
+shared_root="${STFW_PROJ_DIR_CONFIG}/plugins/process/importMasterData/data/${database}"
 dest_root="${stfw_process_dir}/data/${database}"
 mkdir -p "${dest_root}"
 
