@@ -1,0 +1,101 @@
+scenario: daily-balance
+description: |
+    日次残高バッチのシナリオテスト (プラグインエコシステムの実プロジェクト例)。
+    業務日付をまたいで口座残高の繰越を検証する。
+    Arrange (clear/import) → Act (invokeRest) → Collect (exportPostgres) → Assert (compare)。
+requirement_specifications:
+    - REQ-01 当日取引が口座残高へ正しく反映される
+    - REQ-02 前業務日の残高が翌業務日へ繰り越される
+bizdates:
+    - seq: "10"
+      bizdate: "20240101"
+      description: |
+        Day1 (2024-01-01)。初期残高を投入し、当日の取引を反映して残高を検証する。
+        reset(truncate) → seed(口座マスタ投入) → 取引 POST → 残高収集 → 期待値突合。
+      processes:
+        - seq: "10"
+          group: arrange
+          type: clearPostgres
+          description: |
+            accounts / transactions を truncate して初期状態にする (reset)。
+          config:
+            database: appdb
+            host_group: db
+            tables:
+                - transactions
+                - accounts
+            user: appuser
+        - seq: "20"
+          group: arrange
+          type: importPostgres
+          description: |
+            初期残高 CSV (acc-001=1000 / acc-002=2000) を accounts へ投入する (seed)。
+          config:
+            database: appdb
+            host_group: db
+            tables:
+                - accounts
+            user: appuser
+        - seq: "30"
+          group: act
+          type: invokeRest
+          description: |
+            取引を API へ POST する (acc-001 +500 / acc-002 +300)。
+          config:
+            host_group: api
+            script: script.js
+        - seq: "40"
+          group: collect
+          type: exportPostgres
+          description: |
+            取引反映後の残高を evidence/appdb/accounts.csv へ収集する。
+          config:
+            database: appdb
+            host_group: db
+            tables:
+                - accounts
+            user: appuser
+        - seq: "50"
+          group: assert
+          type: compare
+          description: |
+            当日残高が期待値 (acc-001=1500 / acc-002=2300) と一致することを検証する。
+          requirement_specifications:
+            - REQ-01 当日取引が口座残高へ正しく反映される
+          config:
+            compare_files_version: v2.2.0
+    - seq: "20"
+      bizdate: "20240102"
+      description: |
+        Day2 (2024-01-02)。Day1 の残高を「繰り越して」当日の取引を反映する。
+        reset/seed は行わず (前日状態を引き継ぐ)、取引 POST → 残高収集 → 累積残高の突合。
+      processes:
+        - seq: "10"
+          group: act
+          type: invokeRest
+          description: |
+            前業務日の残高に対して取引を POST する (acc-001 -200 / acc-002 +100)。
+          config:
+            host_group: api
+            script: script.js
+        - seq: "20"
+          group: collect
+          type: exportPostgres
+          description: |
+            取引反映後の累積残高を evidence/appdb/accounts.csv へ収集する。
+          config:
+            database: appdb
+            host_group: db
+            tables:
+                - accounts
+            user: appuser
+        - seq: "30"
+          group: assert
+          type: compare
+          description: |
+            繰越後の累積残高が期待値 (acc-001=1300 / acc-002=2400) と一致することを検証する。
+          requirement_specifications:
+            - REQ-01 当日取引が口座残高へ正しく反映される
+            - REQ-02 前業務日の残高が翌業務日へ繰り越される
+          config:
+            compare_files_version: v2.2.0

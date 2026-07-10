@@ -1,0 +1,5 @@
+description: |
+  当日残高が期待値 (acc-001=1500 / acc-002=2300) と一致することを検証する。
+
+requirement_specifications:
+  - "REQ-01 当日取引が口座残高へ正しく反映される"

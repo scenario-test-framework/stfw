@@ -1,0 +1,4 @@
+description: |
+  前業務日の残高に対して取引を POST する (acc-001 -200 / acc-002 +100)。
+
+requirement_specifications:

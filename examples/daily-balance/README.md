@@ -67,6 +67,32 @@ vi stfw/scenario/daily-balance/_10_20240101/_50_assert_compare/expect/_40_collec
 docker compose run --rm stfw run daily-balance   # compare が差分を検出し Error 終了
 ```
 
+## ドキュメント / spec（ラウンドトリップ）
+
+シナリオのツリー（=正）から、人が読む**ドキュメント**と、機械可読な **spec** を投影できます。
+
+| コマンド | 生成物 | 用途 |
+|---|---|---|
+| `stfw scenario doc daily-balance` | [`stfw/docs/daily-balance.doc.md`](stfw/docs/daily-balance.doc.md) | フェーズ推定・**要求トレーサビリティ表**つきの Markdown |
+| `stfw scenario spec daily-balance` | [`stfw/docs/daily-balance.spec.yml`](stfw/docs/daily-balance.spec.yml) | ツリーと可逆な YAML（往復の出口） |
+| `stfw scenario scaffold <spec.yml>` | ディレクトリ骨格 | spec からツリーを再生成（往復の入口） |
+
+- doc / spec は各階層の `metadata.yml`（`description` / `requirement_specifications`）と
+  `config/config.yml` を読み取ります。本例では assert プロセスに `REQ-01` / `REQ-02` を紐づけ、
+  doc の「要求トレーサビリティ」表に「どの要求をどの process が検証するか」が出力されます。
+- `spec → scaffold → spec` は**完全一致**（骨格：seq / bizdate / group / type / description /
+  requirement_specifications / config.yml のサブツリー）。data CSV・script・expect などの葉は
+  対象外です。
+
+同梱の `stfw/docs/*.md` / `stfw/docs/*.spec.yml` は上記コマンドで生成した実出力です。手元で再生成するには（stfw サービスの作業ディレクトリ `/work` が `stfw/` にマウントされます）:
+
+```sh
+docker compose run --rm stfw scenario doc  daily-balance --out docs/daily-balance.doc.md
+docker compose run --rm stfw scenario spec daily-balance --out docs/daily-balance.spec.yml
+```
+
+> 詳細は [`../../docs/GUIDE.md` §8](../../docs/GUIDE.md) を参照。
+
 ## ディレクトリ
 
 ```
@@ -80,6 +106,9 @@ examples/daily-balance/
 └── stfw/               # stfw プロジェクト (stfw init 相当 + シナリオ)
     ├── stfw.yml
     ├── config/inventory/local.yml
+    ├── docs/               # ラウンドトリップ生成物 (doc / spec の実出力例)
+    │   ├── daily-balance.doc.md
+    │   └── daily-balance.spec.yml
     └── scenario/daily-balance/
         ├── _10_20240101/   # Day1: arrange→arrange→act→collect→assert
         └── _20_20240102/   # Day2: act→collect→assert (繰越)

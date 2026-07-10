@@ -4,3 +4,5 @@ description: |
   Arrange (clear/import) → Act (invokeRest) → Collect (exportPostgres) → Assert (compare)。
 
 requirement_specifications:
+  - "REQ-01 当日取引が口座残高へ正しく反映される"
+  - "REQ-02 前業務日の残高が翌業務日へ繰り越される"

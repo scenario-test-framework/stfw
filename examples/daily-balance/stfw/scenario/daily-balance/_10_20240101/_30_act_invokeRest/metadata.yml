@@ -1,0 +1,4 @@
+description: |
+  取引を API へ POST する (acc-001 +500 / acc-002 +300)。
+
+requirement_specifications:
