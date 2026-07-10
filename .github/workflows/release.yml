@@ -44,7 +44,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=latest
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           target: runtime
@@ -66,7 +66,7 @@ jobs:
           # full 側が通常版の latest を上書きしないよう明示的に無効化する
           flavor: |
             latest=false
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           target: full

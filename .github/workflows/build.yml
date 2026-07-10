@@ -34,13 +34,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           target: runtime
           push: false
       # 全組込みプラグインのランタイム同梱版もビルド検証する
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           target: full
