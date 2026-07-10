@@ -232,9 +232,22 @@ stfw scenario scaffold /tmp/daily-balance-2.spec.yml
 | `data/**`（CSV 等）・`scripts/**`・`expect/**`・secret・階層フック `plugins/**` | ❌（人が書く葉。`scaffold` は生成しない） |
 
 `scaffold` は既存のシナリオディレクトリがあると既定でエラーになります（誤上書き防止）。
-`--force` で再生成できますが、`metadata.yml` / `config/config.yml` の上書きのみを行い
-ディレクトリ削除は一切しないため、手動で追加した `data/`・`scripts/`・`expect/` は
-再生成後も残ります。詳細は [`docs/AS-BUILT.md`](AS-BUILT.md) §12（シナリオ doc/spec 投影と往復）を参照してください。
+`--force` は再生成を許可しますが `metadata.yml` / `config/config.yml` の上書きのみで削除はせず、
+手動で追加した `data/`・`scripts/`・`expect/` は再生成後も残ります。
+
+spec を編集して bizdate/process を削除した後、tree もそれに揃えたい場合は `--prune` を使います。
+spec との差分同期で「spec に無いディレクトリを削除・在るディレクトリを維持・不足を追加」します。
+
+```sh
+# spec に無くなった bizdate/process を (実装済みの葉ごと) 削除して同期する
+stfw scenario scaffold --prune daily-balance.spec.yml
+# 削除したディレクトリは `removed: ...` 行で表示される
+```
+
+> `--prune` は実装済みの葉（`data/`・`scripts/`・`expect/`）を巻き込んで削除する破壊的操作です
+> （`--force` を含意）。規約に合致しないディレクトリ（`notes/` 等）には触れません。
+
+詳細は [`docs/AS-BUILT.md`](AS-BUILT.md) §12（シナリオ doc/spec 投影と往復）を参照してください。
 
 ## 参考
 

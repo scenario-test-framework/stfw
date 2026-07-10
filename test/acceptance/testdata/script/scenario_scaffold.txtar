@@ -39,6 +39,28 @@ exec touch scenario/built/_10_20240101/_10_pre_scripts/scripts/100_manual
 exec stfw scenario scaffold --force spec.yml
 exists scenario/built/_10_20240101/_10_pre_scripts/scripts/100_manual
 
+# --- --prune は spec との差分同期 (spec に無いディレクトリを削除、葉は温存) ---
+# spec に無い余分な bizdate / process を葉つきで追加
+mkdir scenario/built/_20_29991231/_10_extra_scripts
+exec touch scenario/built/_20_29991231/_10_extra_scripts/leaf
+mkdir scenario/built/_10_20240101/_99_extra_scripts
+exec touch scenario/built/_10_20240101/_99_extra_scripts/leaf
+# 規約外のディレクトリ (prune 対象外)
+mkdir scenario/built/notes
+exec touch scenario/built/notes/memo
+
+exec stfw scenario scaffold --prune spec.yml
+stdout 'removed: scenario/built/_20_29991231'
+stdout 'removed: scenario/built/_10_20240101/_99_extra_scripts'
+
+# spec に無い bizdate/process は削除される
+! exists scenario/built/_20_29991231
+! exists scenario/built/_10_20240101/_99_extra_scripts
+# spec にある process 配下の手動の葉は温存される
+exists scenario/built/_10_20240101/_10_pre_scripts/scripts/100_manual
+# 規約外のディレクトリは触れない
+exists scenario/built/notes/memo
+
 # --- 不正な spec は VO 検証エラーになる (group に "_" を含む) ---
 ! exec stfw scenario scaffold bad_group.yml
 stderr 'can not contains'

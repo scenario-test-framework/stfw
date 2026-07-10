@@ -102,10 +102,16 @@ func Process(log *slog.Logger, out io.Writer, projDir, cwd, seqStr, groupStr, pr
 // ScaffoldFromSpec は spec (repository.ScenarioSpec) から scenario/bizdate/process の
 // ディレクトリ骨格 (metadata.yml + config/config.yml) を生成する (spec → tree、往復の入口)。
 // data/scripts/expect 等の葉は生成しない (往復対象は骨格のみ。plan §0)。
-// シナリオディレクトリが既に存在する場合、force が false ならエラーにする
-// (誤上書き防止。既定は fail-safe)。CreateSpecNode は削除を行わないため、force で
-// 再生成しても既存の葉ディレクトリ (data/scripts/expect) は温存される。
-func ScaffoldFromSpec(log *slog.Logger, out io.Writer, projDir string, spec repository.ScenarioSpec, force bool) error {
+//
+// 差分同期の挙動:
+//   - spec にあり disk に無い: 追加
+//   - 両方にある: 維持 (metadata.yml / config.yml は spec で上書き、葉は温存)
+//   - disk にあり spec に無い: force のみでは温存、prune 指定時のみ削除 (破壊的)
+//
+// シナリオディレクトリが既に存在する場合、force / prune いずれも false ならエラーに
+// する (誤上書き防止。既定は fail-safe)。prune は spec に無い bizdate/process ディレクトリを
+// 実装済みの葉ごと削除するため force を含意する。
+func ScaffoldFromSpec(log *slog.Logger, out io.Writer, projDir string, spec repository.ScenarioSpec, force, prune bool) error {
 	plan, err := planFromSpec(spec)
 	if err != nil {
 		return err
@@ -117,18 +123,51 @@ func ScaffoldFromSpec(log *slog.Logger, out io.Writer, projDir string, spec repo
 	}
 
 	scenarioDir := filepath.Join(root, plan.name)
-	if repository.DirExists(scenarioDir) && !force {
-		return fmt.Errorf("%s already exists (use --force to regenerate)", scenarioDir)
+	existed := repository.DirExists(scenarioDir)
+	if existed && !force && !prune {
+		return fmt.Errorf("%s already exists (use --force to regenerate, --prune to sync)", scenarioDir)
 	}
 
 	created, err := writeSpecPlan(scenarioDir, plan)
 	if err != nil {
 		return fmt.Errorf("scenario scaffold: %w", err)
 	}
-
 	printCreated(out, projDir, created)
+
+	// prune: spec に無い bizdate/process ディレクトリを削除する (追加・上書きの後に実施)。
+	if prune && existed {
+		removed, err := repository.PruneScenarioTree(scenarioDir, keptBizdateDirs(plan), keptProcessDirs(plan))
+		if err != nil {
+			return fmt.Errorf("scenario scaffold prune: %w", err)
+		}
+		printRemoved(out, projDir, removed)
+		log.Info("scenario scaffold pruned", "scenario", plan.name, "removed", len(removed))
+	}
+
 	log.Info("scenario scaffold generated", "scenario", plan.name, "bizdates", len(plan.bizdates))
 	return nil
+}
+
+// keptBizdateDirs は plan に含まれる bizdate ディレクトリ名の集合を返す (prune で残す対象)。
+func keptBizdateDirs(plan specPlan) map[string]bool {
+	kept := make(map[string]bool, len(plan.bizdates))
+	for _, b := range plan.bizdates {
+		kept[b.dirName] = true
+	}
+	return kept
+}
+
+// keptProcessDirs は plan の各 bizdate 配下で残す process ディレクトリ名の集合を返す。
+func keptProcessDirs(plan specPlan) map[string]map[string]bool {
+	kept := make(map[string]map[string]bool, len(plan.bizdates))
+	for _, b := range plan.bizdates {
+		ps := make(map[string]bool, len(b.processes))
+		for _, p := range b.processes {
+			ps[p.dirName] = true
+		}
+		kept[b.dirName] = ps
+	}
+	return kept
 }
 
 // specPlan は spec を検証済みのディレクトリ名へ変換した中間表現。
@@ -284,5 +323,17 @@ func printCreated(out io.Writer, projDir string, created []string) {
 			rel = p
 		}
 		fmt.Fprintln(out, filepath.ToSlash(rel))
+	}
+}
+
+// printRemoved は prune で削除したディレクトリを "removed: " プレフィックス付きで
+// 出力する (作成行と区別できるようにする)。
+func printRemoved(out io.Writer, projDir string, removed []string) {
+	for _, p := range removed {
+		rel, err := filepath.Rel(projDir, p)
+		if err != nil {
+			rel = p
+		}
+		fmt.Fprintln(out, "removed: "+filepath.ToSlash(rel))
 	}
 }
