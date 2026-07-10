@@ -1,0 +1,7 @@
+# Act: トイ API へ当日の取引を POST する (grafana k6)。
+# host_group=api の先頭ホストが __ENV.stfw_target_host として k6 に渡る。
+stfw:
+  process:
+    invokeRest:
+      host_group: api
+      script: script.js

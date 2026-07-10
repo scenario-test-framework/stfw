@@ -1,0 +1,10 @@
+# Arrange: 口座マスタ (初期残高) を投入する。
+# 入力 CSV: data/appdb/accounts.csv (exportPostgres と同じ CSV 形式)。
+stfw:
+  process:
+    importPostgres:
+      host_group: db
+      database: appdb
+      user: appuser
+      tables:
+        - accounts

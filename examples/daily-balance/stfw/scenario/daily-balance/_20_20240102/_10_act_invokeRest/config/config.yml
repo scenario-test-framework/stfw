@@ -1,0 +1,6 @@
+# Act: Day2 の取引を POST する。前日の残高に対して加減算される。
+stfw:
+  process:
+    invokeRest:
+      host_group: api
+      script: script.js

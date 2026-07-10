@@ -1,0 +1,13 @@
+.DS_Store
+
+.stfw/
+
+# run.sh が生成する暗号鍵と暗号化済みクレデンシャル (デモ用途・コミットしない)
+config/encrypt/
+config/passwd/
+
+# 収集系プラグインの出力・compare の生成物 (エビデンスディレクトリ規約)。
+# expect/ のみ git 管理し、収集結果 (evidence) と比較の中間物 (actual/result) は追跡しない。
+evidence/
+actual/
+result/

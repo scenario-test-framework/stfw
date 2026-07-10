@@ -1,0 +1,12 @@
+stfw:
+  project_version: 1.0.0
+
+  loglevel: "info"
+  timezone: "Asia/Tokyo"
+
+  # この example 用のインベントリ (compose のサービス名でホストを解決する)
+  inventory: local.yml
+
+  # example では実行結果を消さない (無期限保存)
+  housekeep:
+    retention_days: 0

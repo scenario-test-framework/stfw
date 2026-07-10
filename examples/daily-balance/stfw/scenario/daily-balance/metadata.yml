@@ -1,0 +1,6 @@
+description: |
+  日次残高バッチのシナリオテスト (プラグインエコシステムの実プロジェクト例)。
+  業務日付をまたいで口座残高の繰越を検証する。
+  Arrange (clear/import) → Act (invokeRest) → Collect (exportPostgres) → Assert (compare)。
+
+requirement_specifications:

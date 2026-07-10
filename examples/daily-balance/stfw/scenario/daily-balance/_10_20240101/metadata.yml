@@ -1,0 +1,5 @@
+description: |
+  Day1 (2024-01-01)。初期残高を投入し、当日の取引を反映して残高を検証する。
+  reset(truncate) → seed(口座マスタ投入) → 取引 POST → 残高収集 → 期待値突合。
+
+requirement_specifications:

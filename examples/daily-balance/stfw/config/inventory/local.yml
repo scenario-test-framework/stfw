@@ -1,0 +1,6 @@
+# daily-balance example のインベントリ。ホスト名は compose のサービス名。
+stfw_inventory:
+  - db:
+    - postgres
+  - api:
+    - api

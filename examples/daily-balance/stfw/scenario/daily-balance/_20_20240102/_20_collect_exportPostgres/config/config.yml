@@ -1,0 +1,9 @@
+# Collect: Day2 取引反映後の残高を収集する。
+stfw:
+  process:
+    exportPostgres:
+      host_group: db
+      database: appdb
+      user: appuser
+      tables:
+        - accounts

@@ -1,0 +1,5 @@
+description: |
+  Day2 (2024-01-02)。Day1 の残高を「繰り越して」当日の取引を反映する。
+  reset/seed は行わず (前日状態を引き継ぐ)、取引 POST → 残高収集 → 累積残高の突合。
+
+requirement_specifications:

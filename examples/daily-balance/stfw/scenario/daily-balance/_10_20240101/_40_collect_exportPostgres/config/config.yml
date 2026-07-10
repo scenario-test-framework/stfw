@@ -1,0 +1,10 @@
+# Collect: 取引反映後の残高を CSV エビデンス化する。
+# 出力: evidence/appdb/accounts.csv
+stfw:
+  process:
+    exportPostgres:
+      host_group: db
+      database: appdb
+      user: appuser
+      tables:
+        - accounts

@@ -1,0 +1,5 @@
+# Assert: Day1 からの累積残高を期待値と突合する。
+stfw:
+  process:
+    compare:
+      compare_files_version: v2.2.0

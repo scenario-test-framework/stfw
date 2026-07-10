@@ -1,0 +1,10 @@
+# Arrange: 前回実行の状態を消す (冪等化)。transactions → accounts の順に truncate。
+stfw:
+  process:
+    clearPostgres:
+      host_group: db
+      database: appdb
+      user: appuser
+      tables:
+        - transactions
+        - accounts
