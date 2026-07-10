@@ -13,6 +13,8 @@
 #   避けるため環境変数として export し (k6 は include-system-env-vars 既定 true で __ENV へ
 #   取り込む)、Masker が出力をマスクする。
 # 出力: end-of-test サマリを ${stfw_process_dir}/evidence/summary.json (--summary-export) へ。
+#   そのサマリから自己完結の HTML レポート evidence/report.html を生成する
+#   (k6 本体の web dashboard は負荷テスト向けで単発 Act では生成されないため、サマリから作る)。
 #
 # 終了コード: k6 は 0=成功 / 99=閾値失敗 / 100+=各種エラー / 105=外部中断 を返す。
 #   本プラグインは「Act の失敗はステップ失敗」に従い、非 0 を一律 exit 6 とする。
@@ -96,6 +98,40 @@ done
 
 "${k6_bin}" "${k6_args[@]}" "${script}"
 k6_rc=$?
+
+# サマリ (summary.json) から自己完結の HTML レポートを生成する。
+# k6 が失敗 (閾値割れ等) してもサマリは出るため、evidence として常に残す。
+summary="${stfw_process_dir}/evidence/summary.json"
+report="${stfw_process_dir}/evidence/report.html"
+if [ -f "${summary}" ]; then
+  {
+    cat <<'HTML'
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>k6 report</title>
+<style>body{font:14px/1.6 system-ui,sans-serif;margin:2rem;color:#222}
+h1{font-size:1.1rem}table{border-collapse:collapse;margin-top:1rem}
+th,td{border:1px solid #ccc;padding:4px 10px;text-align:left}th{background:#f4f4f4}</style>
+</head><body><h1>k6 summary</h1><div id="app">summary.json を読み込めませんでした。</div>
+<script id="k6" type="application/json">
+HTML
+    cat "${summary}"
+    cat <<'HTML'
+</script>
+<script>
+const d = JSON.parse(document.getElementById('k6').textContent);
+const m = d.metrics || {};
+const rows = Object.keys(m).sort().map(k => {
+  const v = m[k].values || m[k];
+  const cells = Object.entries(v)
+    .map(([n, x]) => `${n}=${typeof x === 'number' ? x.toFixed(2) : x}`).join(', ');
+  return `<tr><td>${k}</td><td>${cells}</td></tr>`;
+}).join('');
+document.getElementById('app').innerHTML =
+  `<table><tr><th>metric</th><th>values</th></tr>${rows}</table>`;
+</script></body></html>
+HTML
+  } > "${report}"
+fi
 
 if [ "${k6_rc}" -eq 0 ]; then
   exit 0

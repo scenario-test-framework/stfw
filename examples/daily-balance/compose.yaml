@@ -1,9 +1,10 @@
 # daily-balance example の実行環境。
 #   ./run.sh                       # 依存起動 → secret 準備 → stfw run → レポート配信
 # もしくは個別に:
-#   docker compose up -d postgres api            # SUT (テスト対象) を起動
+#   docker compose up -d postgres api jaeger     # SUT (テスト対象) + トレース送信先を起動
 #   docker compose run --rm stfw run daily-balance
 #   docker compose up -d nginx && open http://localhost:8088   # HTML レポート閲覧
+#   open http://localhost:16686                  # Jaeger UI で実行トレースを閲覧
 configs:
   nginx_conf:
     content: |
@@ -46,6 +47,14 @@ services:
       timeout: 3s
       retries: 15
 
+  # --- OTLP トレースの送信先 (Jaeger all-in-one。UI + collector + インメモリ保存) ---
+  # Jaeger v2 は OTLP 受信 (gRPC 4317 / HTTP 4318) が既定で有効。stfw は HTTP 4318 へ送る。
+  jaeger:
+    image: jaegertracing/jaeger:latest
+    ports:
+      # トレース閲覧 UI。他サービスと衝突する場合は STFW_JAEGER_PORT で変更可
+      - "${STFW_JAEGER_PORT:-16686}:16686"
+
   # --- stfw 本体 (全ランタイム同梱の :full。psql / k6 を内蔵) ---
   stfw:
     image: ghcr.io/scenario-test-framework/stfw:full
@@ -53,8 +62,12 @@ services:
       context: ../..
       target: full
     working_dir: /work
-    # DB 接続先の identity (database / user) は stfw 側の stfw.yml (stfw.db.*) が正。
-    # ここに env は置かない (config の ${stfw_db_*} は run 開始時に stfw.yml から解決)。
+    # DB 接続先の identity (database / user) は stfw 側の stfw.yml (stfw.db.*) が正なので
+    # ここには置かない (config の ${stfw_db_*} は run 開始時に stfw.yml から解決)。
+    environment:
+      # OTLP トレースの送信先 (OTel 標準の環境変数。stfw の解決順で最優先)。
+      # 実行状況を Jaeger UI (下記 jaeger サービス) でトレースとして閲覧できる。
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
     volumes:
       - ./stfw:/work
       - reports:/work/.stfw/reports
@@ -62,6 +75,8 @@ services:
       postgres:
         condition: service_healthy
       api:
+        condition: service_started
+      jaeger:
         condition: service_started
     profiles: ["cli"]
 

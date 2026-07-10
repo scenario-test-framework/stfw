@@ -35,8 +35,9 @@ exec stfw run inv
 stdout 'run_id: _'
 # host が -e で __ENV へ注入される
 stdout 'stfw_target_host=api01'
-# end-of-test サマリがエビデンスへ出力される
+# end-of-test サマリと web dashboard の HTML レポートがエビデンスへ出力される
 exists scenario/inv/_10_99990101/_10_act_invokeRest/evidence/summary.json
+exists scenario/inv/_10_99990101/_10_act_invokeRest/evidence/report.html
 # パスワードは環境変数で渡され、マスクされる (argv には載らない)
 stderr '\[secret\]'
 ! stderr 'secretpw'
@@ -59,6 +60,7 @@ stderr 'user requires host_group'
 exec stfw run invweb
 stdout 'K6_BROWSER_HEADLESS=true'
 exists scenario/invweb/_10_99990101/_10_act_invokeWeb/evidence/summary.json
+exists scenario/invweb/_10_99990101/_10_act_invokeWeb/evidence/report.html
 
 -- stfw.yml --
 stfw:

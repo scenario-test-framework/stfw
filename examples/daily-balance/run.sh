@@ -15,8 +15,8 @@ run() { docker compose run --rm -T stfw "$@"; }
 # plugin install は既に install 済みだと exit 3 (Warn) を返す。それは正常扱いにする。
 ensure_plugin() { run plugin install "$1" || [ "$?" -eq 3 ]; }
 
-echo "==> 依存サービス (postgres + トイ API = テスト対象) を起動"
-docker compose up -d --build postgres api
+echo "==> 依存サービス (postgres + トイ API = テスト対象、Jaeger = トレース送信先) を起動"
+docker compose up -d --build postgres api jaeger
 
 echo "==> secret を準備 (age 鍵 + DB パスワード)"
 if [ ! -f stfw/config/encrypt/key.txt ]; then
@@ -37,4 +37,5 @@ echo "==> HTML レポート配信 (nginx) を起動"
 docker compose up -d nginx
 echo
 echo "    レポート: http://localhost:${STFW_REPORT_PORT:-8088}"
+echo "    トレース: http://localhost:${STFW_JAEGER_PORT:-16686}  (Jaeger UI。service=stfw を選択)"
 echo "    後片付け: ./run.sh --down"
