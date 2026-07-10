@@ -7,6 +7,16 @@ stfw:
   # この example 用のインベントリ (compose のサービス名でホストを解決する)
   inventory: local.yml
 
+  # DB 接続先の identity (database / user) をプロジェクト共通で 1 か所に集約する。
+  # 各 postgres 系プラグインの共通設定 (config/plugins/process/{type}/config.yml) から
+  # ${stfw_db_database} / ${stfw_db_user} で参照する。run 開始時に stfw.yml の値が
+  # 環境へ export され、config チェーンの ${...} 展開で解決される (AS-BUILT §8.2)。
+  # ※ 接続先ホスト・パスワードはここに書かない (inventory + secret で解決する禁止契約)。
+  # ※ SUT 側 (compose の postgres/api) の値と一致させること。
+  db:
+    database: appdb
+    user: appuser
+
   # example では実行結果を消さない (無期限保存)
   housekeep:
     retention_days: 0

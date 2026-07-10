@@ -31,6 +31,12 @@ func Run(log *slog.Logger, out, errOut io.Writer, projDir string, cfg *repositor
 		return err
 	}
 
+	// stfw.yml の設定値を環境へ反映し、後続の config チェーン (${...}) から
+	// 参照できるようにする (v0.2 export_yaml 互換。§8.2)。
+	if err := exportConfigEnv(cfg); err != nil {
+		return err
+	}
+
 	// 構造検証
 	tree, err := repository.LoadScenarioTree(projDir, names)
 	if err != nil {

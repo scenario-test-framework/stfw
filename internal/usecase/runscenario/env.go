@@ -1,6 +1,7 @@
 package runscenario
 
 import (
+	"os"
 	"path/filepath"
 	"sort"
 
@@ -8,6 +9,21 @@ import (
 	"github.com/scenario-test-framework/stfw/internal/domain/run"
 	"github.com/scenario-test-framework/stfw/internal/repository"
 )
+
+// exportConfigEnv は stfw.yml (+ 同梱デフォルト) のフラット化結果を stfw 自身の
+// 環境変数へ反映する (v0.2 の export_yaml 相当)。
+// 子スクリプトへは baseEnv 経由で既に渡るが、プラグイン/プロセス config チェーンの
+// ${...} 展開 (flattenValue の os.Getenv) は stfw 自身の環境しか見ないため、
+// stfw.yml の設定値 (例: stfw.db.database → ${stfw_db_database}) を config から
+// 参照できるようにするにはこの明示的な export が必要。
+func exportConfigEnv(cfg *repository.Config) error {
+	for k, v := range cfg.Flat() {
+		if err := os.Setenv(k, v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // baseEnv は全スクリプト共通の env (実行契約) を組み立てる。
 // v0.2 の setenv (STFW_PROJ_DIR_* の export) + dig の _export (run_id / run_mode) +

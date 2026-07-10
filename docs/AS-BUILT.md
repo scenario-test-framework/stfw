@@ -692,6 +692,7 @@ Error スパンのステータスメッセージ（階層）: `{node_type} {name
 - 値中の `${VAR}` は **環境変数で展開**（未定義は空文字。bash の `source` と同挙動）
 - null 値は空文字
 - フラット化結果の全キーが実行時 env として全スクリプトへ公開される
+- **`stfw run` 開始時に、stfw.yml（+ 同梱デフォルト）のフラット化結果を stfw 自身の環境変数へ export する**（v0.2 `export_yaml` 互換）。これによりプラグイン/プロセス config チェーン（§8.1 の下段）の `${...}` 展開から stfw.yml の設定値を参照できる。例: stfw.yml に `stfw.db.database: appdb` を置き、`config/plugins/process/{type}/config.yml` で `database: ${stfw_db_database}` と参照すると、接続先 DB 名をプロジェクトで 1 か所に集約できる（接続先ホスト・パスワードは §4.7 の禁止契約どおり inventory + secret で解決し、config には書かない）。
 
 > **list 値の上書きに関する既知の制約**: 上書きチェーン（§8.1）は各レイヤーを同一マップへ後勝ちでフラット化する。list は添字キー（`_0`, `_1`, …）に展開されるため、**上位レイヤーがより短い list で上書きしても、下位レイヤーの余分な末尾添字（`_2` 以降など）は残留する**（プラグインは添字を空になるまで読むため、残留要素も有効になる）。これは list 値をとる全設定（`key_patterns` / `tables` / `targets` / invoke の `env` 等）に共通する。**list を完全に置き換えたい場合は単一レイヤーで定義するか、上書き側の要素数を同数以上にする**こと（post-flatten では「list 添字」と「数値 map キー」が区別できないため、汎用的な末尾クリアは行わない）。
 
@@ -723,7 +724,7 @@ Error スパンのステータスメッセージ（階層）: `{node_type} {name
 `stfw.server.* は v1.0 で廃止されました (実行エンジン内包化により digdag server は不要です)`。設定値は実行に影響しない。
 v0.2 の `stfw.webhooks.*` は警告なしで読み飛ばされる（env としてフラット化公開はされる）。
 
-> 根拠: `internal/repository/config.go`, `assets/config/stfw.yml`, `assets/template/stfw.yml`, `internal/repository/plugin.go`（ProcessConfigEnv）, `test/acceptance/testdata/script/{run_env,run_plugin}.txtar`
+> 根拠: `internal/repository/config.go`, `assets/config/stfw.yml`, `assets/template/stfw.yml`, `internal/repository/plugin.go`（ProcessConfigEnv）, `internal/usecase/runscenario/env.go`（exportConfigEnv）, `test/acceptance/testdata/script/{run_env,run_plugin,run_config_expand}.txtar`
 
 ---
 

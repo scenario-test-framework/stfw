@@ -19,15 +19,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      # DB 接続先の identity は STFW_DB_* を単一ソースにする (既定は appuser/appdb/apppass)。
-      # 変更する場合は STFW_DB_USER=foo ./run.sh のように 1 か所だけ上書きすればよい。
-      POSTGRES_USER: ${STFW_DB_USER:-appuser}
-      POSTGRES_PASSWORD: ${STFW_DB_PASSWORD:-apppass}
-      POSTGRES_DB: ${STFW_DB_DATABASE:-appdb}
+      # SUT (テスト対象) 自身の DB identity。stfw 側の接続先 (stfw/stfw.yml の stfw.db.*)
+      # と一致させること。パスワードは stfw 側では secret で解決する (run.sh 参照)。
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: apppass
+      POSTGRES_DB: appdb
     volumes:
       - ./sut/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${STFW_DB_USER:-appuser} -d ${STFW_DB_DATABASE:-appdb}"]
+      test: ["CMD-SHELL", "pg_isready -U appuser -d appdb"]
       interval: 2s
       timeout: 3s
       retries: 15
@@ -36,7 +36,7 @@ services:
     build:
       context: ./sut
     environment:
-      DATABASE_URL: postgres://${STFW_DB_USER:-appuser}:${STFW_DB_PASSWORD:-apppass}@postgres:5432/${STFW_DB_DATABASE:-appdb}?sslmode=disable
+      DATABASE_URL: postgres://appuser:apppass@postgres:5432/appdb?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy
@@ -53,12 +53,8 @@ services:
       context: ../..
       target: full
     working_dir: /work
-    environment:
-      # 各プロセス config の ${STFW_DB_*} 展開元 (stfw は os.Getenv を参照する)。
-      # postgres/api と同じ STFW_DB_* を単一ソースにするので、接続先を変えても
-      # ここ 1 系統の env を変えるだけで全プロセスに反映される。
-      STFW_DB_DATABASE: ${STFW_DB_DATABASE:-appdb}
-      STFW_DB_USER: ${STFW_DB_USER:-appuser}
+    # DB 接続先の identity (database / user) は stfw 側の stfw.yml (stfw.db.*) が正。
+    # ここに env は置かない (config の ${stfw_db_*} は run 開始時に stfw.yml から解決)。
     volumes:
       - ./stfw:/work
       - reports:/work/.stfw/reports

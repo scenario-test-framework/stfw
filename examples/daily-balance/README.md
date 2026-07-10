@@ -131,11 +131,11 @@ examples/daily-balance/
 │   ├── schema.sql      # users(マスタ) / accounts(残高) / transactions
 │   └── Dockerfile
 └── stfw/               # stfw プロジェクト (stfw init 相当 + シナリオ)
-    ├── stfw.yml
+    ├── stfw.yml                                             # stfw.db.* = DB 接続先の単一ソース
     ├── config/
     │   ├── inventory/local.yml
     │   └── plugins/process/                                 # プロセスプラグインの共通設定
-    │       ├── {clear,import,export}Postgres/config.yml     #   DB 接続系を共通化
+    │       ├── {clear,import,export}Postgres/config.yml     #   接続系 (${stfw_db_*} 参照)
     │       └── importMasterData/
     │           ├── config.yml                               #   DB 接続系を共通化
     │           └── data/appdb/users.csv                     #   シナリオ共通のマスタデータ
@@ -161,17 +161,25 @@ git 管理外です。
 共通の上書き設定に一本化** し、各プロセスの `config/config.yml` は `tables` だけを書きます。
 
 ```
-config/plugins/process/{type}/config.yml   ← host_group / port / database / user を共通定義
+stfw.yml                                    ← database / user を単一ソースで宣言 (stfw.db.*)
+config/plugins/process/{type}/config.yml   ← host_group / port と ${stfw_db_*} 参照を共通定義
 scenario/.../{process}/config/config.yml   ← tables のみ
 ```
 
 - 設定の上書きチェーン（§8.1）: プラグイン既定 → `config/plugins/process/{type}/` →
   各プロセス `config/config.yml`。共通値は真ん中の層に置きます。
-- `database` / `user` はさらに `${STFW_DB_DATABASE}` / `${STFW_DB_USER}` で参照し、**単一ソース**に
-  します。展開元は `compose.yaml` の env（既定 `appdb` / `appuser`）で、postgres・api・stfw の
-  3 サービスが同じ `STFW_DB_*` を共有します。接続先を変えるときは env を 1 系統変えるだけです。
+- `database` / `user` の値そのものは **`stfw.yml` の `stfw.db.*` が単一ソース**です。共通設定は
+  `${stfw_db_database}` / `${stfw_db_user}` で参照します。`stfw run` 開始時に stfw.yml の値が
+  環境へ export され、config チェーンの `${...}` 展開で解決されます（AS-BUILT §8.2）。
 
-```sh
-# 例: 接続ユーザーを変えて実行 (postgres/api/stfw/secret すべてに反映)
-STFW_DB_USER=tester STFW_DB_PASSWORD=secret ./run.sh
+```yaml
+# stfw/stfw.yml — 接続先 DB の identity をここ 1 か所で管理 (探しやすい)
+stfw:
+  db:
+    database: appdb
+    user: appuser
 ```
+
+> SUT 側（`compose.yaml` の postgres/api）は「テスト対象そのものの DB 定義」なので compose に
+> 置きます。`stfw.yml` の `stfw.db.*` はそこへ接続する側の宣言で、値を一致させます。
+> 接続先ホスト・パスワードは `stfw.yml` に書かず、inventory + secret で解決します（禁止契約）。

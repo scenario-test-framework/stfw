@@ -1,0 +1,38 @@
+# STEP: config チェーンの ${...} 展開が stfw.yml の設定値を参照できること (§8.2)
+# stfw.yml (stfw.db.*) をプロセス config から ${stfw_db_*} で参照し、
+# 実行時に解決された値がユーザースクリプトへ渡ることを固定する。
+# (run 開始時に stfw.yml のフラット値が環境へ export される = v0.2 export_yaml 互換)
+
+exec stfw run expandtest
+cmp resolved.txt resolved_golden.txt
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  timezone: "Asia/Tokyo"
+  db:
+    database: appdb
+    user: appuser
+-- scenario/expandtest/metadata.yml --
+description:
+-- scenario/expandtest/_10_99990101/metadata.yml --
+description:
+-- scenario/expandtest/_10_99990101/_10_pre_scripts/metadata.yml --
+description:
+-- scenario/expandtest/_10_99990101/_10_pre_scripts/config/config.yml --
+stfw:
+  process:
+    scripts:
+      resolved_database: ${stfw_db_database}
+      resolved_user: ${stfw_db_user}
+-- scenario/expandtest/_10_99990101/_10_pre_scripts/scripts/100_dump --
+#!/bin/bash
+{
+  echo "database=${stfw_process_scripts_resolved_database}"
+  echo "user=${stfw_process_scripts_resolved_user}"
+} >"${STFW_PROJ_DIR}/resolved.txt"
+exit 0
+-- resolved_golden.txt --
+database=appdb
+user=appuser
