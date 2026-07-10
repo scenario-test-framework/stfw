@@ -89,6 +89,9 @@ BC 間の共有は ID とジャーナルイベントのみである。notify・H
 | `stfw new scenario <name>` | name | `{proj}/scenario/{name}/` を作成し `metadata.yml` を生成（冪等）。`scenario/` ディレクトリと stfw.yml の存在が前提 |
 | `stfw new bizdate <seq> <bizdate>` | seq, bizdate（YYYYMMDD） | カレントがシナリオディレクトリであることを要求。`_{seq}_{bizdate}/metadata.yml` を生成（冪等） |
 | `stfw new process <seq> <group> <type>` | seq, group, type | カレントが業務日付ディレクトリであることを要求。プラグインを解決し `_{seq}_{group}_{type}/` を**削除して作り直し**、プラグイン `template/` を展開 + `metadata.yml` 生成 |
+| `stfw scenario doc <name> [-o, --out <file>]` | name | シナリオを Markdown ドキュメントへ投影 (tree → doc)。`--out` 省略時は stdout |
+| `stfw scenario spec <name> [-o, --out <file>]` | name | シナリオを spec yaml へ export (tree → spec、§12 往復の出口)。`--out` 省略時は stdout |
+| `stfw scenario scaffold <spec.yml> [-f, --force]` | spec ファイルパス | spec (structured yaml) からシナリオ骨格を生成 (spec → tree、§12 往復の入口)。既存シナリオディレクトリはエラー (`--force` で再生成) |
 | `stfw validate [scenario...]` | 省略時は全シナリオ | ディレクトリ規約・プラグイン解決可否・`config/config.yml` 存在を静的検証。エラー違反があれば exit 6、警告のみは exit 0 |
 | `stfw run [-d, --dry-run] <scenario...>` | 1 つ以上のシナリオ名 | 内蔵ランナーで実行（§4, §5）。実行前に validate 相当の静的検証を自動実行。dry-run は execute / post_execute をスキップ |
 | `stfw status [run_id]` | 省略時は最新 run | ジャーナルをリプレイして階層ツリーとステータスを表示 |
@@ -107,7 +110,7 @@ BC 間の共有は ID とジャーナルイベントのみである。notify・H
 | `stfw plugin redis-encode-row` | `--key/--type/--ttl`（stdin→stdout） | 隠しコマンド。redis 値を正規化し CSV 1 行へ変換する組込み Redis プラグイン用ヘルパ（§4.10） |
 | `stfw plugin redis-decode` | なし（stdin→stdout） | 隠しコマンド。export CSV を redis-cli コマンド列へ変換する組込み Redis プラグイン用ヘルパ（§4.10） |
 
-> 根拠: `internal/presentation/cli/*.go`（全コマンド定義）, `internal/domain/run/exitcode.go`, `internal/presentation/logger/logger.go`, `test/acceptance/testdata/script/{init,new,validate,status,report,inventory,secret,ssh_trust,plugin}.txtar`
+> 根拠: `internal/presentation/cli/*.go`（全コマンド定義）, `internal/domain/run/exitcode.go`, `internal/presentation/logger/logger.go`, `test/acceptance/testdata/script/{init,new,validate,status,report,inventory,secret,ssh_trust,plugin,scenario_doc,scenario_scaffold,scenario_roundtrip}.txtar`
 
 ---
 
@@ -857,3 +860,105 @@ stfw_inventory:
 - `STFW_HOME` の廃止、bizdate の実在日付検証の追加、run_id 採番規則は互換維持
 
 > 根拠: `docs/MIGRATION.md`, `README.md`
+
+---
+
+## 12. シナリオ doc/spec 投影と往復（scenario doc/spec/scaffold）
+
+`stfw new scenario`（対話・単一ノード生成）とは別に、tree（ディレクトリ構造）を
+Markdown ドキュメント・構造化 YAML (spec) へ投影し、spec からディレクトリ骨格を
+再生成できる。方式は「**tree が真実の源**・spec は tree と可逆な媒体・doc は
+tree からの読み取り専用の投影」。
+
+### 12.1 コマンド契約
+
+| コマンド | 方向 | 動作 |
+|---|---|---|
+| `stfw scenario doc <name> [-o, --out <file>]` | tree → doc | シナリオを Markdown へ投影。`--out` 省略時は stdout |
+| `stfw scenario spec <name> [-o, --out <file>]` | tree → spec | シナリオを spec yaml へ export（往復の出口）。`--out` 省略時は stdout |
+| `stfw scenario scaffold <spec.yml> [-f, --force]` | spec → tree | spec からディレクトリ骨格（`metadata.yml` + `config/config.yml`）を生成（往復の入口） |
+
+- `<name>` は `scenario/{name}`。いずれもプロジェクトルート（`stfw.yml` のある dir）で実行する。
+- `scenario scaffold` はシナリオディレクトリが既に存在すると既定でエラーにする（誤上書き防止）。
+  `--force` で再生成できるが、内部的に `metadata.yml` / `config/config.yml` の**上書きのみ**を行い
+  ディレクトリの削除は一切しないため、手動で追加した `data/`・`scripts/`・`expect/` 等の葉は
+  再生成後も温存される。一方、spec から削除されたプロセス（既存 tree にあり spec に無いもの）は
+  孤立ディレクトリとして残る（`scenario scaffold` は追加・上書きのみで削除は行わない既知の制約）。
+- `doc` / `spec` の出力は決定論的（同一 tree → 同一バイト列）。`spec` の YAML は
+  `gopkg.in/yaml.v3` の map マーシャルがキーを昇順で確定するため、`config` サブツリーの
+  キー順も安定する。
+
+### 12.2 往復の境界
+
+| 対象 | 往復可否 |
+|---|---|
+| シナリオ名 | ✅ 往復可能（骨格） |
+| 各業務日付の seq・bizdate 値・description・requirement_specifications | ✅ 往復可能（骨格） |
+| 各プロセスの seq・group・type・description・requirement_specifications・`config/config.yml` の `stfw.process.{type}` サブツリー | ✅ 往復可能（骨格） |
+| `data/**`・`scripts/**`・`expect/**`（CSV・実行可能ファイル・期待値）、secret、階層フック `plugins/**` | ❌ 往復対象外（人が書く葉） |
+
+`scenario scaffold` は葉を空ディレクトリ・生成せずにとどめ、`metadata.yml` と
+`config/config.yml` のみを生成する。`stfw new process` は逆にプラグインの `template/` を
+展開する（scripts タイプの `scripts/100_1st_step` 等）ため、両者は棲み分ける
+（`scenario scaffold` は往復用の骨格生成、`new process` は対話的な単一ノード生成）。
+
+### 12.3 spec スキーマ（`scenario.spec.yml`）
+
+```yaml
+scenario: daily-balance                 # = scenario/{name}
+description: |                          # scenario/metadata.yml の description
+  日次残高バッチのシナリオテスト...
+requirement_specifications:             # scenario/metadata.yml の requirement_specifications（任意）
+  - SPEC-000
+bizdates:
+  - seq: "10"                           # ディレクトリ _{seq}_{bizdate} の seq
+    bizdate: "20240101"                 # 8 桁 YYYYMMDD（NewBizdate で検証）
+    description: Day1 ...
+    processes:
+      - seq: "10"                       # _{seq}_{group}_{type} の seq
+        group: arrange                  # NewGroup で検証（"_" 禁止）
+        type: clearPostgres             # プラグイン type（解決可否は validate で担保）
+        description: truncate
+        requirement_specifications:
+          - SPEC-013-01
+        config:                         # config/config.yml の stfw.process.{type} 配下
+          host_group: db
+          database: appdb
+          tables: [transactions, accounts]
+```
+
+- **ディレクトリ名との対応**: bizdate dir = `_{seq}_{bizdate}`、process dir = `_{seq}_{group}_{type}`
+  （`internal/domain/scenario/dirname.go` の `BizdateDirName` / `ProcessDirName` をそのまま使う）。
+- **seq は文字列**。先頭ゼロ（`"010"`）を保持する `Seq` 値オブジェクトの規則（§3.2）に合わせるため、
+  spec の `seq` は YAML 上も文字列として扱う（`yaml.v3` は数字に見える文字列を自動的にクォートする）。
+  ゼロパディングは必須ではない（既存の `_10_` 慣例と同じく、無くてもよい）。
+- **config が空/未指定**の場合、`scenario scaffold` は `stfw.process.{type}: {}` の空スタブを書く
+  （プラグイン同梱の既定値での穴埋めはしない）。往復の決定性（spec の空 config → tree → spec' も
+  空 config）を優先した設計判断で、プラグイン既定値を写す方式だと「未指定」と「プラグイン既定値と
+  一致する値を指定」を区別できず spec ↔ spec' が一致しなくなるため採らなかった。
+- `description` / `requirement_specifications` が空の階層は spec 側で `omitempty` により省略される。
+
+### 12.4 doc（Markdown）フォーマット
+
+シナリオ 1 つにつき Markdown 1 枚。`## 要求トレーサビリティ`（`requirement_specifications` を
+全 process から集約。空なら節ごと省略）→ 業務日付ごとの `## {dir} — {description 先頭行}`
+（process 一覧表 + process ごとの `### {dir}` 詳細節）の順で構成する。
+
+process 一覧表・詳細節の「フェーズ(推定)」列は type → フェーズの固定マッピング
+（GUIDE.md §2 と同じ表）を `scenario.PhaseOf(type)` で導出する。ユーザー定義 type・`scripts` は
+`-`（汎用/不明）になる。設定 (`config/config.yml` の該当サブツリー) がある process のみ
+「- 設定:」の YAML コードブロックを持つ。
+
+### 12.5 metadata.yml consumer
+
+`metadata.yml` は `stfw new`（scenario/bizdate/process の scaffold）が空スタブ
+（`description:` / `requirement_specifications:` とも空）を生成するのみで、v1.0 は
+これまで読み取り側を持たなかった（生成専用）。`stfw scenario doc` / `stfw scenario spec` が
+`internal/repository/metadata.go` の `ReadNodeMetadata` を介して読む最初の consumer になる
+（ファイル不在・空値はゼロ値として許容し、既存の空スタブと後方互換）。
+
+> 根拠: `internal/presentation/cli/scenario.go`, `internal/usecase/scaffold/scaffold.go`
+> (`ScaffoldFromSpec`), `internal/usecase/scenariodoc/scenariodoc.go`,
+> `internal/repository/{metadata,processconfig,scenariospec,scenariodoc}.go`,
+> `internal/gateway/mdwriter.go`, `internal/domain/scenario/{phase,docview}.go`,
+> `test/acceptance/testdata/script/{scenario_doc,scenario_scaffold,scenario_roundtrip}.txtar`

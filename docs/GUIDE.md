@@ -200,6 +200,42 @@ stfw report [run_id]              # HTML レポート再生成
 compare-files（compare）を使うシナリオは、事前に `stfw plugin install {type}` が必要です
 （`stfw init` は全プラグインの install をまとめて行います）。
 
+## 8. シナリオを文書化・雛形生成する
+
+ここまでの `daily-balance` はディレクトリを直接編集して作りました。既存シナリオを
+レビュー用に文書化したい場合や、似た構造のシナリオを別名で量産したい場合は
+`stfw scenario doc/spec/scaffold` を使います。方式は「**tree（ディレクトリ構造）が
+真実の源**・spec（構造化 YAML）は tree と可逆・doc（Markdown）は tree からの
+読み取り専用の投影」です（`stfw new scenario` の対話的な単一ノード生成とは別物）。
+
+```sh
+cd examples/daily-balance/stfw
+
+# tree -> doc: シナリオをレビュー用 Markdown へ投影 (--out 省略時は stdout)
+stfw scenario doc daily-balance --out /tmp/daily-balance.md
+
+# tree -> spec: シナリオを構造化 YAML へ export (往復の出口)
+stfw scenario spec daily-balance --out /tmp/daily-balance.spec.yml
+
+# spec -> tree: spec からシナリオ骨格 (metadata.yml + config/config.yml) を生成 (往復の入口)
+# 別名にコピーしてから量産する例 (scenario: の値を書き換えてから使う)
+stfw scenario scaffold /tmp/daily-balance-2.spec.yml
+```
+
+`doc` は要求トレーサビリティ表（`requirement_specifications` を全 process から集約）と
+業務日付ごとの process 一覧・設定を並べた読み取り専用のレビュー資料です。
+`spec` ⇄ `scaffold` は往復可能ですが、対象は**骨格のみ**です。
+
+| 対象 | 往復可否 |
+|---|---|
+| シナリオ名・業務日付 (seq/bizdate)・プロセス (seq/group/type)・description・requirement_specifications・config/config.yml | ✅ |
+| `data/**`（CSV 等）・`scripts/**`・`expect/**`・secret・階層フック `plugins/**` | ❌（人が書く葉。`scaffold` は生成しない） |
+
+`scaffold` は既存のシナリオディレクトリがあると既定でエラーになります（誤上書き防止）。
+`--force` で再生成できますが、`metadata.yml` / `config/config.yml` の上書きのみを行い
+ディレクトリ削除は一切しないため、手動で追加した `data/`・`scripts/`・`expect/` は
+再生成後も残ります。詳細は [`docs/AS-BUILT.md`](AS-BUILT.md) §12（シナリオ doc/spec 投影と往復）を参照してください。
+
 ## 参考
 
 - 実行可能サンプル: [`examples/daily-balance`](../examples/daily-balance/)
