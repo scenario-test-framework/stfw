@@ -1,0 +1,2 @@
+外部システム群	外部システム	役割
+テスト支援ツール	grafana k6	invokeWeb（ブラウザモード）/ invokeRestプラグインが利用するテスト実行OSS。画面での取引入力と画面操作での検証（invokeWeb）、APIでの取引入力とレスポンス検証（invokeRest）を実行する。Act 実行後は k6 の end-of-test サマリを自プロセスディレクトリ配下の evidence/summary.json へ出力し、テスト実行時間が集計周期の 2 倍以上（実時間およそ 1 秒以上）でデータが十分な場合は k6 web dashboard が evidence/report.html を生成する（データ不足時は summary.json から自己完結の HTML をプラグイン側でフォールバック生成する）。k6 が閾値割れ等で失敗してもサマリ（summary.json）は出力され report.html は常に残る

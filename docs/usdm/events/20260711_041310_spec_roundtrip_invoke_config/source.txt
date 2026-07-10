@@ -1,0 +1,59 @@
+# 変更要望: stfw v1.0 実装確定事項の RDRA 反映 (3 件)
+
+以下はすべて実装・検証済みの確定事項である (master ブランチ、docs/AS-BUILT.md が実装契約の正本)。
+最終 RDRA イベント (20260709_071603_remote_housekeep) 以降の差分を RDRA に反映したい。
+
+## 1. シナリオ構造の spec / doc 往復生成 (reverse / scaffold)
+
+シナリオのディレクトリツリー (規約ベースの記述。これが正) を、機械可読な spec と
+人間可読なドキュメントに相互変換できるようにした。テスト作成者がシナリオ構造を単一
+ファイルでレビュー・共有し、そこからツリーを再生成 (版管理・移送) できることが狙い。
+
+- `stfw scenario reverse <name> [-o, --out-dir <dir>]`: シナリオツリーから spec (`<name>.yml`) と
+  ドキュメント (`<name>.md`) をセット生成する (リバース生成)。既定の出力先は `docs/`。
+  ドキュメントには各プロセスの group / type / description・要求トレーサビリティ
+  (metadata.yml の requirement_specifications = どの要求をどの process が検証するか)・
+  config サブツリーが表形式で出力される。
+- `stfw scaffold <spec.yml> [--sync]`: spec からディレクトリ骨格 (scenario > bizdate > process の
+  ディレクトリ・metadata.yml・config) を生成する。既存ツリーがある場合、`--sync` は差分同期を行う
+  (spec に有りツリーに無いディレクトリは追加、両方に有るディレクトリは維持、spec に無くなった
+  ディレクトリは削除)。`--sync` 無しで既存ツリーがある場合はエラー。
+- 往復セマンティクス: `reverse -> scaffold -> reverse` は骨格 (seq / bizdate / group / type /
+  description / requirement_specifications / config サブツリー) が完全一致する (可逆)。
+  data CSV・テストスクリプト・expect などの葉ファイルは往復の対象外。
+- 位置づけ: 既存の scaffold 生成 (stfw new。空の 3 階層雛形を対話的に作る) とは別に、
+  spec ファイルを単一ソースとしたツリー生成・差分同期の入口を提供する。
+
+## 2. invoke プラグイン (invokeRest / invokeWeb) のエビデンス出力
+
+API / ブラウザ実行 (Act) を grafana k6 で行う invoke プラグインが、実行結果を
+エビデンスとして残せるようにした。負荷テストや API 実行の結果を人間可読な HTML で
+確認・保全することが狙い。
+
+- invokeRest / invokeWeb は Act 実行後、k6 の end-of-test サマリを
+  `{process}/evidence/summary.json` へ出力する (エビデンスディレクトリ規約に従う。gitignore 対象)。
+- あわせて HTML レポート `{process}/evidence/report.html` を出力する。優先順は
+  (1) k6 web dashboard が十分なデータ (テスト実行時間が集計周期の 2 倍以上、実時間およそ 1 秒以上) で
+  レポートを生成した場合はそれを採用、(2) 生成されない場合 (単発 Act 等でデータ不足) は
+  summary.json から自己完結の HTML をプラグイン側でフォールバック生成する。
+- k6 が閾値割れ等で失敗してもサマリは出力されるため、report.html は常に残る。
+- エビデンスディレクトリ規約 (第 3 の互換境界) の対象に、収集系プラグインに加えて
+  invoke 系 (実行系) のエビデンス出力 (summary.json / report.html) を含める。
+
+## 3. 設定の ${...} 展開が stfw.yml の値を参照できる
+
+複数プロセスで共通の設定値を stfw.yml に単一ソース化し、各プロセス config には固有値
+(テーブル名等) だけを書けるようにした。ユーザー変更時のメンテ漏れを防ぐことが狙い。
+
+- プラグイン / プロセスの config チェーン (プラグイン既定 -> プロジェクト
+  config/plugins/process/{type}/ -> プロセス config/config.yml) の値中の `${VAR}` 展開は
+  環境変数を参照する。stfw run 開始時に stfw.yml (+ 同梱デフォルト) のフラット化結果を
+  実行環境へ export する (v0.2 の export_yaml 互換) ため、config から stfw.yml の設定値を
+  `${stfw_...}` で参照できる。
+- 例: DB 接続先の identity (database / user) を stfw.yml の `stfw.db.database` / `stfw.db.user` に
+  集約し、各 postgres 系プラグインの共通設定 (config/plugins/process/{type}/config.yml) から
+  `${stfw_db_database}` / `${stfw_db_user}` で参照する。各シナリオのプロセス config は
+  テーブル名だけを書く。
+- 接続先ホスト・パスワードは従来どおり config に直書きせず inventory (ホスト解決) + secret
+  (パスワード) から解決する禁止契約を維持する (この変更は identity である database / user の
+  集約であり、接続情報の直書き解禁ではない)。
