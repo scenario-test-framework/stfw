@@ -2,6 +2,7 @@ package repository
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -129,6 +130,49 @@ func CopyPluginTemplate(loc PluginLocation, destDir string) ([]string, error) {
 		return nil, fmt.Errorf("plugin template: %s is not exist", src)
 	}
 	return copyFSTree(os.DirFS(src), ".", destDir)
+}
+
+// PluginHasTemplate はプラグインが template/ ディレクトリを持つかを返す。
+// 組込みプラグインでは scripts のみが template/ を持ち、config 駆動の
+// プラグイン (clearPostgres 等) は持たない。
+func PluginHasTemplate(loc PluginLocation) bool {
+	if loc.Embedded {
+		info, err := fs.Stat(assets.Plugins, path.Join(loc.EmbedPath, "template"))
+		return err == nil && info.IsDir()
+	}
+	info, err := os.Stat(filepath.Join(loc.Dir, "template"))
+	return err == nil && info.IsDir()
+}
+
+// CopyPluginDefaultConfig はプラグインのデフォルト config.yml を
+// destDir/config/config.yml へコピーし、作成したファイルの絶対パス一覧を返す。
+// template/ を持たない config 駆動プラグインの雛形として使う
+// (プロセスの config/config.yml があれば validate の上書き対象になる)。
+// プラグインに config.yml が無い場合は何も作らず (nil, nil) を返す。
+func CopyPluginDefaultConfig(loc PluginLocation, destDir string) ([]string, error) {
+	var raw []byte
+	var err error
+	if loc.Embedded {
+		raw, err = fs.ReadFile(assets.Plugins, path.Join(loc.EmbedPath, "config.yml"))
+	} else {
+		raw, err = os.ReadFile(filepath.Join(loc.Dir, "config.yml"))
+	}
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("plugin config: %w", err)
+	}
+
+	confDir := filepath.Join(destDir, "config")
+	if err := os.MkdirAll(confDir, 0o755); err != nil {
+		return nil, err
+	}
+	dest := filepath.Join(confDir, "config.yml")
+	if err := os.WriteFile(dest, raw, 0o644); err != nil {
+		return nil, err
+	}
+	return []string{dest}, nil
 }
 
 // ProcessConfigEnv はプロセス実行時に注入するプラグイン設定の env を返す。

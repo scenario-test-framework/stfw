@@ -30,6 +30,14 @@ cd _20_99990102
 exec stfw new process 10 pre scripts
 exists _10_pre_scripts/scripts/200_2nd_step
 
+# template/ を持たない config 駆動プラグイン (組込み) は
+# デフォルト config.yml を config/config.yml として配置する (scripts/ は無い)
+exec stfw new process 20 db clearPostgres
+stdout 'scenario/test/_20_99990102/_20_db_clearPostgres/config/config.yml'
+exists _20_db_clearPostgres/config/config.yml
+exists _20_db_clearPostgres/metadata.yml
+! exists _20_db_clearPostgres/scripts
+
 # dig ファイルは v1.0 では生成されない
 cd $WORK
 ! exists scenario/test/scenario.dig

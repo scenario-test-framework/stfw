@@ -23,8 +23,11 @@ func CreateNodeScaffold(parentDir, dirName string) ([]string, error) {
 }
 
 // CreateProcessScaffold はプロセス階層の scaffold を生成する。
-// 既存ディレクトリは削除して作り直し、プラグインの template/ を展開して
-// metadata.yml を生成する (v0.2 の process initialize と同じ挙動)。
+// 既存ディレクトリは削除して作り直し、雛形と metadata.yml を生成する
+// (v0.2 の process initialize と同じ挙動)。
+// template/ を持つプラグイン (組込みでは scripts) はその内容を展開する。
+// template/ を持たない config 駆動プラグインは、プラグインのデフォルト
+// config.yml を config/config.yml として配置する。
 // 作成したファイルの絶対パス一覧 (昇順) を返す。
 func CreateProcessScaffold(loc PluginLocation, parentDir, dirName string) ([]string, error) {
 	dir := filepath.Join(parentDir, dirName)
@@ -35,7 +38,13 @@ func CreateProcessScaffold(loc PluginLocation, parentDir, dirName string) ([]str
 		return nil, err
 	}
 
-	created, err := CopyPluginTemplate(loc, dir)
+	var created []string
+	var err error
+	if PluginHasTemplate(loc) {
+		created, err = CopyPluginTemplate(loc, dir)
+	} else {
+		created, err = CopyPluginDefaultConfig(loc, dir)
+	}
 	if err != nil {
 		return nil, err
 	}
