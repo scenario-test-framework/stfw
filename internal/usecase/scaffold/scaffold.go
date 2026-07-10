@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"path/filepath"
+	"sort"
 
 	"github.com/scenario-test-framework/stfw/internal/domain/project"
 	"github.com/scenario-test-framework/stfw/internal/domain/scenario"
@@ -96,6 +97,170 @@ func Process(log *slog.Logger, out io.Writer, projDir, cwd, seqStr, groupStr, pr
 	printCreated(out, projDir, created)
 	log.Info("process initialized", "dir", dirName, "type", processType)
 	return nil
+}
+
+// ScaffoldFromSpec は spec (repository.ScenarioSpec) から scenario/bizdate/process の
+// ディレクトリ骨格 (metadata.yml + config/config.yml) を生成する (spec → tree、往復の入口)。
+// data/scripts/expect 等の葉は生成しない (往復対象は骨格のみ。plan §0)。
+// シナリオディレクトリが既に存在する場合、force が false ならエラーにする
+// (誤上書き防止。既定は fail-safe)。CreateSpecNode は削除を行わないため、force で
+// 再生成しても既存の葉ディレクトリ (data/scripts/expect) は温存される。
+func ScaffoldFromSpec(log *slog.Logger, out io.Writer, projDir string, spec repository.ScenarioSpec, force bool) error {
+	plan, err := planFromSpec(spec)
+	if err != nil {
+		return err
+	}
+
+	root := filepath.Join(projDir, scenario.RootDirName)
+	if !repository.ProjectConfigExists(projDir, project.ConfigFileName) || !repository.DirExists(root) {
+		return fmt.Errorf("%s is not scenario-root-dir", root)
+	}
+
+	scenarioDir := filepath.Join(root, plan.name)
+	if repository.DirExists(scenarioDir) && !force {
+		return fmt.Errorf("%s already exists (use --force to regenerate)", scenarioDir)
+	}
+
+	created, err := writeSpecPlan(scenarioDir, plan)
+	if err != nil {
+		return fmt.Errorf("scenario scaffold: %w", err)
+	}
+
+	printCreated(out, projDir, created)
+	log.Info("scenario scaffold generated", "scenario", plan.name, "bizdates", len(plan.bizdates))
+	return nil
+}
+
+// specPlan は spec を検証済みのディレクトリ名へ変換した中間表現。
+// 書き込み前に spec 全体を検証しきることで、途中で VO 検証エラーになった場合の
+// 部分書き込みを避ける。
+type specPlan struct {
+	name     string
+	meta     repository.Metadata
+	bizdates []specBizdatePlan
+}
+
+type specBizdatePlan struct {
+	dirName   string
+	meta      repository.Metadata
+	processes []specProcessPlan
+}
+
+type specProcessPlan struct {
+	dirName     string
+	processType string
+	meta        repository.Metadata
+	config      map[string]any
+}
+
+// planFromSpec は spec を検証し specPlan を組み立てる。
+// ディレクトリ名の組み立て・検証は既存の値オブジェクト (NewSeq/NewBizdate/NewGroup/
+// ValidateProcessType) をそのまま再利用し、`stfw new` と同じ規則を通す。
+func planFromSpec(spec repository.ScenarioSpec) (specPlan, error) {
+	name, err := scenario.NewScenarioName(spec.Scenario)
+	if err != nil {
+		return specPlan{}, err
+	}
+	plan := specPlan{
+		name: name.String(),
+		meta: repository.Metadata{
+			Description:               spec.Description,
+			RequirementSpecifications: spec.RequirementSpecifications,
+		},
+	}
+
+	// spec 内の bizdate/process が同一ディレクトリ名に衝突していないかを、書き込み前に
+	// 検証する (衝突を許すと writeSpecPlan が後勝ちで silent 上書きしてしまうため)。
+	seenBizdateDirs := map[string]bool{}
+
+	for _, b := range spec.Bizdates {
+		seq, err := scenario.NewSeq(b.Seq)
+		if err != nil {
+			return specPlan{}, err
+		}
+		bizdate, err := scenario.NewBizdate(b.Bizdate)
+		if err != nil {
+			return specPlan{}, err
+		}
+		bDirName := scenario.BizdateDirName(seq, bizdate)
+		if seenBizdateDirs[bDirName] {
+			return specPlan{}, fmt.Errorf("duplicate bizdate directory: %s", bDirName)
+		}
+		seenBizdateDirs[bDirName] = true
+
+		bPlan := specBizdatePlan{
+			dirName: bDirName,
+			meta: repository.Metadata{
+				Description:               b.Description,
+				RequirementSpecifications: b.RequirementSpecifications,
+			},
+		}
+
+		seenProcessDirs := map[string]bool{}
+		for _, p := range b.Processes {
+			pSeq, err := scenario.NewSeq(p.Seq)
+			if err != nil {
+				return specPlan{}, err
+			}
+			group, err := scenario.NewGroup(p.Group)
+			if err != nil {
+				return specPlan{}, err
+			}
+			if err := scenario.ValidateProcessType(p.Type); err != nil {
+				return specPlan{}, err
+			}
+			pDirName := scenario.ProcessDirName(pSeq, group, p.Type)
+			if seenProcessDirs[pDirName] {
+				return specPlan{}, fmt.Errorf("duplicate process directory: %s in %s", pDirName, bDirName)
+			}
+			seenProcessDirs[pDirName] = true
+
+			bPlan.processes = append(bPlan.processes, specProcessPlan{
+				dirName:     pDirName,
+				processType: p.Type,
+				meta: repository.Metadata{
+					Description:               p.Description,
+					RequirementSpecifications: p.RequirementSpecifications,
+				},
+				config: p.Config,
+			})
+		}
+		plan.bizdates = append(plan.bizdates, bPlan)
+	}
+	return plan, nil
+}
+
+// writeSpecPlan は検証済みの specPlan をディスクへ書き出す。
+// 作成・上書きしたファイルの絶対パス一覧 (昇順) を返す。
+func writeSpecPlan(scenarioDir string, plan specPlan) ([]string, error) {
+	var created []string
+
+	if err := repository.CreateSpecNode(scenarioDir, plan.meta); err != nil {
+		return nil, err
+	}
+	created = append(created, filepath.Join(scenarioDir, "metadata.yml"))
+
+	for _, b := range plan.bizdates {
+		bDir := filepath.Join(scenarioDir, b.dirName)
+		if err := repository.CreateSpecNode(bDir, b.meta); err != nil {
+			return nil, err
+		}
+		created = append(created, filepath.Join(bDir, "metadata.yml"))
+
+		for _, p := range b.processes {
+			pDir := filepath.Join(bDir, p.dirName)
+			if err := repository.CreateSpecNode(pDir, p.meta); err != nil {
+				return nil, err
+			}
+			if err := repository.WriteProcessConfig(pDir, p.processType, p.config); err != nil {
+				return nil, err
+			}
+			created = append(created, filepath.Join(pDir, "metadata.yml"), filepath.Join(pDir, "config", "config.yml"))
+		}
+	}
+
+	sort.Strings(created)
+	return created, nil
 }
 
 // isHierarchyDir は cwd がプロジェクト内の期待する階層かを判定する。

@@ -1,0 +1,50 @@
+# STEP: scenario roundtrip (spec -> tree -> spec の往復セマンティクス、plan §7)
+# `scenario spec` (tree -> spec) → `scenario scaffold --force` (spec -> tree') →
+# 再度 `scenario spec` (tree' -> spec') で spec == spec' (バイト完全一致) を固定する。
+# 既存シナリオ (init テンプレートの sample) を対象に、tree に手を加えず往復させる。
+
+exec stfw init --skip-plugin-init
+
+exec stfw scenario spec sample --out spec1.yml
+exec stfw scenario scaffold --force spec1.yml
+exec stfw scenario spec sample --out spec2.yml
+cmp spec1.yml spec2.yml
+
+# config/description/requirement_specifications を含むシナリオでも往復が安定する
+# (custom.spec.yml の手書きインデントと MarshalSpec の正規化インデントは異なりうるため、
+# ここでは「意味的な往復」= 2 回目以降の spec が完全一致することのみを固定する)
+exec stfw scenario scaffold custom.spec.yml
+exec stfw scenario spec custom --out custom.spec1.yml
+grep 'カスタムシナリオ' custom.spec1.yml
+grep 'SPEC-013-01' custom.spec1.yml
+exec stfw scenario scaffold --force custom.spec1.yml
+exec stfw scenario spec custom --out custom.spec2.yml
+cmp custom.spec1.yml custom.spec2.yml
+
+-- custom.spec.yml --
+scenario: custom
+description: |
+  カスタムシナリオ (往復確認用)。
+requirement_specifications:
+  - SPEC-000
+bizdates:
+  - seq: "10"
+    bizdate: "20240101"
+    description: Day1
+    processes:
+      - seq: "10"
+        group: arrange
+        type: clearPostgres
+        description: truncate
+        requirement_specifications:
+          - SPEC-013-01
+        config:
+          database: appdb
+          host_group: db
+          tables:
+            - transactions
+            - accounts
+      - seq: "30"
+        group: act
+        type: invokeRest
+        description: 取引 POST

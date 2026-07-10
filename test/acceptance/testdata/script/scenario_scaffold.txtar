@@ -1,0 +1,110 @@
+# STEP: scenario scaffold (spec -> tree の往復入口)
+# spec (structured yaml) から生成した骨格に対して `stfw validate` が pass することを固定する。
+# data/scripts/expect 等の葉は生成しない (往復対象は骨格のみ) ことも合わせて検証する。
+
+exec stfw init --skip-plugin-init
+
+exec stfw scenario scaffold spec.yml
+stdout 'scenario/built/metadata.yml'
+stdout 'scenario/built/_10_20240101/metadata.yml'
+stdout 'scenario/built/_10_20240101/_10_pre_scripts/metadata.yml'
+stdout 'scenario/built/_10_20240101/_10_pre_scripts/config/config.yml'
+
+exists scenario/built/metadata.yml
+exists scenario/built/_10_20240101/_10_pre_scripts/config/config.yml
+
+# 骨格のみ生成する: scripts の葉 (scripts/*) は生成しない
+! exists scenario/built/_10_20240101/_10_pre_scripts/scripts
+
+# validate 相当が pass する (プラグイン解決可否・config.yml 存在)
+exec stfw validate built
+! stdout .
+
+# metadata.yml に spec の description / requirement_specifications が反映されている
+grep 'built シナリオの説明' scenario/built/metadata.yml
+grep 'SPEC-100' scenario/built/_10_20240101/_10_pre_scripts/metadata.yml
+
+# config が空指定の process は空スタブになる (プラグイン既定値では穴埋めしない)
+exec cat scenario/built/_10_20240101/_20_post_scripts/config/config.yml
+stdout 'scripts: \{\}'
+
+# --- 既存シナリオへの再 scaffold は既定でエラー ---
+! exec stfw scenario scaffold spec.yml
+stderr 'already exists'
+stderr 'force'
+
+# --force で再生成できる (手動追加した葉は温存される)
+mkdir scenario/built/_10_20240101/_10_pre_scripts/scripts
+exec touch scenario/built/_10_20240101/_10_pre_scripts/scripts/100_manual
+exec stfw scenario scaffold --force spec.yml
+exists scenario/built/_10_20240101/_10_pre_scripts/scripts/100_manual
+
+# --- 不正な spec は VO 検証エラーになる (group に "_" を含む) ---
+! exec stfw scenario scaffold bad_group.yml
+stderr 'can not contains'
+
+# --- spec 内の重複ディレクトリは silent 上書きせずエラーにし、何も書き込まない ---
+! exec stfw scenario scaffold dup_bizdate.yml
+stderr 'duplicate bizdate directory'
+! exists scenario/dupbiz
+
+! exec stfw scenario scaffold dup_process.yml
+stderr 'duplicate process directory'
+! exists scenario/dupproc
+
+-- spec.yml --
+scenario: built
+description: built シナリオの説明
+bizdates:
+  - seq: "10"
+    bizdate: "20240101"
+    description: Day1
+    processes:
+      - seq: "10"
+        group: pre
+        type: scripts
+        description: setup
+        requirement_specifications:
+          - SPEC-100
+        config:
+          some_key: value1
+      - seq: "20"
+        group: post
+        type: scripts
+        description: teardown
+-- bad_group.yml --
+scenario: badgroup
+bizdates:
+  - seq: "10"
+    bizdate: "20240101"
+    processes:
+      - seq: "10"
+        group: pre_group
+        type: scripts
+-- dup_bizdate.yml --
+scenario: dupbiz
+bizdates:
+  - seq: "10"
+    bizdate: "20240101"
+    processes:
+      - seq: "10"
+        group: pre
+        type: scripts
+  - seq: "10"
+    bizdate: "20240101"
+    processes:
+      - seq: "20"
+        group: post
+        type: scripts
+-- dup_process.yml --
+scenario: dupproc
+bizdates:
+  - seq: "10"
+    bizdate: "20240101"
+    processes:
+      - seq: "10"
+        group: pre
+        type: scripts
+      - seq: "10"
+        group: pre
+        type: scripts

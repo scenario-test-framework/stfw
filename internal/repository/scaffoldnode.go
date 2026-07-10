@@ -6,12 +6,6 @@ import (
 	"sort"
 )
 
-// metadataFileName は各階層に置くメタ情報ファイル名 (v0.2 の FILENAME_META と同じ)。
-const metadataFileName = "metadata.yml"
-
-// metadataContent は metadata.yml の初期内容 (v0.2 の metadata_repository と同じ)。
-const metadataContent = "description:\n\nrequirement_specifications:\n\n"
-
 // CreateNodeScaffold は scenario / bizdate 階層の scaffold を生成する。
 // ディレクトリが無ければ作成し、metadata.yml を (再) 生成する
 // (v0.2 の scenario/bizdate initialize と同じ冪等な挙動。dig は生成しない)。

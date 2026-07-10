@@ -1,0 +1,106 @@
+# STEP: scenario doc (tree -> doc の投影)
+# metadata.yml / config/config.yml 済みの小さいシナリオを手書きし、
+# `stfw scenario doc` の出力が golden (期待 Markdown) と完全一致することを固定する。
+
+exec stfw scenario doc mini
+cmp stdout mini.doc.md
+
+# --out はファイルへ書き出し、書き出し先パスを stdout へ出力する
+exec stfw scenario doc mini --out mini.doc.out.md
+stdout '^mini.doc.out.md$'
+cmp mini.doc.out.md mini.doc.md
+
+# 存在しないシナリオはエラー (exit 6)
+! exec stfw scenario doc nosuch
+stderr 'nosuch is not exist'
+
+# --- ディレクトリ命名規約違反は doc/spec とも失敗する (壊れた出力を成功扱いにしない) ---
+! exec stfw scenario doc badstruct
+stderr '_xx_bad_scripts'
+! exec stfw scenario spec badstruct
+stderr '_xx_bad_scripts'
+
+# --- 未インストールのプラグイン type・config.yml 不在は doc/spec を妨げない
+#     (プラグイン解決可否・config 存在は `stfw validate` の責務であって doc/spec の責務ではない) ---
+exec stfw scenario doc uninstalled
+stdout '_10_pre_customPlugin'
+exec stfw scenario spec uninstalled
+stdout 'customPlugin'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+-- scenario/mini/metadata.yml --
+description: |
+  最小サンプルシナリオ。
+-- scenario/mini/_10_20240101/metadata.yml --
+description: Day1
+-- scenario/mini/_10_20240101/_10_arrange_clearPostgres/metadata.yml --
+description: truncate
+
+requirement_specifications:
+  - SPEC-013-01
+-- scenario/mini/_10_20240101/_10_arrange_clearPostgres/config/config.yml --
+stfw:
+  process:
+    clearPostgres:
+      host_group: db
+      database: appdb
+      tables:
+        - transactions
+        - accounts
+-- scenario/mini/_10_20240101/_30_act_invokeRest/metadata.yml --
+description: 取引 POST
+-- scenario/mini/_10_20240101/_30_act_invokeRest/config/config.yml --
+stfw:
+  process:
+    invokeRest: {}
+-- mini.doc.md --
+# シナリオ: mini
+
+最小サンプルシナリオ。
+
+## 要求トレーサビリティ
+
+| 要求仕様 | 検証する process |
+|---|---|
+| SPEC-013-01 | _10_20240101/_10_arrange_clearPostgres |
+
+## _10_20240101 — Day1
+
+| # | process | フェーズ(推定) | プラグイン | 説明 |
+|---|---|---|---|---|
+| _10 | _10_arrange_clearPostgres | Arrange | clearPostgres | truncate |
+| _30 | _30_act_invokeRest | Act | invokeRest | 取引 POST |
+
+### _10_arrange_clearPostgres
+
+- フェーズ(推定): Arrange
+- 要求仕様: SPEC-013-01
+- 設定:
+
+    ```yaml
+    database: appdb
+    host_group: db
+    tables:
+        - transactions
+        - accounts
+    ```
+
+### _30_act_invokeRest
+
+- フェーズ(推定): Act
+- 要求仕様: -
+-- scenario/badstruct/metadata.yml --
+description: broken
+-- scenario/badstruct/_10_20240101/metadata.yml --
+description: Day1
+-- scenario/badstruct/_10_20240101/_xx_bad_scripts/metadata.yml --
+description: bad
+-- scenario/uninstalled/metadata.yml --
+description: 未インストールのプラグインを含むシナリオ
+-- scenario/uninstalled/_10_20240101/metadata.yml --
+description: Day1
+-- scenario/uninstalled/_10_20240101/_10_pre_customPlugin/metadata.yml --
+description: 独自プラグイン

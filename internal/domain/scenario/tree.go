@@ -149,6 +149,31 @@ func (t *ScenarioTree) Validate(installedTypes []string) Violations {
 	return vs
 }
 
+// StructureViolations はディレクトリ名規約 (`_{seq}_{bizdate}` / `_{seq}_{group}_{type}`) の
+// parse エラーのみを列挙する。Validate とは異なり、プラグイン解決可否・config.yml 存在・
+// 残存 *.dig は対象にしない (scenario doc/spec の投影はプラグイン未インストールでも
+// 行えるべきだが、seq/group/type が空のまま壊れた doc/spec を出すのは避けたいため)。
+func (t *ScenarioTree) StructureViolations() Violations {
+	var vs Violations
+	for _, s := range t.scenarios {
+		sPath := path.Join(RootDirName, s.name)
+		for _, b := range s.bizdates {
+			bPath := path.Join(sPath, b.dirName)
+			if b.parseErr != nil {
+				vs = append(vs, Violation{Path: bPath, Level: ViolationError, Message: b.parseErr.Error()})
+				continue
+			}
+			for _, p := range b.processes {
+				if p.parseErr != nil {
+					pPath := path.Join(bPath, p.dirName)
+					vs = append(vs, Violation{Path: pPath, Level: ViolationError, Message: p.parseErr.Error()})
+				}
+			}
+		}
+	}
+	return vs
+}
+
 // digViolations は dir 配下に残存する *.dig ファイルを警告として列挙する。
 // dig 生成は v1.0 で廃止された (validate への静的検証昇格)。
 func digViolations(parent string, dir RawDir) Violations {
