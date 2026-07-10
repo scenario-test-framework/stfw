@@ -1,0 +1,59 @@
+#!/bin/bash
+# importMasterData (カスタムプラグインの実装例): config 内の CSV を投入する Arrange。
+#
+# 主眼は「カスタムプラグインは組込みプラグインを部品として再利用できる」こと。
+# DB 投入ロジックは再実装せず、ファイル操作 + 組込みプラグインへの委譲で実現する:
+#   1. ファイル操作 : config の CSV を importPostgres が読む data/{db}/{table}.csv へ書き出す
+#   2. 委譲         : 組込み importPostgres の execute を、接続系 env を訳して呼び出す
+#
+# 設定 (config.yml の stfw.process.importMasterData):
+#   host_group / port / database / user  … importPostgres と同じ接続系
+#   tables[].name / tables[].csv         … 投入先テーブル名と CSV 本文
+set -uo pipefail
+
+database="${stfw_process_importMasterData_database:-}"
+if [ -z "${database}" ]; then
+  echo "importMasterData: database is required" >&2
+  exit 6
+fi
+
+data_root="${stfw_process_dir}/data/${database}"
+mkdir -p "${data_root}"
+
+# 1) config の CSV を data/{database}/{table}.csv へ書き出す (ファイル操作)。
+#    併せて importPostgres の tables 列挙 env を組み立てる。
+i=0
+while :; do
+  name_var="stfw_process_importMasterData_tables_${i}_name"
+  csv_var="stfw_process_importMasterData_tables_${i}_csv"
+  name="${!name_var:-}"
+  [ -z "${name}" ] && break
+  printf '%s' "${!csv_var:-}" > "${data_root}/${name}.csv"
+  export "stfw_process_importPostgres_tables_${i}=${name}"
+  echo "importMasterData: wrote ${data_root}/${name}.csv"
+  i=$((i + 1))
+done
+if [ "${i}" -eq 0 ]; then
+  echo "importMasterData: no tables in config" >&2
+  exit 6
+fi
+
+# 2) importPostgres の接続系 env を自分の config から写す。
+export stfw_process_importPostgres_host_group="${stfw_process_importMasterData_host_group:-}"
+export stfw_process_importPostgres_port="${stfw_process_importMasterData_port:-5432}"
+export stfw_process_importPostgres_database="${database}"
+export stfw_process_importPostgres_user="${stfw_process_importMasterData_user:-}"
+
+# 3) 組込み importPostgres を確保 (materialize) して execute へ委譲する。
+#    stfw plugin install は組込みプラグインを .stfw 配下へ展開する (STFW_PROJ_DIR_DATA)。
+pg_execute="${STFW_PROJ_DIR_DATA}/plugins/process/importPostgres/bin/run/execute"
+if [ ! -x "${pg_execute}" ]; then
+  stfw plugin install importPostgres || true
+fi
+if [ ! -x "${pg_execute}" ]; then
+  echo "importMasterData: built-in importPostgres is not available: ${pg_execute}" >&2
+  exit 6
+fi
+
+echo "importMasterData: delegating to built-in importPostgres"
+exec "${pg_execute}"

@@ -15,7 +15,8 @@ Arrange (clear/import) → Act (invokeRest) → Collect (exportPostgres) → Ass
 
 | # | process | グループ | プラグイン | 説明 |
 |---|---|---|---|---|
-| _10 | _10_arrange_clearPostgres | arrange | clearPostgres | accounts / transactions を truncate して初期状態にする (reset)。 |
+| _10 | _10_arrange_clearPostgres | arrange | clearPostgres | users / accounts / transactions を truncate して初期状態にする (reset)。 |
+| _15 | _15_arrange_importMasterData | arrange | importMasterData | 口座名義のマスタデータ (users) を config 内の CSV から投入する (seed)。 |
 | _20 | _20_arrange_importPostgres | arrange | importPostgres | 初期残高 CSV (acc-001=1000 / acc-002=2000) を accounts へ投入する (seed)。 |
 | _30 | _30_act_invokeRest | act | invokeRest | 取引を API へ POST する (acc-001 +500 / acc-002 +300)。 |
 | _40 | _40_collect_exportPostgres | collect | exportPostgres | 取引反映後の残高を evidence/appdb/accounts.csv へ収集する。 |
@@ -33,6 +34,26 @@ Arrange (clear/import) → Act (invokeRest) → Collect (exportPostgres) → Ass
     tables:
         - transactions
         - accounts
+        - users
+    user: appuser
+    ```
+
+### _15_arrange_importMasterData
+
+- グループ: arrange
+- 要求仕様: -
+- 設定:
+
+    ```yaml
+    database: appdb
+    host_group: db
+    port: "5432"
+    tables:
+        - csv: |
+            id,name,email
+            acc-001,Alice,alice@example.com
+            acc-002,Bob,bob@example.com
+          name: users
     user: appuser
     ```
 

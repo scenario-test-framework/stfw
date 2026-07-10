@@ -1,4 +1,4 @@
-# Arrange: 前回実行の状態を消す (冪等化)。transactions → accounts の順に truncate。
+# Arrange: 前回実行の状態を消す (冪等化)。transactions → accounts → users の順に truncate。
 stfw:
   process:
     clearPostgres:
@@ -8,3 +8,4 @@ stfw:
       tables:
         - transactions
         - accounts
+        - users

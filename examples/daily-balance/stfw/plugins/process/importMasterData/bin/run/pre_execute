@@ -1,0 +1,3 @@
+#!/bin/bash
+# 前処理は不要 (CSV は config に同梱されており、execute で data/ へ書き出す)。
+exit 0

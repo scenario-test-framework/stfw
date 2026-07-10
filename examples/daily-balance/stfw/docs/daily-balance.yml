@@ -17,13 +17,31 @@ bizdates:
           group: arrange
           type: clearPostgres
           description: |
-            accounts / transactions を truncate して初期状態にする (reset)。
+            users / accounts / transactions を truncate して初期状態にする (reset)。
           config:
             database: appdb
             host_group: db
             tables:
                 - transactions
                 - accounts
+                - users
+            user: appuser
+        - seq: "15"
+          group: arrange
+          type: importMasterData
+          description: |
+            口座名義のマスタデータ (users) を config 内の CSV から投入する (seed)。
+            カスタムプラグイン importMasterData の実装例 (ファイル操作 + 組込み importPostgres への委譲)。
+          config:
+            database: appdb
+            host_group: db
+            port: "5432"
+            tables:
+                - csv: |
+                    id,name,email
+                    acc-001,Alice,alice@example.com
+                    acc-002,Bob,bob@example.com
+                  name: users
             user: appuser
         - seq: "20"
           group: arrange

@@ -1,0 +1,5 @@
+description: |
+  口座名義のマスタデータ (users) を config 内の CSV から投入する (seed)。
+  カスタムプラグイン importMasterData の実装例 (ファイル操作 + 組込み importPostgres への委譲)。
+
+requirement_specifications:

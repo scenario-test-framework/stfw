@@ -1,4 +1,4 @@
 description: |
-  accounts / transactions を truncate して初期状態にする (reset)。
+  users / accounts / transactions を truncate して初期状態にする (reset)。
 
 requirement_specifications:

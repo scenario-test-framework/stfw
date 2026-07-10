@@ -1,0 +1,16 @@
+# Arrange: 口座名義のマスタデータ (users) を config 内の CSV から投入する。
+# importMasterData はカスタムプラグイン (plugins/process/importMasterData)。
+# CSV を data/appdb/users.csv へ書き出し、組込み importPostgres へ委譲する。
+stfw:
+  process:
+    importMasterData:
+      host_group: db
+      port: "5432"
+      database: appdb
+      user: appuser
+      tables:
+        - name: users
+          csv: |
+            id,name,email
+            acc-001,Alice,alice@example.com
+            acc-002,Bob,bob@example.com

@@ -1,0 +1,3 @@
+#!/bin/bash
+# importMasterData は psql の存在のみが要件で、プロビジョニングは不要。
+exit 0

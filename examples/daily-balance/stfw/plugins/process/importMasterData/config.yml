@@ -1,0 +1,22 @@
+# importMasterData の既定設定。プロジェクト側 (プロセスの config/config.yml) で上書きする。
+#
+# 接続系は組込み importPostgres と同じ:
+#   host_group : 接続先 DB ホストを解決する inventory グループ名
+#   port       : PostgreSQL ポート
+#   database   : 対象データベース名
+#   user       : 接続ユーザー (パスワードは secret {host}-{user} で解決)
+#
+# tables : 「テーブル名 + そのテーブルへ投入する CSV 本文」のリスト
+#   - name : 対象テーブル名
+#   - csv  : ヘッダー付き CSV 本文 (importPostgres と同じ形式。NULL は \N)
+#
+# 件数の少ないマスタ/参照データを別ファイルにせず scenario の config に同梱するための
+# カスタムプラグイン。接続情報 (ホスト・パスワード) を config に直書きしてはならない。
+stfw:
+  process:
+    importMasterData:
+      host_group: ""
+      port: "5432"
+      database: ""
+      user: ""
+      tables: []

@@ -1,0 +1,11 @@
+#!/bin/bash
+# 前提コマンド (psql) が揃っていればインストール済みとみなす。
+# DB 投入は組込み importPostgres へ委譲するため、要件は importPostgres と同じ。
+for cmd in psql; do
+  if ! command -v "${cmd}" >/dev/null 2>&1; then
+    echo "${cmd} is not installed."
+    exit 1
+  fi
+done
+echo "true"
+exit 0

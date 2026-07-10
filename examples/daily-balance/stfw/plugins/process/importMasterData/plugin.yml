@@ -1,0 +1,4 @@
+# importMasterData: config 内の CSV をマスタデータとして投入するカスタムプラグイン。
+# DB 投入は組込み importPostgres へ委譲するため psql を要件とする。
+requires:
+  - psql
