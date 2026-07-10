@@ -13,8 +13,9 @@
 #   避けるため環境変数として export し (k6 は include-system-env-vars 既定 true で __ENV へ
 #   取り込む)、Masker が出力をマスクする。
 # 出力: end-of-test サマリを ${stfw_process_dir}/evidence/summary.json (--summary-export) へ。
-#   そのサマリから自己完結の HTML レポート evidence/report.html を生成する
-#   (k6 本体の web dashboard は負荷テスト向けで単発 Act では生成されないため、サマリから作る)。
+#   HTML レポート evidence/report.html は次の優先で出力する:
+#   1. k6 web dashboard (--out web-dashboard=export=...)。負荷テスト等で十分なデータがある場合。
+#   2. 上が生成しなかった場合 (単発 Act 等でデータ不足) は、サマリから自己完結 HTML を生成。
 #
 # 終了コード: k6 は 0=成功 / 99=閾値失敗 / 100+=各種エラー / 105=外部中断 を返す。
 #   本プラグインは「Act の失敗はステップ失敗」に従い、非 0 を一律 exit 6 とする。
@@ -56,7 +57,11 @@ fi
 # ブラウザは既定でヘッドレス (CI/非対話環境向け)。スクリプト側の指定が優先される。
 export K6_BROWSER_HEADLESS="${K6_BROWSER_HEADLESS:-true}"
 
-k6_args=(run --summary-export "${stfw_process_dir}/evidence/summary.json")
+summary="${stfw_process_dir}/evidence/summary.json"
+report="${stfw_process_dir}/evidence/report.html"
+# k6 web dashboard に report.html を書かせる (period を詰めて短めのテストでも出しやすくする)。
+# 生成は十分なデータがある場合のみ。無い場合は下のフォールバックで補う。
+k6_args=(run --summary-export "${summary}" --out "web-dashboard=period=1s&export=${report}")
 
 # 接続情報の解決 (任意)。host_group があれば先頭ホストを __ENV へ注入する。
 if [ -n "${host_group}" ]; then
@@ -96,14 +101,14 @@ while :; do
   k6_args+=(-e "${kv}")
 done
 
+rm -f "${report}"  # 前回実行の残骸を消し、今回の結果だけを評価する
 "${k6_bin}" "${k6_args[@]}" "${script}"
 k6_rc=$?
 
-# サマリ (summary.json) から自己完結の HTML レポートを生成する。
-# k6 が失敗 (閾値割れ等) してもサマリは出るため、evidence として常に残す。
-summary="${stfw_process_dir}/evidence/summary.json"
-report="${stfw_process_dir}/evidence/report.html"
-if [ -f "${summary}" ]; then
+# k6 web dashboard がレポートを出さなかった場合 (データ不足) のみ、サマリから自己完結
+# HTML を生成してフォールバックする。k6 が出したリッチなレポートは上書きしない。
+# (k6 が失敗してもサマリは出るため、evidence として report は常に残る)。
+if [ ! -f "${report}" ] && [ -f "${summary}" ]; then
   {
     cat <<'HTML'
 <!doctype html><html lang="en"><head><meta charset="utf-8">

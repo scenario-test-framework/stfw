@@ -42,7 +42,7 @@ k6 スクリプト側からは `__ENV.stfw_target_host` / `__ENV.stfw_target_pas
 
 ```
 {process}/evidence/summary.json    # k6 の end-of-test サマリ (--summary-export)
-{process}/evidence/report.html     # summary.json から生成する自己完結の HTML レポート
+{process}/evidence/report.html     # HTML レポート。k6 web dashboard を優先、無ければ summary.json から生成
 ```
 
 ## 終了コード
