@@ -22,9 +22,9 @@ echo "==> secret を準備 (age 鍵 + DB パスワード)"
 if [ ! -f stfw/config/encrypt/key.txt ]; then
   run secret keygen
 fi
-# compose の POSTGRES_PASSWORD と同じ値を DB ホスト postgres / ユーザー appuser に登録
+# compose と同じ STFW_DB_* を単一ソースに、DB ホスト postgres へ user/password を登録
 # (再実行でも冪等になるよう --force で上書き)
-run secret set postgres appuser apppass --force
+run secret set postgres "${STFW_DB_USER:-appuser}" "${STFW_DB_PASSWORD:-apppass}" --force
 
 echo "==> プラグインの外部バイナリ (k6 / compare-files) を install"
 ensure_plugin invokeRest

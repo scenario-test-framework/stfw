@@ -19,13 +19,10 @@ bizdates:
           description: |
             users / accounts / transactions を truncate して初期状態にする (reset)。
           config:
-            database: appdb
-            host_group: db
             tables:
                 - transactions
                 - accounts
                 - users
-            user: appuser
         - seq: "15"
           group: arrange
           type: importMasterData
@@ -34,23 +31,16 @@ bizdates:
             カスタムプラグイン importMasterData の実装例。共通データ
             config/plugins/importMasterData/data/appdb/users.csv を読み、組込み importPostgres へ委譲する。
           config:
-            database: appdb
-            host_group: db
-            port: "5432"
             tables:
                 - users
-            user: appuser
         - seq: "20"
           group: arrange
           type: importPostgres
           description: |
             初期残高 CSV (acc-001=1000 / acc-002=2000) を accounts へ投入する (seed)。
           config:
-            database: appdb
-            host_group: db
             tables:
                 - accounts
-            user: appuser
         - seq: "30"
           group: act
           type: invokeRest
@@ -65,11 +55,8 @@ bizdates:
           description: |
             取引反映後の残高を evidence/appdb/accounts.csv へ収集する。
           config:
-            database: appdb
-            host_group: db
             tables:
                 - accounts
-            user: appuser
         - seq: "50"
           group: assert
           type: compare
@@ -99,11 +86,8 @@ bizdates:
           description: |
             取引反映後の累積残高を evidence/appdb/accounts.csv へ収集する。
           config:
-            database: appdb
-            host_group: db
             tables:
                 - accounts
-            user: appuser
         - seq: "30"
           group: assert
           type: compare

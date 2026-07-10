@@ -29,13 +29,10 @@ Arrange (clear/import) → Act (invokeRest) → Collect (exportPostgres) → Ass
 - 設定:
 
     ```yaml
-    database: appdb
-    host_group: db
     tables:
         - transactions
         - accounts
         - users
-    user: appuser
     ```
 
 ### _15_arrange_importMasterData
@@ -45,12 +42,8 @@ Arrange (clear/import) → Act (invokeRest) → Collect (exportPostgres) → Ass
 - 設定:
 
     ```yaml
-    database: appdb
-    host_group: db
-    port: "5432"
     tables:
         - users
-    user: appuser
     ```
 
 ### _20_arrange_importPostgres
@@ -60,11 +53,8 @@ Arrange (clear/import) → Act (invokeRest) → Collect (exportPostgres) → Ass
 - 設定:
 
     ```yaml
-    database: appdb
-    host_group: db
     tables:
         - accounts
-    user: appuser
     ```
 
 ### _30_act_invokeRest
@@ -85,11 +75,8 @@ Arrange (clear/import) → Act (invokeRest) → Collect (exportPostgres) → Ass
 - 設定:
 
     ```yaml
-    database: appdb
-    host_group: db
     tables:
         - accounts
-    user: appuser
     ```
 
 ### _50_assert_compare
@@ -128,11 +115,8 @@ Arrange (clear/import) → Act (invokeRest) → Collect (exportPostgres) → Ass
 - 設定:
 
     ```yaml
-    database: appdb
-    host_group: db
     tables:
         - accounts
-    user: appuser
     ```
 
 ### _30_assert_compare

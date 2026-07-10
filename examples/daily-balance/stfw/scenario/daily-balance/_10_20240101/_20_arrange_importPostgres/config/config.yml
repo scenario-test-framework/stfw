@@ -1,10 +1,7 @@
-# Arrange: 口座マスタ (初期残高) を投入する。
-# 入力 CSV: data/appdb/accounts.csv (exportPostgres と同じ CSV 形式)。
+# Arrange: 口座マスタ (初期残高) を投入する。入力 CSV: data/appdb/accounts.csv。
+# 接続系は config/plugins/process/importPostgres/config.yml で共通化 (ここは tables のみ)。
 stfw:
   process:
     importPostgres:
-      host_group: db
-      database: appdb
-      user: appuser
       tables:
         - accounts

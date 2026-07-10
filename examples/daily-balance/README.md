@@ -134,7 +134,8 @@ examples/daily-balance/
     ├── stfw.yml
     ├── config/
     │   ├── inventory/local.yml
-    │   └── plugins/importMasterData/data/appdb/users.csv  # シナリオ共通のマスタデータ
+    │   ├── plugins/importMasterData/data/appdb/users.csv  # シナリオ共通のマスタデータ
+    │   └── plugins/process/{clear,import,export}Postgres/config.yml  # DB 接続系を共通化
     ├── plugins/            # カスタムプラグイン
     │   └── process/importMasterData/   # 共通データ → 組込み importPostgres へ委譲
     ├── docs/               # リバース生成物 (spec + doc の実出力例)
@@ -148,3 +149,26 @@ examples/daily-balance/
 接続情報は config に直書きせず、inventory（ホスト解決）と secret（パスワード）から解決します。
 `run.sh` が生成する `stfw/config/encrypt/`・`stfw/config/passwd/`（デモ用鍵・クレデンシャル）は
 git 管理外です。
+
+## DB 接続系の共通化
+
+`clearPostgres` / `importPostgres` / `exportPostgres` / `importMasterData` は、どれも同じ DB
+（`database` / `user`）へ接続します。各シナリオのプロセス config にこれを書くと、ユーザーを
+変えたときに全プロセスを直す必要があり、直し忘れやすくなります。そこで **接続系はプロジェクト
+共通の上書き設定に一本化** し、各プロセスの `config/config.yml` は `tables` だけを書きます。
+
+```
+config/plugins/process/{type}/config.yml   ← host_group / port / database / user を共通定義
+scenario/.../{process}/config/config.yml   ← tables のみ
+```
+
+- 設定の上書きチェーン（§8.1）: プラグイン既定 → `config/plugins/process/{type}/` →
+  各プロセス `config/config.yml`。共通値は真ん中の層に置きます。
+- `database` / `user` はさらに `${STFW_DB_DATABASE}` / `${STFW_DB_USER}` で参照し、**単一ソース**に
+  します。展開元は `compose.yaml` の env（既定 `appdb` / `appuser`）で、postgres・api・stfw の
+  3 サービスが同じ `STFW_DB_*` を共有します。接続先を変えるときは env を 1 系統変えるだけです。
+
+```sh
+# 例: 接続ユーザーを変えて実行 (postgres/api/stfw/secret すべてに反映)
+STFW_DB_USER=tester STFW_DB_PASSWORD=secret ./run.sh
+```

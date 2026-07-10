@@ -2,12 +2,9 @@
 # importMasterData はカスタムプラグイン (plugins/process/importMasterData)。
 # 共通データ config/plugins/importMasterData/data/appdb/users.csv を読み、
 # data/appdb/users.csv へ配置して組込み importPostgres へ委譲する。
+# 接続系は config/plugins/process/importMasterData/config.yml で共通化 (ここは tables のみ)。
 stfw:
   process:
     importMasterData:
-      host_group: db
-      port: "5432"
-      database: appdb
-      user: appuser
       tables:
         - users

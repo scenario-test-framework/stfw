@@ -1,10 +1,8 @@
 # Arrange: 前回実行の状態を消す (冪等化)。transactions → accounts → users の順に truncate。
+# 接続系は config/plugins/process/clearPostgres/config.yml で共通化 (ここは tables のみ)。
 stfw:
   process:
     clearPostgres:
-      host_group: db
-      database: appdb
-      user: appuser
       tables:
         - transactions
         - accounts

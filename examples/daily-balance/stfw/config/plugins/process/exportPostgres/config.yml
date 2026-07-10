@@ -1,0 +1,11 @@
+# exportPostgres の接続系をプロジェクト全体で共通化する上書き設定 (§8.1 の上書きチェーン)。
+# 各シナリオのプロセス config/config.yml は tables だけを書けばよい。
+# database / user は compose の env (STFW_DB_DATABASE / STFW_DB_USER) を単一ソースとし、
+# ${...} で参照する (値の展開は実行時の環境変数から行われる)。
+stfw:
+  process:
+    exportPostgres:
+      host_group: db
+      port: "5432"
+      database: ${STFW_DB_DATABASE}
+      user: ${STFW_DB_USER}
