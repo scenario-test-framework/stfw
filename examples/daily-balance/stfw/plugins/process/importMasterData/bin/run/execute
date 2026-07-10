@@ -22,12 +22,26 @@ if [ -z "${database}" ]; then
   exit 6
 fi
 
+# 委譲先の組込み importPostgres を先に確保する (fail-fast)。
+# stfw plugin install は組込みプラグインを .stfw 配下へ展開する (STFW_PROJ_DIR_DATA)。
+# ここで用意できないなら以降の準備は無駄になるため、早期にエラー終了する。
+pg_execute="${STFW_PROJ_DIR_DATA}/plugins/process/importPostgres/bin/run/execute"
+if [ ! -x "${pg_execute}" ]; then
+  stfw plugin install importPostgres || true
+fi
+if [ ! -x "${pg_execute}" ]; then
+  echo "importMasterData: built-in importPostgres is not available: ${pg_execute}" >&2
+  exit 6
+fi
+
 # シナリオ共通のマスタデータ置き場 (STFW_PROJ_DIR_CONFIG = {projDir}/config)
 shared_root="${STFW_PROJ_DIR_CONFIG}/plugins/process/importMasterData/data/${database}"
 dest_root="${stfw_process_dir}/data/${database}"
 mkdir -p "${dest_root}"
 
-# 1) 共通データ CSV を data/{database}/{table}.csv へ配置する (ファイル操作)。
+# 1) 共通データ CSV を data/{database}/{table}.csv から参照できるようにする。
+#    実体はコピーせず symlink を張る (共通データが唯一の正。importPostgres の
+#    存在判定 -f も psql の STDIN リダイレクトも symlink をたどるため動作する)。
 #    併せて importPostgres の tables 列挙 env を組み立てる。
 i=0
 while :; do
@@ -39,9 +53,11 @@ while :; do
     echo "importMasterData: shared master data not found: ${src}" >&2
     exit 6
   fi
-  cp "${src}" "${dest_root}/${table}.csv"
+  # -f: 既存 (過去実行の symlink / 実体) を上書き。ターゲットは絶対パス
+  # (dest_root と shared_root は別ディレクトリのため相対にしない)。
+  ln -sf "${src}" "${dest_root}/${table}.csv"
   export "stfw_process_importPostgres_tables_${i}=${table}"
-  echo "importMasterData: staged ${table} from ${src}"
+  echo "importMasterData: linked ${table} -> ${src}"
   i=$((i + 1))
 done
 if [ "${i}" -eq 0 ]; then
@@ -55,16 +71,6 @@ export stfw_process_importPostgres_port="${stfw_process_importMasterData_port:-5
 export stfw_process_importPostgres_database="${database}"
 export stfw_process_importPostgres_user="${stfw_process_importMasterData_user:-}"
 
-# 3) 組込み importPostgres を確保 (materialize) して execute へ委譲する。
-#    stfw plugin install は組込みプラグインを .stfw 配下へ展開する (STFW_PROJ_DIR_DATA)。
-pg_execute="${STFW_PROJ_DIR_DATA}/plugins/process/importPostgres/bin/run/execute"
-if [ ! -x "${pg_execute}" ]; then
-  stfw plugin install importPostgres || true
-fi
-if [ ! -x "${pg_execute}" ]; then
-  echo "importMasterData: built-in importPostgres is not available: ${pg_execute}" >&2
-  exit 6
-fi
-
+# 3) 組込み importPostgres の execute へ委譲する。
 echo "importMasterData: delegating to built-in importPostgres"
 exec "${pg_execute}"

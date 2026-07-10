@@ -76,9 +76,11 @@ stfw/config/plugins/process/importMasterData/data/appdb/users.csv   # ← 全シ
 観点は **「カスタムプラグインは組込みプラグインを部品として再利用できる」** こと。
 DB 投入は再実装せず、次の 2 段で実現しています。
 
-1. **ファイル操作**: 共通データ `config/plugins/process/importMasterData/data/appdb/users.csv` を、
-   組込み `importPostgres` が読む（プロセス配下の）`data/appdb/users.csv` へコピーする。
-2. **委譲**: 組込み `importPostgres` の `execute` を、接続系の env を訳して呼び出す。
+1. **ファイル操作**: 組込み `importPostgres` が読む（プロセス配下の）`data/appdb/users.csv` から、
+   共通データ `config/plugins/process/importMasterData/data/appdb/users.csv` へ **symlink を張る**
+   （実体はコピーせず共通データを唯一の正とする）。プロセス配下の `data/` は gitignore 済み。
+2. **委譲**: 委譲先の組込み `importPostgres` を先頭で確保（無ければ早期エラー）し、その `execute` を
+   接続系の env を訳して呼び出す。
 
 `plugins/process/{type}/` に置くだけで組込みより優先して解決されます（プラグイン契約の詳細は
 プラグインの [README](stfw/plugins/process/importMasterData/README.md) と

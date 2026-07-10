@@ -12,6 +12,6 @@ evidence/
 actual/
 result/
 
-# importMasterData が共通データ (config/plugins/importMasterData/data/) を実行時に
-# プロセス配下へ materialize したもの。ソースは共通データ側なので追跡しない。
+# importMasterData が共通データ (config/plugins/process/importMasterData/data/) を
+# 実行時にプロセス配下へ symlink したもの。ソースは共通データ側なので追跡しない。
 scenario/daily-balance/_10_20240101/_15_arrange_importMasterData/data/

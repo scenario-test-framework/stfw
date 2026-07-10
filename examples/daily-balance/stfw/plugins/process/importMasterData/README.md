@@ -25,10 +25,13 @@ config/plugins/process/importMasterData/data/
 このプラグインの主眼は **「カスタムプラグインは組込みプラグインを部品として再利用できる」**
 ことの実演です。DB 投入ロジックは再実装せず、次の 2 段で実現します。
 
-1. **ファイル操作**: 共通データ `config/plugins/process/importMasterData/data/{db}/{table}.csv` を、
-   組込み `importPostgres` が読む `data/{db}/{table}.csv`（プロセス配下）へコピーする。
+1. **ファイル操作**: 共通データ `config/plugins/process/importMasterData/data/{db}/{table}.csv` へ、
+   組込み `importPostgres` が読む `data/{db}/{table}.csv`（プロセス配下）から **symlink を張る**。
+   実体はコピーせず共通データを唯一の正とする（`importPostgres` の存在判定・`psql` の入力読み込みは
+   symlink をたどるため動作する）。プロセス配下の `data/` は実行時生成物として gitignore する。
 2. **委譲**: 組込み `importPostgres` の `bin/run/execute` を、接続系の env を訳して呼び出す
-   （`stfw plugin install importPostgres` で `.stfw/` 配下へ materialize されたものを exec）。
+   （委譲先は先頭で確保し、用意できなければ早期にエラー終了する。`stfw plugin install importPostgres`
+   で `.stfw/` 配下へ materialize されたものを exec）。
 
 ## 設定
 
