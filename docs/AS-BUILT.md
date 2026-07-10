@@ -944,10 +944,10 @@ bizdates:
 全 process から集約。空なら節ごと省略）→ 業務日付ごとの `## {dir} — {description 先頭行}`
 （process 一覧表 + process ごとの `### {dir}` 詳細節）の順で構成する。
 
-process 一覧表・詳細節の「フェーズ(推定)」列は type → フェーズの固定マッピング
-（GUIDE.md §2 と同じ表）を `scenario.PhaseOf(type)` で導出する。ユーザー定義 type・`scripts` は
-`-`（汎用/不明）になる。設定 (`config/config.yml` の該当サブツリー) がある process のみ
-「- 設定:」の YAML コードブロックを持つ。
+process 一覧表・詳細節の「グループ」列は、ディレクトリ名 `_{seq}_{group}_{type}` の
+**group 部をそのまま**表示する（作者が宣言した確定値であり推定を含まない）。aaca 規約
+（GUIDE.md §2）で group をフェーズ名に揃えると、この列がそのままフェーズ表になる。設定
+(`config/config.yml` の該当サブツリー) がある process のみ「- 設定:」の YAML コードブロックを持つ。
 
 ### 12.5 metadata.yml consumer
 

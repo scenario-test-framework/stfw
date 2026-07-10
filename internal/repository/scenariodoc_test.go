@@ -38,7 +38,7 @@ func TestBuildDocFromTree(t *testing.T) {
 					{
 						SeqLabel:                  "_10",
 						DirName:                   "_10_arrange_clearPostgres",
-						Phase:                     "Arrange",
+						Group:                     "arrange",
 						Type:                      "clearPostgres",
 						Description:               "truncate",
 						RequirementSpecifications: []string{"SPEC-013-01"},
@@ -47,7 +47,7 @@ func TestBuildDocFromTree(t *testing.T) {
 					{
 						SeqLabel:                  "_30",
 						DirName:                   "_30_act_invokeRest",
-						Phase:                     "Act",
+						Group:                     "act",
 						Type:                      "invokeRest",
 						Description:               "取引 POST",
 						RequirementSpecifications: []string{"SPEC-015-01"},

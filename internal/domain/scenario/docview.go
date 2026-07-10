@@ -27,7 +27,7 @@ type DocBizdate struct {
 type DocProcess struct {
 	SeqLabel                  string // "_" + seq (プロセス一覧表の # 列)
 	DirName                   string
-	Phase                     string
+	Group                     string // ディレクトリ名 `_{seq}_{group}_{type}` の group 部 (作者が宣言した確定値)
 	Type                      string
 	Description               string // 1 行 (説明の先頭行。テーブルセルが改行で壊れないよう畳む)
 	RequirementSpecifications []string

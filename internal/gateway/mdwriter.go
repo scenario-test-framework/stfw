@@ -33,9 +33,9 @@ func RenderScenarioDoc(doc scenario.DocData) (string, error) {
 	for _, bz := range doc.Bizdates {
 		fmt.Fprintf(&b, "## %s\n\n", bz.Title)
 
-		b.WriteString("| # | process | フェーズ(推定) | プラグイン | 説明 |\n|---|---|---|---|---|\n")
+		b.WriteString("| # | process | グループ | プラグイン | 説明 |\n|---|---|---|---|---|\n")
 		for _, p := range bz.Processes {
-			fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n", p.SeqLabel, p.DirName, p.Phase, p.Type, p.Description)
+			fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n", p.SeqLabel, p.DirName, p.Group, p.Type, p.Description)
 		}
 		b.WriteString("\n")
 
@@ -49,7 +49,7 @@ func RenderScenarioDoc(doc scenario.DocData) (string, error) {
 
 func writeProcessSection(b *strings.Builder, p scenario.DocProcess) {
 	fmt.Fprintf(b, "### %s\n\n", p.DirName)
-	fmt.Fprintf(b, "- フェーズ(推定): %s\n", p.Phase)
+	fmt.Fprintf(b, "- グループ: %s\n", p.Group)
 
 	reqs := "-"
 	if len(p.RequirementSpecifications) > 0 {

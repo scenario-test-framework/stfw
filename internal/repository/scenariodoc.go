@@ -59,7 +59,7 @@ func BuildDocFromTree(projDir string, view scenario.ScenarioView) (scenario.DocD
 			docBizdate.Processes = append(docBizdate.Processes, scenario.DocProcess{
 				SeqLabel:                  "_" + p.Seq,
 				DirName:                   p.DirName,
-				Phase:                     scenario.PhaseOf(p.ProcessType).String(),
+				Group:                     p.Group,
 				Type:                      p.ProcessType,
 				Description:               firstLine(pMeta.Description),
 				RequirementSpecifications: pMeta.RequirementSpecifications,

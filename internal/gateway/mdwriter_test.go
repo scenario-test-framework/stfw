@@ -24,7 +24,7 @@ func TestRenderScenarioDoc(t *testing.T) {
 					{
 						SeqLabel:                  "_10",
 						DirName:                   "_10_arrange_clearPostgres",
-						Phase:                     "Arrange",
+						Group:                     "arrange",
 						Type:                      "clearPostgres",
 						Description:               "truncate",
 						RequirementSpecifications: []string{"SPEC-013-01"},
@@ -33,7 +33,7 @@ func TestRenderScenarioDoc(t *testing.T) {
 					{
 						SeqLabel:    "_30",
 						DirName:     "_30_act_invokeRest",
-						Phase:       "Act",
+						Group:       "act",
 						Type:        "invokeRest",
 						Description: "取引 POST",
 					},
@@ -55,14 +55,14 @@ func TestRenderScenarioDoc(t *testing.T) {
 
 ## _10_20240101 — Day1
 
-| # | process | フェーズ(推定) | プラグイン | 説明 |
+| # | process | グループ | プラグイン | 説明 |
 |---|---|---|---|---|
-| _10 | _10_arrange_clearPostgres | Arrange | clearPostgres | truncate |
-| _30 | _30_act_invokeRest | Act | invokeRest | 取引 POST |
+| _10 | _10_arrange_clearPostgres | arrange | clearPostgres | truncate |
+| _30 | _30_act_invokeRest | act | invokeRest | 取引 POST |
 
 ### _10_arrange_clearPostgres
 
-- フェーズ(推定): Arrange
+- グループ: arrange
 - 要求仕様: SPEC-013-01
 - 設定:
 
@@ -75,7 +75,7 @@ func TestRenderScenarioDoc(t *testing.T) {
 
 ### _30_act_invokeRest
 
-- フェーズ(推定): Act
+- グループ: act
 - 要求仕様: -
 `
 
@@ -97,7 +97,7 @@ func TestRenderScenarioDocMinimal(t *testing.T) {
 				DirName: "_10_20240101",
 				Title:   "_10_20240101",
 				Processes: []scenario.DocProcess{
-					{SeqLabel: "_10", DirName: "_10_pre_scripts", Phase: "-", Type: "scripts"},
+					{SeqLabel: "_10", DirName: "_10_pre_scripts", Group: "pre", Type: "scripts"},
 				},
 			},
 		},
@@ -107,13 +107,13 @@ func TestRenderScenarioDocMinimal(t *testing.T) {
 
 ## _10_20240101
 
-| # | process | フェーズ(推定) | プラグイン | 説明 |
+| # | process | グループ | プラグイン | 説明 |
 |---|---|---|---|---|
-| _10 | _10_pre_scripts | - | scripts |  |
+| _10 | _10_pre_scripts | pre | scripts |  |
 
 ### _10_pre_scripts
 
-- フェーズ(推定): -
+- グループ: pre
 - 要求仕様: -
 `
 
