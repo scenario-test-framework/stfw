@@ -64,6 +64,9 @@ presentation (cli / logger)
 - **受け入れテスト（testscript / `.txtar`）**: `test/acceptance/testdata/script/*.txtar`。
   コマンドの外部契約（stdout/stderr/exit code/生成物）を golden で固定する。挙動を変えたら
   該当 txtar を必ず更新する。
+  - **ファイル名がサブテスト名になる**（`TestAcceptance/{filename}`）。ユニットと同じ書式
+    **`対象_XXXの場合_YYYであること`** で命名する（例: `run_実行する場合_公開envが契約どおりであること.txtar`）。
+    リネーム時は `docs/AS-BUILT.md` の「根拠」参照も追従させる。
 - **ユニットテスト**: ドメインルール・repository の境界。I/O 境界は**実体でテストする**
   （`t.TempDir()` の実ファイル・実バイナリ。モックで誤魔化さない）。
   - **構造は AAA パターン**（Arrange / Act / Assert）。各ケースを `// Arrange` `// Act`
