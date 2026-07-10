@@ -59,9 +59,10 @@ export K6_BROWSER_HEADLESS="${K6_BROWSER_HEADLESS:-true}"
 
 summary="${stfw_process_dir}/evidence/summary.json"
 report="${stfw_process_dir}/evidence/report.html"
-# k6 web dashboard に report.html を書かせる (period を詰めて短めのテストでも出しやすくする)。
-# 生成は十分なデータがある場合のみ。無い場合は下のフォールバックで補う。
-k6_args=(run --summary-export "${summary}" --out "web-dashboard=period=1s&export=${report}")
+# k6 web dashboard に report.html を書かせる。period を詰めて短めのテストでも出しやすくする。
+# 生成条件は「テスト実行時間 >= 2 * period」かつ実時間 ~1 秒以上 (実測)。period=500ms なら
+# 1 秒以上のテストで生成される。満たさない場合 (単発 Act 等) は下のフォールバックで補う。
+k6_args=(run --summary-export "${summary}" --out "web-dashboard=period=500ms&export=${report}")
 
 # 接続情報の解決 (任意)。host_group があれば先頭ホストを __ENV へ注入する。
 if [ -n "${host_group}" ]; then
