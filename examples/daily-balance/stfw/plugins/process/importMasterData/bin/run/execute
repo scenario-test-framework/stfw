@@ -1,14 +1,19 @@
 #!/bin/bash
-# importMasterData (カスタムプラグインの実装例): config 内の CSV を投入する Arrange。
+# importMasterData (カスタムプラグインの実装例): 複数シナリオで共有するテスト共通の
+# マスタデータを投入する Arrange。
+#
+# 共通データの置き場 (シナリオ非依存・プロジェクト共通):
+#   config/plugins/importMasterData/data/{database}/{table}.csv
+# 任意のシナリオの importMasterData プロセスが tables に名前を宣言するだけで取り込める。
 #
 # 主眼は「カスタムプラグインは組込みプラグインを部品として再利用できる」こと。
 # DB 投入ロジックは再実装せず、ファイル操作 + 組込みプラグインへの委譲で実現する:
-#   1. ファイル操作 : config の CSV を importPostgres が読む data/{db}/{table}.csv へ書き出す
+#   1. ファイル操作 : 共通データ CSV を importPostgres が読む data/{db}/{table}.csv へ配置
 #   2. 委譲         : 組込み importPostgres の execute を、接続系 env を訳して呼び出す
 #
 # 設定 (config.yml の stfw.process.importMasterData):
 #   host_group / port / database / user  … importPostgres と同じ接続系
-#   tables[].name / tables[].csv         … 投入先テーブル名と CSV 本文
+#   tables                               … 取り込む共通データ (テーブル名) のリスト
 set -uo pipefail
 
 database="${stfw_process_importMasterData_database:-}"
@@ -17,20 +22,26 @@ if [ -z "${database}" ]; then
   exit 6
 fi
 
-data_root="${stfw_process_dir}/data/${database}"
-mkdir -p "${data_root}"
+# シナリオ共通のマスタデータ置き場 (STFW_PROJ_DIR_CONFIG = {projDir}/config)
+shared_root="${STFW_PROJ_DIR_CONFIG}/plugins/importMasterData/data/${database}"
+dest_root="${stfw_process_dir}/data/${database}"
+mkdir -p "${dest_root}"
 
-# 1) config の CSV を data/{database}/{table}.csv へ書き出す (ファイル操作)。
+# 1) 共通データ CSV を data/{database}/{table}.csv へ配置する (ファイル操作)。
 #    併せて importPostgres の tables 列挙 env を組み立てる。
 i=0
 while :; do
-  name_var="stfw_process_importMasterData_tables_${i}_name"
-  csv_var="stfw_process_importMasterData_tables_${i}_csv"
-  name="${!name_var:-}"
-  [ -z "${name}" ] && break
-  printf '%s' "${!csv_var:-}" > "${data_root}/${name}.csv"
-  export "stfw_process_importPostgres_tables_${i}=${name}"
-  echo "importMasterData: wrote ${data_root}/${name}.csv"
+  t_var="stfw_process_importMasterData_tables_${i}"
+  table="${!t_var:-}"
+  [ -z "${table}" ] && break
+  src="${shared_root}/${table}.csv"
+  if [ ! -f "${src}" ]; then
+    echo "importMasterData: shared master data not found: ${src}" >&2
+    exit 6
+  fi
+  cp "${src}" "${dest_root}/${table}.csv"
+  export "stfw_process_importPostgres_tables_${i}=${table}"
+  echo "importMasterData: staged ${table} from ${src}"
   i=$((i + 1))
 done
 if [ "${i}" -eq 0 ]; then

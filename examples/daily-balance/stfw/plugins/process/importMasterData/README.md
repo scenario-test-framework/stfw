@@ -1,14 +1,32 @@
 # importMasterData（カスタムプラグインの実装例）
 
-`config` に持たせた CSV を、データストアのマスタ/参照テーブルへ投入する Arrange 用の
-**カスタムプロセスプラグイン**です。件数が少なく scenario と一緒に管理したいマスタデータ
-（口座名義・区分値・支店マスタなど）を、別ファイルに切り出さず config へ同梱するために使います。
+**複数シナリオで共有するテスト共通のマスタ/参照データ**をデータストアへ投入する
+Arrange 用の**カスタムプロセスプラグイン**です。口座名義・区分値・支店マスタなど、
+特定シナリオに属さない共通データを 1 か所にまとめて管理し、各シナリオはそれを
+「取り込む」だけにできます。
+
+## 共通データの置き場
+
+```
+config/plugins/importMasterData/data/{database}/{table}.csv
+```
+
+シナリオ非依存のプロジェクト共通の場所です。任意のシナリオの `importMasterData`
+プロセスが `tables` にテーブル名を宣言するだけで、この共通データを取り込めます。
+
+```
+config/plugins/importMasterData/data/
+└── appdb/
+    └── users.csv        # ← 全シナリオで共有する口座名義マスタ
+```
+
+## 設計（組込みプラグインの再利用）
 
 このプラグインの主眼は **「カスタムプラグインは組込みプラグインを部品として再利用できる」**
 ことの実演です。DB 投入ロジックは再実装せず、次の 2 段で実現します。
 
-1. **ファイル操作**: config の CSV を、組込み `importPostgres` が読む
-   `data/{database}/{table}.csv` へ書き出す。
+1. **ファイル操作**: 共通データ `config/plugins/importMasterData/data/{db}/{table}.csv` を、
+   組込み `importPostgres` が読む `data/{db}/{table}.csv`（プロセス配下）へコピーする。
 2. **委譲**: 組込み `importPostgres` の `bin/run/execute` を、接続系の env を訳して呼び出す
    （`stfw plugin install importPostgres` で `.stfw/` 配下へ materialize されたものを exec）。
 
@@ -19,8 +37,7 @@
 | キー | 説明 |
 |---|---|
 | `host_group` / `port` / `database` / `user` | 接続系（組込み `importPostgres` と同じ。接続情報は inventory + secret で解決し config に直書きしない） |
-| `tables[].name` | 投入先テーブル名 |
-| `tables[].csv` | ヘッダー付き CSV 本文（`importPostgres` と同じ形式。NULL は `\N`） |
+| `tables` | 取り込む共通データ（テーブル名）のリスト。`config/plugins/importMasterData/data/{database}/{table}.csv` を解決する |
 
 ```yaml
 stfw:
@@ -30,11 +47,7 @@ stfw:
       database: appdb
       user: appuser
       tables:
-        - name: users
-          csv: |
-            id,name,email
-            acc-001,Alice,alice@example.com
-            acc-002,Bob,bob@example.com
+        - users
 ```
 
 ## プラグインの作り方（このリポジトリのプラグイン契約）
@@ -49,8 +62,6 @@ plugins/process/importMasterData/
 ```
 
 - 入力は env（`stfw_process_importMasterData_*` = config のフラット化、`stfw_process_dir` /
-  `STFW_PROJ_DIR_DATA` など実行コンテキスト）。
+  `STFW_PROJ_DIR_CONFIG` / `STFW_PROJ_DIR_DATA` など実行コンテキスト）。
 - 出力はリターンコード（`0`=Success / `3`=Warn / `6`=Error）。
 - `plugins/process/` に置くだけで `stfw run` / `stfw validate` が解決します（組込みより優先）。
-
-> 注: config の値は env 展開（`$VAR`）を通るため、CSV 本文に `$` を含めないでください。

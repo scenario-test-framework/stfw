@@ -30,18 +30,15 @@ bizdates:
           group: arrange
           type: importMasterData
           description: |
-            口座名義のマスタデータ (users) を config 内の CSV から投入する (seed)。
-            カスタムプラグイン importMasterData の実装例 (ファイル操作 + 組込み importPostgres への委譲)。
+            シナリオ共通の口座名義マスタ (users) を投入する (seed)。
+            カスタムプラグイン importMasterData の実装例。共通データ
+            config/plugins/importMasterData/data/appdb/users.csv を読み、組込み importPostgres へ委譲する。
           config:
             database: appdb
             host_group: db
             port: "5432"
             tables:
-                - csv: |
-                    id,name,email
-                    acc-001,Alice,alice@example.com
-                    acc-002,Bob,bob@example.com
-                  name: users
+                - users
             user: appuser
         - seq: "20"
           group: arrange
