@@ -126,119 +126,135 @@ func stubAttr(s tracetest.SpanStub, key string) attribute.Value {
 }
 
 func TestTraceExporterSuccessTree(t *testing.T) {
-	stubs := exportEvents(t, testEvents(t, false))
-	if len(stubs) != 6 {
-		t.Fatalf("exported spans = %d, want 6", len(stubs))
-	}
+	t.Run("TraceExporter_全Success系列の場合_同一トレースの親子ツリーとOkステータスになること", func(t *testing.T) {
+		// Arrange
+		events := testEvents(t, false)
 
-	root := stubByName(t, stubs, "stfw run")
-	scenario := stubByName(t, stubs, "demo")
-	bizdate := stubByName(t, stubs, "_10_99990101")
-	process := stubByName(t, stubs, "_10_pre_scripts")
-	step1 := stubByName(t, stubs, "100_step1")
-	step2 := stubByName(t, stubs, "200_step2")
+		// Act
+		stubs := exportEvents(t, events)
 
-	// 1 run = 1 トレース: 全スパンが同一 TraceID
-	traceID := root.SpanContext.TraceID()
-	for _, s := range stubs {
-		if s.SpanContext.TraceID() != traceID {
-			t.Errorf("span %s trace_id = %s, want %s", s.Name, s.SpanContext.TraceID(), traceID)
+		// Assert
+		if len(stubs) != 6 {
+			t.Fatalf("exported spans = %d, want 6", len(stubs))
 		}
-	}
 
-	// 親子関係: run をルートに scenario > bizdate > process > step
-	if root.Parent.IsValid() {
-		t.Errorf("run span must be root, parent = %+v", root.Parent)
-	}
-	pairs := []struct {
-		child, parent tracetest.SpanStub
-	}{
-		{scenario, root}, {bizdate, scenario}, {process, bizdate}, {step1, process}, {step2, process},
-	}
-	for _, p := range pairs {
-		if p.child.Parent.SpanID() != p.parent.SpanContext.SpanID() {
-			t.Errorf("span %s parent = %s, want %s (%s)",
-				p.child.Name, p.child.Parent.SpanID(), p.parent.SpanContext.SpanID(), p.parent.Name)
+		root := stubByName(t, stubs, "stfw run")
+		scenario := stubByName(t, stubs, "demo")
+		bizdate := stubByName(t, stubs, "_10_99990101")
+		process := stubByName(t, stubs, "_10_pre_scripts")
+		step1 := stubByName(t, stubs, "100_step1")
+		step2 := stubByName(t, stubs, "200_step2")
+
+		// 1 run = 1 トレース: 全スパンが同一 TraceID
+		traceID := root.SpanContext.TraceID()
+		for _, s := range stubs {
+			if s.SpanContext.TraceID() != traceID {
+				t.Errorf("span %s trace_id = %s, want %s", s.Name, s.SpanContext.TraceID(), traceID)
+			}
 		}
-	}
 
-	// 開始・終了時刻はジャーナルイベントの時刻と一致する
-	if !root.StartTime.Equal(ts(0)) || !root.EndTime.Equal(ts(9)) {
-		t.Errorf("run span time = %v-%v, want %v-%v", root.StartTime, root.EndTime, ts(0), ts(9))
-	}
-	if !step1.StartTime.Equal(ts(3)) || !step1.EndTime.Equal(ts(4)) {
-		t.Errorf("step1 span time = %v-%v, want %v-%v", step1.StartTime, step1.EndTime, ts(3), ts(4))
-	}
-
-	// 全 Success → 全スパン Ok
-	for _, s := range stubs {
-		if s.Status.Code != codes.Ok {
-			t.Errorf("span %s status = %s, want Ok", s.Name, s.Status.Code)
+		// 親子関係: run をルートに scenario > bizdate > process > step
+		if root.Parent.IsValid() {
+			t.Errorf("run span must be root, parent = %+v", root.Parent)
 		}
-	}
-
-	// スパン属性 (実行コンテキスト)
-	if v := stubAttr(root, notify.AttrRunMode).AsString(); v != "run" {
-		t.Errorf("run %s = %q, want run", notify.AttrRunMode, v)
-	}
-	if v := stubAttr(bizdate, notify.AttrBizdate).AsString(); v != "99990101" {
-		t.Errorf("bizdate %s = %q", notify.AttrBizdate, v)
-	}
-	if v := stubAttr(process, notify.AttrProcessType).AsString(); v != "scripts" {
-		t.Errorf("process %s = %q", notify.AttrProcessType, v)
-	}
-	if v := stubAttr(step1, notify.AttrStepExit).AsInt64(); v != 0 {
-		t.Errorf("step1 %s = %d, want 0", notify.AttrStepExit, v)
-	}
-	for _, s := range stubs {
-		if v := stubAttr(s, notify.AttrRunID).AsString(); v != "_20200101120000_99" {
-			t.Errorf("span %s %s = %q", s.Name, notify.AttrRunID, v)
+		pairs := []struct {
+			child, parent tracetest.SpanStub
+		}{
+			{scenario, root}, {bizdate, scenario}, {process, bizdate}, {step1, process}, {step2, process},
 		}
-	}
+		for _, p := range pairs {
+			if p.child.Parent.SpanID() != p.parent.SpanContext.SpanID() {
+				t.Errorf("span %s parent = %s, want %s (%s)",
+					p.child.Name, p.child.Parent.SpanID(), p.parent.SpanContext.SpanID(), p.parent.Name)
+			}
+		}
 
-	// リソース属性: service.name / service.version
-	res := root.Resource.Attributes()
-	found := map[attribute.Key]string{}
-	for _, kv := range res {
-		found[kv.Key] = kv.Value.AsString()
-	}
-	if found[semconv.ServiceNameKey] != "stfw" {
-		t.Errorf("service.name = %q, want stfw", found[semconv.ServiceNameKey])
-	}
-	if found[semconv.ServiceVersionKey] != "1.0.0-test" {
-		t.Errorf("service.version = %q, want 1.0.0-test", found[semconv.ServiceVersionKey])
-	}
+		// 開始・終了時刻はジャーナルイベントの時刻と一致する
+		if !root.StartTime.Equal(ts(0)) || !root.EndTime.Equal(ts(9)) {
+			t.Errorf("run span time = %v-%v, want %v-%v", root.StartTime, root.EndTime, ts(0), ts(9))
+		}
+		if !step1.StartTime.Equal(ts(3)) || !step1.EndTime.Equal(ts(4)) {
+			t.Errorf("step1 span time = %v-%v, want %v-%v", step1.StartTime, step1.EndTime, ts(3), ts(4))
+		}
+
+		// 全 Success → 全スパン Ok
+		for _, s := range stubs {
+			if s.Status.Code != codes.Ok {
+				t.Errorf("span %s status = %s, want Ok", s.Name, s.Status.Code)
+			}
+		}
+
+		// スパン属性 (実行コンテキスト)
+		if v := stubAttr(root, notify.AttrRunMode).AsString(); v != "run" {
+			t.Errorf("run %s = %q, want run", notify.AttrRunMode, v)
+		}
+		if v := stubAttr(bizdate, notify.AttrBizdate).AsString(); v != "99990101" {
+			t.Errorf("bizdate %s = %q", notify.AttrBizdate, v)
+		}
+		if v := stubAttr(process, notify.AttrProcessType).AsString(); v != "scripts" {
+			t.Errorf("process %s = %q", notify.AttrProcessType, v)
+		}
+		if v := stubAttr(step1, notify.AttrStepExit).AsInt64(); v != 0 {
+			t.Errorf("step1 %s = %d, want 0", notify.AttrStepExit, v)
+		}
+		for _, s := range stubs {
+			if v := stubAttr(s, notify.AttrRunID).AsString(); v != "_20200101120000_99" {
+				t.Errorf("span %s %s = %q", s.Name, notify.AttrRunID, v)
+			}
+		}
+
+		// リソース属性: service.name / service.version
+		res := root.Resource.Attributes()
+		found := map[attribute.Key]string{}
+		for _, kv := range res {
+			found[kv.Key] = kv.Value.AsString()
+		}
+		if found[semconv.ServiceNameKey] != "stfw" {
+			t.Errorf("service.name = %q, want stfw", found[semconv.ServiceNameKey])
+		}
+		if found[semconv.ServiceVersionKey] != "1.0.0-test" {
+			t.Errorf("service.version = %q, want 1.0.0-test", found[semconv.ServiceVersionKey])
+		}
+	})
 }
 
 func TestTraceExporterErrorTree(t *testing.T) {
-	stubs := exportEvents(t, testEvents(t, true))
-	if len(stubs) != 6 {
-		t.Fatalf("exported spans = %d, want 6", len(stubs))
-	}
+	t.Run("TraceExporter_stepエラーとBlockedを含む系列の場合_ErrorとUnsetを正しく表現すること", func(t *testing.T) {
+		// Arrange
+		events := testEvents(t, true)
 
-	// Error 終了の階層はスパンステータス Error (メッセージ付き)
-	for _, name := range []string{"stfw run", "demo", "_10_99990101", "_10_pre_scripts"} {
-		s := stubByName(t, stubs, name)
-		if s.Status.Code != codes.Error || s.Status.Description == "" {
-			t.Errorf("span %s status = %s (%q), want Error with message", name, s.Status.Code, s.Status.Description)
+		// Act
+		stubs := exportEvents(t, events)
+
+		// Assert
+		if len(stubs) != 6 {
+			t.Fatalf("exported spans = %d, want 6", len(stubs))
 		}
-	}
 
-	// エラーステップはスパンステータス Error
-	step1 := stubByName(t, stubs, "100_step1")
-	if step1.Status.Code != codes.Error {
-		t.Errorf("step1 status = %s, want Error", step1.Status.Code)
-	}
-	if v := stubAttr(step1, notify.AttrStepExit).AsInt64(); v != 6 {
-		t.Errorf("step1 %s = %d, want 6", notify.AttrStepExit, v)
-	}
+		// Error 終了の階層はスパンステータス Error (メッセージ付き)
+		for _, name := range []string{"stfw run", "demo", "_10_99990101", "_10_pre_scripts"} {
+			s := stubByName(t, stubs, name)
+			if s.Status.Code != codes.Error || s.Status.Description == "" {
+				t.Errorf("span %s status = %s (%q), want Error with message", name, s.Status.Code, s.Status.Description)
+			}
+		}
 
-	// Blocked ステップはスパンステータス Unset のまま属性で表現する
-	step2 := stubByName(t, stubs, "200_step2")
-	if step2.Status.Code != codes.Unset {
-		t.Errorf("step2 status = %s, want Unset", step2.Status.Code)
-	}
-	if v := stubAttr(step2, notify.AttrStepStatus).AsString(); v != "Blocked" {
-		t.Errorf("step2 %s = %q, want Blocked", notify.AttrStepStatus, v)
-	}
+		// エラーステップはスパンステータス Error
+		step1 := stubByName(t, stubs, "100_step1")
+		if step1.Status.Code != codes.Error {
+			t.Errorf("step1 status = %s, want Error", step1.Status.Code)
+		}
+		if v := stubAttr(step1, notify.AttrStepExit).AsInt64(); v != 6 {
+			t.Errorf("step1 %s = %d, want 6", notify.AttrStepExit, v)
+		}
+
+		// Blocked ステップはスパンステータス Unset のまま属性で表現する
+		step2 := stubByName(t, stubs, "200_step2")
+		if step2.Status.Code != codes.Unset {
+			t.Errorf("step2 status = %s, want Unset", step2.Status.Code)
+		}
+		if v := stubAttr(step2, notify.AttrStepStatus).AsString(); v != "Blocked" {
+			t.Errorf("step2 %s = %q, want Blocked", notify.AttrStepStatus, v)
+		}
+	})
 }

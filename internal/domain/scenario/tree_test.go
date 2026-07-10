@@ -31,122 +31,149 @@ func validScenarioRaw(name string) RawDir {
 }
 
 func TestScenarioTreeTraversalRule(t *testing.T) {
-	tree := NewScenarioTree([]RawDir{validScenarioRaw("test2"), validScenarioRaw("test1")})
+	t.Run("NewScenarioTree_降順で渡した場合_シナリオ昇順かつプロセスタイプ重複なしで走査されること", func(t *testing.T) {
+		// Arrange
+		tree := NewScenarioTree([]RawDir{validScenarioRaw("test2"), validScenarioRaw("test1")})
 
-	// シナリオは名前昇順
-	names := tree.Scenarios()
-	if len(names) != 2 || names[0] != "test1" || names[1] != "test2" {
-		t.Errorf("Scenarios() = %v, want [test1 test2]", names)
-	}
+		// Act
+		names := tree.Scenarios()
+		types := tree.ProcessTypes()
 
-	// プロセスタイプは重複なし
-	types := tree.ProcessTypes()
-	if len(types) != 1 || types[0] != "scripts" {
-		t.Errorf("ProcessTypes() = %v, want [scripts]", types)
-	}
+		// Assert
+		// シナリオは名前昇順
+		if len(names) != 2 || names[0] != "test1" || names[1] != "test2" {
+			t.Errorf("Scenarios() = %v, want [test1 test2]", names)
+		}
+		// プロセスタイプは重複なし
+		if len(types) != 1 || types[0] != "scripts" {
+			t.Errorf("ProcessTypes() = %v, want [scripts]", types)
+		}
+	})
 }
 
 func TestScenarioTreeValidatePass(t *testing.T) {
-	tree := NewScenarioTree([]RawDir{validScenarioRaw("test")})
-	vs := tree.Validate([]string{"scripts"})
-	if len(vs) != 0 {
-		t.Errorf("Validate() = %v, want no violations", vs)
-	}
+	t.Run("Validate_正常な構成の場合_違反なしであること", func(t *testing.T) {
+		// Arrange
+		tree := NewScenarioTree([]RawDir{validScenarioRaw("test")})
+		// Act
+		vs := tree.Validate([]string{"scripts"})
+		// Assert
+		if len(vs) != 0 {
+			t.Errorf("Validate() = %v, want no violations", vs)
+		}
+	})
 }
 
 func TestScenarioTreeValidateViolations(t *testing.T) {
-	raw := RawDir{
-		Name: "broken",
-		Dirs: []RawDir{
-			// bizdate 命名規約違反 (seq が数字でない)
-			{Name: "_1x_99990101"},
-			// bizdate 命名規約違反 (実在しない日付)
-			{Name: "_10_99990230"},
-			{
-				Name:  "_20_99990102",
-				Files: []string{"bizdate.dig"}, // 残存 dig → 警告
-				Dirs: []RawDir{
-					// process 命名規約違反 (フィールド不足)
-					{Name: "_10_scripts"},
-					// config/config.yml 無し + 未インストールタイプ
-					{Name: "_20_post_unknown", Files: []string{"metadata.yml"}},
+	t.Run("Validate_命名違反や未インストールを含む場合_エラー5件と警告2件であること", func(t *testing.T) {
+		// Arrange
+		raw := RawDir{
+			Name: "broken",
+			Dirs: []RawDir{
+				// bizdate 命名規約違反 (seq が数字でない)
+				{Name: "_1x_99990101"},
+				// bizdate 命名規約違反 (実在しない日付)
+				{Name: "_10_99990230"},
+				{
+					Name:  "_20_99990102",
+					Files: []string{"bizdate.dig"}, // 残存 dig → 警告
+					Dirs: []RawDir{
+						// process 命名規約違反 (フィールド不足)
+						{Name: "_10_scripts"},
+						// config/config.yml 無し + 未インストールタイプ
+						{Name: "_20_post_unknown", Files: []string{"metadata.yml"}},
+					},
 				},
 			},
-		},
-		Files: []string{"scenario.dig"}, // 残存 dig → 警告
-	}
-	tree := NewScenarioTree([]RawDir{raw})
-	vs := tree.Validate([]string{"scripts"})
+			Files: []string{"scenario.dig"}, // 残存 dig → 警告
+		}
+		tree := NewScenarioTree([]RawDir{raw})
 
-	if !vs.HasError() {
-		t.Fatal("Validate() should have errors")
-	}
-	errors, warns := vs.Count()
-	// エラー: bizdate 命名 x2 + process 命名 x1 + 未インストール x1 + config 無し x1
-	if errors != 5 {
-		t.Errorf("errors = %d, want 5: %v", errors, vs)
-	}
-	// 警告: scenario.dig + bizdate.dig
-	if warns != 2 {
-		t.Errorf("warns = %d, want 2: %v", warns, vs)
-	}
+		// Act
+		vs := tree.Validate([]string{"scripts"})
 
-	assertViolation(t, vs, ViolationError, "scenario/broken/_1x_99990101", "must be number")
-	assertViolation(t, vs, ViolationError, "scenario/broken/_10_99990230", "not a valid date")
-	assertViolation(t, vs, ViolationError, "scenario/broken/_20_99990102/_10_scripts", "format")
-	assertViolation(t, vs, ViolationError, "scenario/broken/_20_99990102/_20_post_unknown", "is not installed")
-	assertViolation(t, vs, ViolationError, "scenario/broken/_20_99990102/_20_post_unknown", "config/config.yml is not exist")
-	assertViolation(t, vs, ViolationWarn, "scenario/broken/scenario.dig", "v1.0")
-	assertViolation(t, vs, ViolationWarn, "scenario/broken/_20_99990102/bizdate.dig", "v1.0")
+		// Assert
+		if !vs.HasError() {
+			t.Fatal("Validate() should have errors")
+		}
+		errors, warns := vs.Count()
+		// エラー: bizdate 命名 x2 + process 命名 x1 + 未インストール x1 + config 無し x1
+		if errors != 5 {
+			t.Errorf("errors = %d, want 5: %v", errors, vs)
+		}
+		// 警告: scenario.dig + bizdate.dig
+		if warns != 2 {
+			t.Errorf("warns = %d, want 2: %v", warns, vs)
+		}
+
+		assertViolation(t, vs, ViolationError, "scenario/broken/_1x_99990101", "must be number")
+		assertViolation(t, vs, ViolationError, "scenario/broken/_10_99990230", "not a valid date")
+		assertViolation(t, vs, ViolationError, "scenario/broken/_20_99990102/_10_scripts", "format")
+		assertViolation(t, vs, ViolationError, "scenario/broken/_20_99990102/_20_post_unknown", "is not installed")
+		assertViolation(t, vs, ViolationError, "scenario/broken/_20_99990102/_20_post_unknown", "config/config.yml is not exist")
+		assertViolation(t, vs, ViolationWarn, "scenario/broken/scenario.dig", "v1.0")
+		assertViolation(t, vs, ViolationWarn, "scenario/broken/_20_99990102/bizdate.dig", "v1.0")
+	})
 }
 
 // StructureViolations はディレクトリ命名規約違反のみを対象とし、プラグイン解決可否・
 // config.yml 存在・残存 *.dig は無視する (scenario reverse がプラグイン未インストールでも
 // 投影できるべきという要件を固定する)。
 func TestScenarioTreeStructureViolations(t *testing.T) {
-	raw := RawDir{
-		Name: "broken",
-		Dirs: []RawDir{
-			// bizdate 命名規約違反 (seq が数字でない)
-			{Name: "_1x_99990101"},
-			{
-				Name: "_20_99990102",
-				Dirs: []RawDir{
-					// process 命名規約違反 (フィールド不足)
-					{Name: "_10_scripts"},
-					// 命名は正しいが未インストール + config 無し (Validate ならエラーになる)
-					{Name: "_20_post_unknown", Files: []string{"metadata.yml"}},
+	t.Run("StructureViolations_命名違反と未インストールを含む場合_命名違反2件のみ報告すること", func(t *testing.T) {
+		// Arrange
+		raw := RawDir{
+			Name: "broken",
+			Dirs: []RawDir{
+				// bizdate 命名規約違反 (seq が数字でない)
+				{Name: "_1x_99990101"},
+				{
+					Name: "_20_99990102",
+					Dirs: []RawDir{
+						// process 命名規約違反 (フィールド不足)
+						{Name: "_10_scripts"},
+						// 命名は正しいが未インストール + config 無し (Validate ならエラーになる)
+						{Name: "_20_post_unknown", Files: []string{"metadata.yml"}},
+					},
 				},
 			},
-		},
-	}
-	tree := NewScenarioTree([]RawDir{raw})
-	vs := tree.StructureViolations()
-
-	errors, warns := vs.Count()
-	// 命名規約違反のみ: bizdate x1 + process x1 = 2 件。未インストール・config 無しは含まない。
-	if errors != 2 {
-		t.Errorf("errors = %d, want 2: %v", errors, vs)
-	}
-	if warns != 0 {
-		t.Errorf("warns = %d, want 0 (dig は対象外): %v", warns, vs)
-	}
-	assertViolation(t, vs, ViolationError, "scenario/broken/_1x_99990101", "must be number")
-	assertViolation(t, vs, ViolationError, "scenario/broken/_20_99990102/_10_scripts", "format")
-
-	for _, v := range vs {
-		if strings.Contains(v.Message, "is not installed") || strings.Contains(v.Message, "config/config.yml is not exist") {
-			t.Errorf("StructureViolations must not report plugin/config violations: %v", v)
 		}
-	}
+		tree := NewScenarioTree([]RawDir{raw})
+
+		// Act
+		vs := tree.StructureViolations()
+
+		// Assert
+		errors, warns := vs.Count()
+		// 命名規約違反のみ: bizdate x1 + process x1 = 2 件。未インストール・config 無しは含まない。
+		if errors != 2 {
+			t.Errorf("errors = %d, want 2: %v", errors, vs)
+		}
+		if warns != 0 {
+			t.Errorf("warns = %d, want 0 (dig は対象外): %v", warns, vs)
+		}
+		assertViolation(t, vs, ViolationError, "scenario/broken/_1x_99990101", "must be number")
+		assertViolation(t, vs, ViolationError, "scenario/broken/_20_99990102/_10_scripts", "format")
+
+		for _, v := range vs {
+			if strings.Contains(v.Message, "is not installed") || strings.Contains(v.Message, "config/config.yml is not exist") {
+				t.Errorf("StructureViolations must not report plugin/config violations: %v", v)
+			}
+		}
+	})
 }
 
 func TestScenarioTreeStructureViolationsPass(t *testing.T) {
-	tree := NewScenarioTree([]RawDir{validScenarioRaw("test")})
-	vs := tree.StructureViolations()
-	if len(vs) != 0 {
-		t.Errorf("StructureViolations() = %v, want no violations", vs)
-	}
+	t.Run("StructureViolations_正常な構成の場合_違反なしであること", func(t *testing.T) {
+		// Arrange
+		tree := NewScenarioTree([]RawDir{validScenarioRaw("test")})
+		// Act
+		vs := tree.StructureViolations()
+		// Assert
+		if len(vs) != 0 {
+			t.Errorf("StructureViolations() = %v, want no violations", vs)
+		}
+	})
 }
 
 func assertViolation(t *testing.T, vs Violations, level ViolationLevel, path, msgPart string) {

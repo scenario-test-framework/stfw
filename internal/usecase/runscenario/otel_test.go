@@ -37,35 +37,38 @@ func TestNewOTelNotifierEndpointResolution(t *testing.T) {
 		wantEnabled bool
 	}{
 		{
-			name:        "環境変数・stfw.yml のどちらも未設定なら TracerProvider を組み立てない",
+			name:        "newOTelNotifier_環境変数もstfwymlも未設定の場合_無効であること",
 			wantEnabled: false,
 		},
 		{
-			name:        "OTEL_EXPORTER_OTLP_ENDPOINT 設定で有効",
+			name:        "newOTelNotifier_OTEL_EXPORTER_OTLP_ENDPOINT設定の場合_有効であること",
 			env:         map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://127.0.0.1:14318"},
 			wantEnabled: true,
 		},
 		{
-			name:        "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT 設定で有効",
+			name:        "newOTelNotifier_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT設定の場合_有効であること",
 			env:         map[string]string{"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "http://127.0.0.1:14318/v1/traces"},
 			wantEnabled: true,
 		},
 		{
-			name:        "stfw.yml の stfw.otel.endpoint 設定で有効",
+			name:        "newOTelNotifier_stfwymlのotelendpoint設定の場合_有効であること",
 			stfwYml:     otelYml,
 			wantEnabled: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
 			// テスト実行環境の OTel 変数の影響を除く
 			t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
 			t.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "")
 			for k, v := range tt.env {
 				t.Setenv(k, v)
 			}
+			// Act
 			n := newOTelNotifier(log, testConfig(t, tt.stfwYml), "1.0.0-test")
 			defer n.close()
+			// Assert
 			if n.enabled() != tt.wantEnabled {
 				t.Errorf("enabled = %t, want %t", n.enabled(), tt.wantEnabled)
 			}

@@ -10,33 +10,42 @@ func TestElapsedString(t *testing.T) {
 		endTS   string
 		want    string
 	}{
-		{name: "秒", startTS: "2020-01-01T12:00:00+09:00", endTS: "2020-01-01T12:00:03+09:00", want: "00:00:03"},
-		{name: "分秒", startTS: "2020-01-01T12:00:00+09:00", endTS: "2020-01-01T12:01:30+09:00", want: "00:01:30"},
-		{name: "同時刻", startTS: "2020-01-01T12:00:00+09:00", endTS: "2020-01-01T12:00:00+09:00", want: "00:00:00"},
-		{name: "24時間超は時に加算", startTS: "2020-01-01T12:00:00+09:00", endTS: "2020-01-02T14:00:05+09:00", want: "26:00:05"},
+		{name: "ElapsedString_3秒差の場合_00:00:03であること", startTS: "2020-01-01T12:00:00+09:00", endTS: "2020-01-01T12:00:03+09:00", want: "00:00:03"},
+		{name: "ElapsedString_1分30秒差の場合_00:01:30であること", startTS: "2020-01-01T12:00:00+09:00", endTS: "2020-01-01T12:01:30+09:00", want: "00:01:30"},
+		{name: "ElapsedString_同時刻の場合_00:00:00であること", startTS: "2020-01-01T12:00:00+09:00", endTS: "2020-01-01T12:00:00+09:00", want: "00:00:00"},
+		{name: "ElapsedString_24時間超の場合_時に加算されること", startTS: "2020-01-01T12:00:00+09:00", endTS: "2020-01-02T14:00:05+09:00", want: "26:00:05"},
 	}
 	for _, tt := range tests {
-		got, err := ElapsedString(tt.startTS, tt.endTS)
-		if err != nil {
-			t.Errorf("%s: ElapsedString() error = %v", tt.name, err)
-			continue
-		}
-		if got != tt.want {
-			t.Errorf("%s: ElapsedString() = %s, want %s", tt.name, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			// Act
+			got, err := ElapsedString(tt.startTS, tt.endTS)
+			// Assert
+			if err != nil {
+				t.Fatalf("ElapsedString() error = %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("ElapsedString() = %s, want %s", got, tt.want)
+			}
+		})
 	}
 }
 
 func TestElapsedStringInvalid(t *testing.T) {
-	// 不正なタイムスタンプ・逆転した時刻は error を返す (panic しない)
-	cases := [][2]string{
-		{"invalid", "2020-01-01T12:00:00+09:00"},
-		{"2020-01-01T12:00:00+09:00", "invalid"},
-		{"2020-01-01T12:00:01+09:00", "2020-01-01T12:00:00+09:00"},
-	}
-	for _, c := range cases {
-		if _, err := ElapsedString(c[0], c[1]); err == nil {
-			t.Errorf("ElapsedString(%q, %q) should fail", c[0], c[1])
+	t.Run("ElapsedString_不正なタイムスタンプや逆転時刻の場合_エラーであること", func(t *testing.T) {
+		// Arrange
+		// 不正なタイムスタンプ・逆転した時刻は error を返す (panic しない)
+		cases := [][2]string{
+			{"invalid", "2020-01-01T12:00:00+09:00"},
+			{"2020-01-01T12:00:00+09:00", "invalid"},
+			{"2020-01-01T12:00:01+09:00", "2020-01-01T12:00:00+09:00"},
 		}
-	}
+		for _, c := range cases {
+			// Act
+			_, err := ElapsedString(c[0], c[1])
+			// Assert
+			if err == nil {
+				t.Errorf("ElapsedString(%q, %q) should fail", c[0], c[1])
+			}
+		}
+	})
 }

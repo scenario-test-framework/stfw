@@ -36,53 +36,81 @@ func buildFixtureProject(t *testing.T) string {
 }
 
 func TestRenderDoc(t *testing.T) {
-	projDir := buildFixtureProject(t)
+	t.Run("RenderDoc_正常なシナリオの場合_見出しと要件と process ディレクトリを含むこと", func(t *testing.T) {
+		// Arrange
+		projDir := buildFixtureProject(t)
 
-	doc, err := RenderDoc(projDir, "sample")
-	if err != nil {
-		t.Fatalf("RenderDoc: %v", err)
-	}
-	if !strings.HasPrefix(doc, "# シナリオ: sample\n") {
-		t.Errorf("RenderDoc output does not start with expected heading:\n%s", doc)
-	}
-	if !strings.Contains(doc, "SPEC-1") {
-		t.Errorf("RenderDoc output missing requirement spec:\n%s", doc)
-	}
-	if !strings.Contains(doc, "_10_pre_scripts") {
-		t.Errorf("RenderDoc output missing process dir:\n%s", doc)
-	}
+		// Act
+		doc, err := RenderDoc(projDir, "sample")
+
+		// Assert
+		if err != nil {
+			t.Fatalf("RenderDoc: %v", err)
+		}
+		if !strings.HasPrefix(doc, "# シナリオ: sample\n") {
+			t.Errorf("RenderDoc output does not start with expected heading:\n%s", doc)
+		}
+		if !strings.Contains(doc, "SPEC-1") {
+			t.Errorf("RenderDoc output missing requirement spec:\n%s", doc)
+		}
+		if !strings.Contains(doc, "_10_pre_scripts") {
+			t.Errorf("RenderDoc output missing process dir:\n%s", doc)
+		}
+	})
 }
 
 func TestRenderDocScenarioNotFound(t *testing.T) {
-	projDir := buildFixtureProject(t)
-	if _, err := RenderDoc(projDir, "nosuch"); err == nil {
-		t.Fatal("expected error for non-existent scenario")
-	}
+	t.Run("RenderDoc_存在しないシナリオの場合_エラーであること", func(t *testing.T) {
+		// Arrange
+		projDir := buildFixtureProject(t)
+
+		// Act
+		_, err := RenderDoc(projDir, "nosuch")
+
+		// Assert
+		if err == nil {
+			t.Fatal("expected error for non-existent scenario")
+		}
+	})
 }
 
 func TestExportSpec(t *testing.T) {
-	projDir := buildFixtureProject(t)
+	t.Run("ExportSpec_正常なシナリオの場合_期待する spec 構造を返すこと", func(t *testing.T) {
+		// Arrange
+		projDir := buildFixtureProject(t)
 
-	spec, err := ExportSpec(projDir, "sample")
-	if err != nil {
-		t.Fatalf("ExportSpec: %v", err)
-	}
-	if spec.Scenario != "sample" {
-		t.Errorf("Scenario = %q, want %q", spec.Scenario, "sample")
-	}
-	if len(spec.Bizdates) != 1 || len(spec.Bizdates[0].Processes) != 1 {
-		t.Fatalf("unexpected spec shape: %#v", spec)
-	}
-	if spec.Bizdates[0].Processes[0].Type != "scripts" {
-		t.Errorf("process type = %q, want %q", spec.Bizdates[0].Processes[0].Type, "scripts")
-	}
+		// Act
+		spec, err := ExportSpec(projDir, "sample")
+
+		// Assert
+		if err != nil {
+			t.Fatalf("ExportSpec: %v", err)
+		}
+		if spec.Scenario != "sample" {
+			t.Errorf("Scenario = %q, want %q", spec.Scenario, "sample")
+		}
+		if len(spec.Bizdates) != 1 || len(spec.Bizdates[0].Processes) != 1 {
+			t.Fatalf("unexpected spec shape: %#v", spec)
+		}
+		if spec.Bizdates[0].Processes[0].Type != "scripts" {
+			t.Errorf("process type = %q, want %q", spec.Bizdates[0].Processes[0].Type, "scripts")
+		}
+	})
 }
 
 func TestExportSpecScenarioNotFound(t *testing.T) {
-	projDir := buildFixtureProject(t)
-	if _, err := ExportSpec(projDir, "nosuch"); err == nil {
-		t.Fatal("expected error for non-existent scenario")
-	}
+	t.Run("ExportSpec_存在しないシナリオの場合_エラーであること", func(t *testing.T) {
+		// Arrange
+		projDir := buildFixtureProject(t)
+
+		// Act
+		_, err := ExportSpec(projDir, "nosuch")
+
+		// Assert
+		if err == nil {
+			t.Fatal("expected error for non-existent scenario")
+		}
+	})
 }
 
 // ディレクトリ名規約違反 (process dir が `_{seq}_{group}_{type}` として parse できない) を
@@ -105,50 +133,81 @@ func buildFixtureProjectWithBadProcessDir(t *testing.T) string {
 }
 
 func TestRenderDocStructureViolation(t *testing.T) {
-	projDir := buildFixtureProjectWithBadProcessDir(t)
-	if _, err := RenderDoc(projDir, "broken"); err == nil {
-		t.Fatal("expected error for scenario with directory naming violation")
-	} else if !strings.Contains(err.Error(), "_xx_bad_scripts") {
-		t.Errorf("error = %v, want message to reference the offending dir", err)
-	}
+	t.Run("RenderDoc_processディレクトリ名が規約違反の場合_違反ディレクトリを含むエラーであること", func(t *testing.T) {
+		// Arrange
+		projDir := buildFixtureProjectWithBadProcessDir(t)
+
+		// Act
+		_, err := RenderDoc(projDir, "broken")
+
+		// Assert
+		if err == nil {
+			t.Fatal("expected error for scenario with directory naming violation")
+		} else if !strings.Contains(err.Error(), "_xx_bad_scripts") {
+			t.Errorf("error = %v, want message to reference the offending dir", err)
+		}
+	})
 }
 
 func TestExportSpecStructureViolation(t *testing.T) {
-	projDir := buildFixtureProjectWithBadProcessDir(t)
-	if _, err := ExportSpec(projDir, "broken"); err == nil {
-		t.Fatal("expected error for scenario with directory naming violation")
-	} else if !strings.Contains(err.Error(), "_xx_bad_scripts") {
-		t.Errorf("error = %v, want message to reference the offending dir", err)
-	}
+	t.Run("ExportSpec_processディレクトリ名が規約違反の場合_違反ディレクトリを含むエラーであること", func(t *testing.T) {
+		// Arrange
+		projDir := buildFixtureProjectWithBadProcessDir(t)
+
+		// Act
+		_, err := ExportSpec(projDir, "broken")
+
+		// Assert
+		if err == nil {
+			t.Fatal("expected error for scenario with directory naming violation")
+		} else if !strings.Contains(err.Error(), "_xx_bad_scripts") {
+			t.Errorf("error = %v, want message to reference the offending dir", err)
+		}
+	})
 }
 
 // bizdate dir 側の命名違反 (`_{seq}_{bizdate}` として parse できない) でも同様に失敗する。
 func TestRenderDocStructureViolationBizdate(t *testing.T) {
-	projDir := t.TempDir()
-	base := filepath.Join(projDir, "scenario", "broken2")
-	writeFixtureFile(t, filepath.Join(base, "metadata.yml"), "description: broken\n")
-	// seq が数字でない → NewSeq が失敗し bizdate dir の parseErr になる。
-	writeFixtureFile(t, filepath.Join(base, "_1x_99990101", "metadata.yml"), "description: bad\n")
+	t.Run("RenderDoc_bizdateディレクトリ名が規約違反の場合_エラーであること", func(t *testing.T) {
+		// Arrange
+		projDir := t.TempDir()
+		base := filepath.Join(projDir, "scenario", "broken2")
+		writeFixtureFile(t, filepath.Join(base, "metadata.yml"), "description: broken\n")
+		// seq が数字でない → NewSeq が失敗し bizdate dir の parseErr になる。
+		writeFixtureFile(t, filepath.Join(base, "_1x_99990101", "metadata.yml"), "description: bad\n")
 
-	if _, err := RenderDoc(projDir, "broken2"); err == nil {
-		t.Fatal("expected error for scenario with bizdate directory naming violation")
-	}
+		// Act
+		_, err := RenderDoc(projDir, "broken2")
+
+		// Assert
+		if err == nil {
+			t.Fatal("expected error for scenario with bizdate directory naming violation")
+		}
+	})
 }
 
 // 未インストールのプラグイン type は doc/spec を妨げない (validate の責務であって、
 // doc/spec の責務ではない)。config.yml が無くても RenderDoc/ExportSpec は成功する。
 func TestRenderDocDoesNotRequirePluginInstalled(t *testing.T) {
-	projDir := t.TempDir()
-	base := filepath.Join(projDir, "scenario", "uninstalled")
-	writeFixtureFile(t, filepath.Join(base, "metadata.yml"), "description: x\n")
-	writeFixtureFile(t, filepath.Join(base, "_10_20240101", "metadata.yml"), "description: Day1\n")
-	// config/config.yml すら無い、未インストール想定のプラグイン type。
-	writeFixtureFile(t, filepath.Join(base, "_10_20240101", "_10_pre_customPlugin", "metadata.yml"), "description: x\n")
+	t.Run("RenderDocとExportSpec_プラグイン未インストールの場合_エラーにならず成功すること", func(t *testing.T) {
+		// Arrange
+		projDir := t.TempDir()
+		base := filepath.Join(projDir, "scenario", "uninstalled")
+		writeFixtureFile(t, filepath.Join(base, "metadata.yml"), "description: x\n")
+		writeFixtureFile(t, filepath.Join(base, "_10_20240101", "metadata.yml"), "description: Day1\n")
+		// config/config.yml すら無い、未インストール想定のプラグイン type。
+		writeFixtureFile(t, filepath.Join(base, "_10_20240101", "_10_pre_customPlugin", "metadata.yml"), "description: x\n")
 
-	if _, err := RenderDoc(projDir, "uninstalled"); err != nil {
-		t.Errorf("RenderDoc should not require plugin resolvability: %v", err)
-	}
-	if _, err := ExportSpec(projDir, "uninstalled"); err != nil {
-		t.Errorf("ExportSpec should not require plugin resolvability: %v", err)
-	}
+		// Act
+		_, renderErr := RenderDoc(projDir, "uninstalled")
+		_, exportErr := ExportSpec(projDir, "uninstalled")
+
+		// Assert
+		if renderErr != nil {
+			t.Errorf("RenderDoc should not require plugin resolvability: %v", renderErr)
+		}
+		if exportErr != nil {
+			t.Errorf("ExportSpec should not require plugin resolvability: %v", exportErr)
+		}
+	})
 }
