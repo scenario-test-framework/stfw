@@ -151,6 +151,27 @@ a {
   transition: color 160ms ease;
 }
 
+.language-toggle {
+  display: inline-grid;
+  min-width: 42px;
+  height: 32px;
+  padding: 0 9px;
+  place-items: center;
+  border: 1px solid rgba(27, 215, 255, 0.55);
+  border-radius: 7px;
+  background: rgba(7, 25, 39, 0.86);
+  color: var(--cyan);
+  cursor: pointer;
+  font: 800 0.76rem/1 Inter, "Noto Sans JP", sans-serif;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.language-toggle:hover {
+  border-color: var(--cyan);
+  background: rgba(20, 69, 95, 0.42);
+  color: #fff;
+}
+
 .main-nav a:hover,
 .site-footer nav a:hover,
 .more-link:hover {
@@ -247,6 +268,11 @@ a {
 
 .hero h1 {
   font-size: clamp(2.9rem, 4vw, 3.25rem);
+}
+
+html[lang="en"] .hero h1 {
+  font-size: clamp(2.35rem, 3.35vw, 2.7rem);
+  letter-spacing: -0.045em;
 }
 
 .title-line {
@@ -1083,7 +1109,7 @@ a {
 
   .main-nav {
     justify-content: flex-start;
-    gap: 18px;
+    gap: 14px;
     overflow-x: auto;
   }
 
@@ -1097,6 +1123,14 @@ a {
 
   .hero h1 {
     font-size: clamp(1.9rem, 9.2vw, 2.35rem);
+  }
+
+  html[lang="en"] .hero h1 {
+    font-size: clamp(2.15rem, 10vw, 2.45rem);
+  }
+
+  html[lang="en"] #hero-title .title-line {
+    white-space: normal;
   }
 
   .hero-actions {
