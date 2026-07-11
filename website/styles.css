@@ -222,9 +222,9 @@ a {
 .hero-layout {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(340px, 0.9fr) minmax(560px, 1.55fr);
+  grid-template-columns: minmax(480px, 0.95fr) minmax(540px, 1.2fr);
   align-items: center;
-  gap: 64px;
+  gap: 48px;
 }
 
 .eyebrow {
@@ -246,7 +246,12 @@ a {
 }
 
 .hero h1 {
-  font-size: clamp(2.9rem, 5vw, 4.8rem);
+  font-size: clamp(2.9rem, 4vw, 3.25rem);
+}
+
+.title-line {
+  display: block;
+  white-space: nowrap;
 }
 
 .hero-lead {
@@ -719,7 +724,7 @@ a {
 
 .report-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.9fr) minmax(260px, 0.72fr);
+  grid-template-columns: minmax(0, 1.75fr) minmax(320px, 0.8fr);
   align-items: center;
   gap: 58px;
 }
@@ -1091,7 +1096,7 @@ a {
   }
 
   .hero h1 {
-    font-size: clamp(2.5rem, 13vw, 4rem);
+    font-size: clamp(1.9rem, 9.2vw, 2.35rem);
   }
 
   .hero-actions {
