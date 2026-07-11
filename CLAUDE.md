@@ -117,6 +117,16 @@ golangci-lint run                # CI と同じ v2 設定（.golangci.yml）
   GitHub Actions はアクションをバージョン参照し、`permissions` は最小に保つ。
 - **リリース**（`.github/workflows/release.yml`）: タグ `v*` push で goreleaser がバイナリ +
   checksums を Releases へ、Docker イメージ（`stfw` / `stfw:full`）を ghcr.io へ push する。
+  - **リリース手順**: ① master の CI 緑を確認 → ② 版数フォールバック
+    `internal/presentation/cli/root.go` の `Version = "X.Y.Z-dev"` を**リリースする版**へバンプし、
+    `docs/AS-BUILT.md` の「未注入時 `X.Y.Z-dev`」の記載も追従 → ③ `git tag vX.Y.Z && git push origin vX.Y.Z`。
+    リリースノートは goreleaser がコミットから自動生成（`feat:`/`fix:` でグルーピング、`docs:` は除外）。
+    CHANGELOG ファイルは持たない。
+- **examples/daily-balance を変更したら**: ① `./run.sh` で end-to-end 確認（`sut/schema.sql` を
+  変えた場合は先に `./run.sh --down` で DB を作り直す。schema は postgres コンテナ初期化時のみ実行）、
+  ② `stfw scenario reverse daily-balance` で `stfw/docs/daily-balance.{yml,md}` を再生成
+  （spec/doc はツリーからの生成物。手で編集しない）、③ example README と `docs/GUIDE.md` §3 の
+  ツリー・表を追従。
 - **README は bilingual**: `README.md`=英語 / `README.ja.md`=日本語（バッジ直下に相互リンク）。
   内部ドキュメント（`docs/`）とコメントは日本語。
 - プラグインバイナリ（k6 / compare-files）はイメージに同梱せず、`stfw plugin install {type}` で
