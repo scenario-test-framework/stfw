@@ -1,0 +1,21 @@
+{
+  "layoutList": [
+    {
+      "logicalFileName":  "取引履歴CSV",
+      "fileRegexPattern": "transactions\\.csv",
+      "fileFormat":       "CSV_withHeader",
+      "charset":          "utf8",
+      "lineSp":           "LF",
+      "recordList": [
+        {
+          "type": "Data", "codeValue": "-", "itemList": [
+            { "id": "id",         "name": "取引連番", "criteria": "Ignore", "compareKey": "false" },
+            { "id": "account_id", "name": "口座ID",   "criteria": "Equal",  "compareKey": "true" },
+            { "id": "amount",     "name": "取引金額", "criteria": "Equal",  "compareKey": "false" },
+            { "id": "bizdate",    "name": "業務日付", "criteria": "Equal",  "compareKey": "true" }
+          ]
+        }
+      ]
+    }
+  ]
+}

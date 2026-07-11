@@ -181,9 +181,12 @@ examples/daily-balance/
     │   └── plugins/process/                                 # プロセスプラグインの共通設定
     │       ├── {clear,import,export}Postgres/config.yml     #   接続系 (${stfw_db_*} 参照)
     │       ├── updateBizdate/config.yml                     #   DB 接続系を共通化
-    │       └── importMasterData/
-    │           ├── config.yml                               #   DB 接続系を共通化
-    │           └── data/appdb/users.csv                     #   シナリオ共通のマスタデータ
+    │       ├── importMasterData/
+    │       │   ├── config.yml                               #   DB 接続系を共通化
+    │       │   └── data/appdb/users.csv                     #   シナリオ共通のマスタデータ
+    │       └── compare/compare_layout/                      #   シナリオ共通の比較レイアウト
+    │           ├── accounts.json                            #   残高 CSV (id をキーに突合)
+    │           └── transactions.json                        #   取引履歴 CSV (連番 id を除外)
     ├── plugins/            # カスタムプラグイン
     │   └── process/
     │       ├── importMasterData/   # 共通データ → 組込み importPostgres へ委譲
@@ -200,6 +203,25 @@ examples/daily-balance/
 接続情報は config に直書きせず、inventory（ホスト解決）と secret（パスワード）から解決します。
 `run.sh` が生成する `stfw/config/encrypt/`・`stfw/config/passwd/`（デモ用鍵・クレデンシャル）は
 git 管理外です。
+
+## 比較レイアウトの共通化
+
+エクスポート CSV の突合は、**シナリオ共通の比較レイアウト**
+（`stfw/config/plugins/process/compare/compare_layout/*.json`）で項目単位・キー対応付けに
+しています。行全体のテキスト比較と違い、物理的な行順に依存しません。
+
+- **transactions.json**: 連番 `id`（BIGSERIAL。`TRUNCATE` でシーケンスがリセットされず
+  再実行のたびにずれる）を `criteria: "Ignore"` で比較除外し、`account_id` + `bizdate` を
+  `compareKey`（行の対応付けキー）、`amount` を `criteria: "Equal"` で厳密比較
+- **accounts.json**: `id` を `compareKey`、`balance` を `criteria: "Equal"`
+
+compare プラグインはこのディレクトリを `COMPAREFILES_CLASSPATH` として compare-files へ渡します。
+レイアウトは後勝ちマージのため、プロセス固有の上書きが必要なら従来どおり各プロセスの
+`config/compare_layout/` に同じ `fileRegexPattern` で定義できます。起動設定
+（`compare_files.{json,yaml,yml}`）はプロセスローカル `config/` が最優先です（AS-BUILT §4.11）。
+レイアウトの書き方は compare-files リポジトリの
+[比較レイアウトリファレンス](https://github.com/scenario-test-framework/compare-files/blob/main/docs/compare_layout.md)
+を参照してください。
 
 ## DB 接続系の共通化
 

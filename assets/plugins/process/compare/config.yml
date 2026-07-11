@@ -12,8 +12,9 @@
 #              evidence/ 配下の各ファイルへの symlink。
 #   result/  : gitignore。compare-files の比較結果 (CompareSummary.csv 等) の出力先。
 #
-# compare-files の起動設定 (compare_files.json) と比較レイアウト (compare_layout/) は、
-# プロセスディレクトリの config/ 配下に置くと自動探索される (無ければバイナリ同梱デフォルト)。
+# 比較レイアウト (compare_layout/) は「同梱デフォルト → プロジェクト共通
+# ({proj}/config/plugins/process/compare/) → プロセスローカル (config/)」の後勝ちマージで解決される。
+# 起動設定 (compare_files.json) は前勝ち解決のため、プロジェクト共通側には置かない (AS-BUILT §4.11)。
 stfw:
   process:
     compare:

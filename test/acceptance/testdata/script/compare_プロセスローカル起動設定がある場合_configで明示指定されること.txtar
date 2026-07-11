@@ -1,0 +1,107 @@
+# STEP: compare プラグイン (起動設定 compare_files.json のプロセスローカル優先)
+# curl(DL) はモックし、フェイク compare_files が受け取った -config 引数を記録する。
+#
+# 検証内容:
+#   - プロセスディレクトリの config/compare_files.{json,yaml,yml} が存在する場合、
+#     -config で明示指定して起動される (AS-BUILT §4.11。既定の前勝ち解決では
+#     プロジェクト共通 (CLASSPATH) 側が勝ってしまうため)
+#   - 探索順は json → yaml → yml (json が最優先)
+#   - プロセスローカルが無い場合は -config を付けない (既定解決に任せる)
+
+env PATH=${WORK}/fakebin:${PATH}
+chmod 755 fakebin/curl
+chmod 755 fakebin/fakecomparefiles
+
+# compare-files リリース tarball のフィクスチャを作る (root 直下に compare_files バイナリ)
+mkdir cfsrc
+cp fakebin/fakecomparefiles cfsrc/compare_files
+chmod 755 cfsrc/compare_files
+exec tar czf cf.tar.gz -C cfsrc compare_files
+env STFW_TEST_CF_TARBALL=${WORK}/cf.tar.gz
+
+# プロビジョニング (curl はモック)
+exec stfw plugin install compare
+
+# --- プロセスローカルの compare_files.json あり: -config で明示指定される ---
+exec stfw run cmplocalcfg
+exec cat scenario/cmplocalcfg/_10_99990101/_20_asrt_compare/result/configopt.txt
+stdout '^\./config/compare_files\.json$'
+
+# --- json と yaml が両方ある場合: json が優先される ---
+cp scenario/cmplocalcfg/_10_99990101/_20_asrt_compare/config/compare_files.json scenario/cmplocalcfg/_10_99990101/_20_asrt_compare/config/compare_files.yaml
+exec stfw run cmplocalcfg
+exec cat scenario/cmplocalcfg/_10_99990101/_20_asrt_compare/result/configopt.txt
+stdout '^\./config/compare_files\.json$'
+
+# --- json を消すと yaml にフォールバックする ---
+rm scenario/cmplocalcfg/_10_99990101/_20_asrt_compare/config/compare_files.json
+exec stfw run cmplocalcfg
+exec cat scenario/cmplocalcfg/_10_99990101/_20_asrt_compare/result/configopt.txt
+stdout '^\./config/compare_files\.yaml$'
+
+# --- プロセスローカルの起動設定なし: -config は付かない ---
+rm scenario/cmplocalcfg/_10_99990101/_20_asrt_compare/config/compare_files.yaml
+exec stfw run cmplocalcfg
+exec cat scenario/cmplocalcfg/_10_99990101/_20_asrt_compare/result/configopt.txt
+stdout '^\(none\)$'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+-- scenario/cmplocalcfg/metadata.yml --
+description:
+-- scenario/cmplocalcfg/_10_99990101/metadata.yml --
+description:
+-- scenario/cmplocalcfg/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/cmplocalcfg/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/cmplocalcfg/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1"
+printf 'hello\n' > "${stfw_process_dir}/evidence/host1/data.txt"
+exit 0
+-- scenario/cmplocalcfg/_10_99990101/_20_asrt_compare/metadata.yml --
+description:
+-- scenario/cmplocalcfg/_10_99990101/_20_asrt_compare/config/config.yml --
+stfw:
+  process:
+    compare:
+      compare_files_version: v2.2.0
+-- scenario/cmplocalcfg/_10_99990101/_20_asrt_compare/config/compare_files.json --
+{}
+-- scenario/cmplocalcfg/_10_99990101/_20_asrt_compare/expect/_10_col_scripts/host1/data.txt --
+hello
+-- fakebin/curl --
+#!/bin/bash
+# curl -fsSL <url> -o <out> をフィクスチャ tarball のコピーで再現
+out=""
+while [ $# -gt 0 ]; do
+  case "$1" in -o) out="$2"; shift 2;; *) shift;; esac
+done
+cp "${STFW_TEST_CF_TARBALL}" "${out}"
+exit 0
+-- fakebin/fakecomparefiles --
+#!/bin/bash
+# fake compare_files: 受け取った -config 引数を result/configopt.txt に記録し、
+# 全一致の CompareSummary.csv を出力して 0 で終了する。
+out="result"
+cfgopt="(none)"
+args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -od | --outputDir) out="$2"; shift 2 ;;
+    -config | --configFile) cfgopt="$2"; shift 2 ;;
+    -layout | --overwriteLayoutDir) shift 2 ;;
+    -*) shift ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+mkdir -p "${out}"
+printf '%s\n' "${cfgopt}" > "${out}/configopt.txt"
+echo "Status,Left,Right" > "${out}/CompareSummary.csv"
+echo "OK,dummy,dummy" >> "${out}/CompareSummary.csv"
+exit 0

@@ -15,8 +15,12 @@
 |---|---|---|
 | `compare_files_version` | - | 取得する compare-files のリリースタグ (既定 v2.2.0) |
 
-compare-files の起動設定 (`compare_files.json`) と比較レイアウト (`compare_layout/`) は、
-プロセスディレクトリの `config/` 配下に置くと自動探索される (無ければバイナリ同梱デフォルト)。
+比較レイアウト (`compare_layout/*.json`) は次の後勝ちマージで解決される (AS-BUILT §4.11):
+バイナリ同梱デフォルト → **プロジェクト共通** `{proj}/config/plugins/process/compare/compare_layout/`
+(COMPAREFILES_CLASSPATH で注入) → **プロセスローカル** `config/compare_layout/`。
+シナリオ横断の共通レイアウトはプロジェクト共通に置き、プロセス固有の上書きはプロセスローカルに置く。
+起動設定 (`compare_files.json`) は前勝ち解決のため、プロジェクト共通側には置かないこと
+(置くとプロセスローカルの起動設定が無視される)。
 
 ## ディレクトリ規約 (エビデンスディレクトリ規約)
 

@@ -23,10 +23,13 @@ CREATE TABLE IF NOT EXISTS accounts (
     balance BIGINT NOT NULL DEFAULT 0
 );
 
--- transactions: 取引履歴。連番 id を持たせない: エビデンス突合 (exportPostgres → expect)
--- を決定的にするため (TRUNCATE はシーケンスをリセットせず、再実行で id がずれる)。
+-- transactions: 取引履歴。連番 id は TRUNCATE でシーケンスがリセットされず再実行で
+-- ずれるが、エビデンス突合はプロジェクト共通の比較レイアウト
+-- (stfw/config/plugins/process/compare/compare_layout/) で id を Ignore・
+-- account_id + bizdate を比較キーにして決定性を保つ。
 CREATE TABLE IF NOT EXISTS transactions (
-    account_id TEXT   NOT NULL,
-    amount     BIGINT NOT NULL,
-    bizdate    TEXT   NOT NULL
+    id         BIGSERIAL PRIMARY KEY,
+    account_id TEXT      NOT NULL,
+    amount     BIGINT    NOT NULL,
+    bizdate    TEXT      NOT NULL
 );

@@ -1,0 +1,19 @@
+{
+  "layoutList": [
+    {
+      "logicalFileName":  "口座残高CSV",
+      "fileRegexPattern": "accounts\\.csv",
+      "fileFormat":       "CSV_withHeader",
+      "charset":          "utf8",
+      "lineSp":           "LF",
+      "recordList": [
+        {
+          "type": "Data", "codeValue": "-", "itemList": [
+            { "id": "id",      "name": "口座ID", "criteria": "Equal", "compareKey": "true" },
+            { "id": "balance", "name": "残高",   "criteria": "Equal", "compareKey": "false" }
+          ]
+        }
+      ]
+    }
+  ]
+}

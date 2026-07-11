@@ -16,8 +16,10 @@
 #
 # 終了コード: compare-files は 0=一致 / 3=差分 (NG/LeftOnly/RightOnly) / 6=エラー を返す。
 #   本プラグインは「比較不一致はステップ失敗」(SPEC-014-02) に従い、非 0 を一律 exit 6 とする。
-#   起動設定 (compare_files.json)・比較レイアウト (compare_layout/) は作業ディレクトリ
-#   (プロセスディレクトリ) の ./config から自動探索される (無ければバイナリ同梱デフォルト)。
+#   比較レイアウト (compare_layout/) は「同梱デフォルト → プロジェクト共通
+#   ({proj}/config/plugins/process/compare/。COMPAREFILES_CLASSPATH で注入) →
+#   プロセスローカル (./config/)」の後勝ちマージで解決される (AS-BUILT §4.11)。
+#   起動設定 (compare_files.json) は前勝ち解決のため、プロジェクト共通側には置かない。
 #
 # 制約: evidence 配下のファイル名に改行を含むケースは非対応 (find の行区切り前提)。
 set -uo pipefail
@@ -93,8 +95,31 @@ for entry in "${entries[@]}"; do
   done <<< "${filelist}"
 done
 
+# プロジェクト共通の比較レイアウト ({proj}/config/plugins/process/compare/) を
+# COMPAREFILES_CLASSPATH で注入する (AS-BUILT §4.11)。レイアウトは後勝ちマージのため、
+# プロセスローカルの config/compare_layout/ が同一 fileRegexPattern を定義すればそちらが勝つ。
+shared_dir="${STFW_PROJ_DIR_CONFIG:-}/plugins/process/compare"
+if [ -n "${STFW_PROJ_DIR_CONFIG:-}" ] && [ -d "${shared_dir}" ]; then
+  export COMPAREFILES_CLASSPATH="${COMPAREFILES_CLASSPATH:+${COMPAREFILES_CLASSPATH}:}${shared_dir}"
+fi
+
+# 起動設定はプロセスローカルを最優先にする。compare-files の既定解決は前勝ち
+# (CLASSPATH → cwd → ./config) のため、プロジェクト共通を注入した状態では明示指定しないと
+# 共通側の起動設定が勝ってしまう。探索順は compare-files の既定と同じ json → yaml → yml。
+config_file=""
+for name in compare_files.json compare_files.yaml compare_files.yml; do
+  if [ -f "./config/${name}" ]; then
+    config_file="./config/${name}"
+    break
+  fi
+done
+
 # 比較実行。cwd はプロセスディレクトリ (実行契約)。左=期待値 expect / 右=実績値 actual。
-"${bin}" -od "${result_dir}" "${expect_dir}" "${actual_dir}"
+if [ -n "${config_file}" ]; then
+  "${bin}" -config "${config_file}" -od "${result_dir}" "${expect_dir}" "${actual_dir}"
+else
+  "${bin}" -od "${result_dir}" "${expect_dir}" "${actual_dir}"
+fi
 cf_rc=$?
 
 if [ "${cf_rc}" -eq 0 ]; then

@@ -1,0 +1,105 @@
+# STEP: compare プラグイン (プロジェクト共通レイアウトの COMPAREFILES_CLASSPATH 注入)
+# curl(DL) はモックし、フェイク compare_files が受け取った COMPAREFILES_CLASSPATH を記録する。
+#
+# 検証内容:
+#   - {proj}/config/plugins/process/compare/ が存在する場合、COMPAREFILES_CLASSPATH の
+#     末尾へ連結されて compare_files が起動される (AS-BUILT §4.11)
+#   - 既存の COMPAREFILES_CLASSPATH がある場合は `:` 区切りで末尾に連結される
+#   - ディレクトリが無い場合は注入されない (env は元の値のまま)
+
+env PATH=${WORK}/fakebin:${PATH}
+chmod 755 fakebin/curl
+chmod 755 fakebin/fakecomparefiles
+
+# compare-files リリース tarball のフィクスチャを作る (root 直下に compare_files バイナリ)
+mkdir cfsrc
+cp fakebin/fakecomparefiles cfsrc/compare_files
+chmod 755 cfsrc/compare_files
+exec tar czf cf.tar.gz -C cfsrc compare_files
+env STFW_TEST_CF_TARBALL=${WORK}/cf.tar.gz
+
+# プロビジョニング (curl はモック)
+exec stfw plugin install compare
+
+# --- 共通ディレクトリあり: CLASSPATH 末尾へ注入される ---
+exec stfw run cmpshared
+exec cat scenario/cmpshared/_10_99990101/_20_asrt_compare/result/classpath.txt
+stdout 'config/plugins/process/compare$'
+
+# --- 既存 CLASSPATH あり: `:` 区切りで末尾に連結される ---
+env COMPAREFILES_CLASSPATH=/preset/dir
+exec stfw run cmpshared
+exec cat scenario/cmpshared/_10_99990101/_20_asrt_compare/result/classpath.txt
+stdout '^/preset/dir:.*config/plugins/process/compare$'
+env COMPAREFILES_CLASSPATH=
+
+# --- 共通ディレクトリなし: 注入されない (env は空のまま) ---
+rm config/plugins/process/compare
+exec stfw run cmpshared
+exec cat scenario/cmpshared/_10_99990101/_20_asrt_compare/result/classpath.txt
+stdout '^\(empty\)$'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+-- config/plugins/process/compare/compare_layout/shared.json --
+{
+  "layoutList": []
+}
+-- scenario/cmpshared/metadata.yml --
+description:
+-- scenario/cmpshared/_10_99990101/metadata.yml --
+description:
+-- scenario/cmpshared/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/cmpshared/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/cmpshared/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1"
+printf 'hello\n' > "${stfw_process_dir}/evidence/host1/data.txt"
+exit 0
+-- scenario/cmpshared/_10_99990101/_20_asrt_compare/metadata.yml --
+description:
+-- scenario/cmpshared/_10_99990101/_20_asrt_compare/config/config.yml --
+stfw:
+  process:
+    compare:
+      compare_files_version: v2.2.0
+-- scenario/cmpshared/_10_99990101/_20_asrt_compare/expect/_10_col_scripts/host1/data.txt --
+hello
+-- fakebin/curl --
+#!/bin/bash
+# curl -fsSL <url> -o <out> をフィクスチャ tarball のコピーで再現
+out=""
+while [ $# -gt 0 ]; do
+  case "$1" in -o) out="$2"; shift 2;; *) shift;; esac
+done
+cp "${STFW_TEST_CF_TARBALL}" "${out}"
+exit 0
+-- fakebin/fakecomparefiles --
+#!/bin/bash
+# fake compare_files: 受け取った COMPAREFILES_CLASSPATH を result/classpath.txt に記録し、
+# 全一致の CompareSummary.csv を出力して 0 で終了する。
+out="result"
+args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -od | --outputDir) out="$2"; shift 2 ;;
+    -config | --configFile | -layout | --overwriteLayoutDir) shift 2 ;;
+    -*) shift ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+mkdir -p "${out}"
+if [ -n "${COMPAREFILES_CLASSPATH:-}" ]; then
+  printf '%s\n' "${COMPAREFILES_CLASSPATH}" > "${out}/classpath.txt"
+else
+  printf '(empty)\n' > "${out}/classpath.txt"
+fi
+echo "Status,Left,Right" > "${out}/CompareSummary.csv"
+echo "OK,dummy,dummy" >> "${out}/CompareSummary.csv"
+exit 0

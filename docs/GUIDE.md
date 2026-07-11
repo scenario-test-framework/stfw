@@ -185,6 +185,13 @@ secret は `stfw secret keygen` で鍵を作り、`stfw secret set postgres appu
 つまり `expect/{収集プロセス名}/{database}/{table}.csv` に期待値を置けば、compare が
 同じ bizdate 内の収集エビデンスと突合します。差分があれば非 0 終了し、シナリオは失敗します。
 
+既定は行全体のテキスト比較ですが、**比較レイアウト**を定義すると項目単位の比較にできます
+（連番・更新時刻列の除外、キー列による行の対応付けなど）。シナリオを跨いで共通のレイアウトは
+`config/plugins/process/compare/compare_layout/*.json`（プロジェクト共通）に、プロセス固有の
+上書きは各プロセスの `config/compare_layout/` に置きます（後勝ち。AS-BUILT §4.11）。
+daily-balance の `transactions.json`（連番 id を Ignore・`account_id`+`bizdate` をキーに突合）が
+実例です。レイアウトの書き方は compare-files の比較レイアウトリファレンスを参照してください。
+
 ## 6. ホスト操作系プラグイン（ssh 経由）
 
 `sshExec` / `scpPut` / `collectLog` / `collectFile` は ssh/scp でリモートホストを操作します。
