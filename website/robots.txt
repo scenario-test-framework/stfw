@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://scenario-test-framework.github.io/stfw/sitemap.xml

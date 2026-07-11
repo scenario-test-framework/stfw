@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#030b14">
+    <meta
+      name="description"
+      content="stfwは、業務日をまたぐシナリオテストをGo製シングルバイナリひとつで実行するテストフレームワークです。"
+    >
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="ja_JP">
+    <meta property="og:title" content="stfw — Scenario Test Framework">
+    <meta
+      property="og:description"
+      content="複雑なシナリオを、確信をもってリリース。"
+    >
+    <meta
+      property="og:image"
+      content="https://raw.githubusercontent.com/scenario-test-framework/stfw/master/docs/assets/ogp.png"
+    >
+    <meta name="twitter:card" content="summary_large_image">
+    <title>stfw — Scenario Test Framework</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main">本文へ移動</a>
+
+    <header class="site-header">
+      <div class="shell nav-wrap">
+        <a class="brand" href="#top" aria-label="stfw ホーム">
+          <span class="brand-prompt" aria-hidden="true">&gt;</span><span>stfw</span>
+        </a>
+        <nav class="main-nav" aria-label="メインナビゲーション">
+          <a href="#features">特徴</a>
+          <a href="#plugins">プラグイン</a>
+          <a href="https://github.com/scenario-test-framework/stfw/blob/master/README.ja.md">ドキュメント</a>
+          <a href="https://github.com/scenario-test-framework/stfw">GitHub</a>
+        </nav>
+        <div class="nav-actions">
+          <a class="button button-ghost button-small" href="https://github.com/scenario-test-framework/stfw/blob/master/README.ja.md">ドキュメントを見る</a>
+          <a class="button button-primary button-small" href="#quickstart">はじめる</a>
+        </div>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero section-grid" id="top" aria-labelledby="hero-title">
+        <div class="hero-glow" aria-hidden="true"></div>
+        <div class="shell hero-layout">
+          <div class="hero-copy">
+            <p class="eyebrow">シナリオテストフレームワーク</p>
+            <h1 id="hero-title">複雑なシナリオを、<br>確信をもって<br>リリース。</h1>
+            <p class="hero-lead">業務日をまたぐテストを、<br>Go製シングルバイナリひとつで。</p>
+            <div class="hero-actions">
+              <a class="button button-primary" href="#quickstart">はじめる</a>
+              <a class="button button-ghost" href="https://github.com/scenario-test-framework/stfw">
+                GitHubで見る <span class="github-dot" aria-hidden="true">●</span>
+              </a>
+            </div>
+          </div>
+
+          <div class="scenario-map" aria-label="シナリオが業務日ごとに実行され、成功に至る流れ">
+            <div class="tree-card panel">
+              <div class="tree-line"><span class="folder-icon" aria-hidden="true"></span> scenarios</div>
+              <div class="tree-branch">├─ <span class="folder-icon" aria-hidden="true"></span> customer</div>
+              <div class="tree-branch tree-depth-2">├─ create</div>
+              <div class="tree-branch tree-depth-2">├─ update</div>
+              <div class="tree-branch tree-depth-2">└─ close</div>
+              <div class="tree-branch">├─ <span class="folder-icon" aria-hidden="true"></span> billing</div>
+              <div class="tree-branch tree-depth-2">├─ invoice</div>
+              <div class="tree-branch tree-depth-2">├─ payment</div>
+              <div class="tree-branch tree-depth-2">└─ refund</div>
+              <div class="tree-branch">└─ <span class="folder-icon" aria-hidden="true"></span> ledger</div>
+            </div>
+
+            <div class="date-flow">
+              <p class="map-label">業務日</p>
+              <div class="date-columns">
+                <div class="date-column">
+                  <time datetime="2026-07-01">2026-07-01</time>
+                  <span class="run-node">&gt;_ <i></i></span>
+                  <span class="run-node">&gt;_ <i></i></span>
+                  <span class="run-node">&gt;_ <i></i></span>
+                </div>
+                <div class="date-column">
+                  <time datetime="2026-07-02">2026-07-02</time>
+                  <span class="run-node">&gt;_ <i></i></span>
+                  <span class="run-node">&gt;_ <i></i></span>
+                  <span class="run-node">&gt;_ <i></i></span>
+                </div>
+                <div class="date-column">
+                  <time datetime="2026-07-03">2026-07-03</time>
+                  <span class="run-node">&gt;_ <i></i></span>
+                  <span class="run-node">&gt;_ <i></i></span>
+                  <span class="run-node">&gt;_ <i></i></span>
+                </div>
+              </div>
+            </div>
+            <div class="success-orb" aria-hidden="true">✓</div>
+
+            <ol class="hero-pipeline" aria-label="テストの4フェーズ">
+              <li><span class="phase-icon folder-icon" aria-hidden="true"></span>Arrange</li>
+              <li><span class="phase-icon terminal-icon" aria-hidden="true">&gt;_</span>Act</li>
+              <li><span class="phase-icon database-icon" aria-hidden="true">◫</span>Collect</li>
+              <li class="phase-success"><span class="phase-icon check-icon" aria-hidden="true">✓</span>Assert</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="shell proof-strip panel" aria-label="主要な特徴">
+          <div><span class="proof-icon cube-icon" aria-hidden="true">◇</span><strong>シングルバイナリ</strong></div>
+          <div><span class="proof-icon bolt-icon" aria-hidden="true">ϟ</span><strong>フェイルファスト実行</strong></div>
+          <div><span class="proof-icon trace-icon" aria-hidden="true">⌘</span><strong>OTLPネイティブ</strong></div>
+        </div>
+      </section>
+
+      <section class="section section-grid" id="features" aria-labelledby="features-title">
+        <div class="shell">
+          <h2 id="features-title" class="section-title">実システムのシナリオテストのために</h2>
+          <div class="feature-grid">
+            <article class="feature-card panel">
+              <div class="card-heading">
+                <span class="card-icon folder-icon" aria-hidden="true"></span>
+                <div>
+                  <h3>設定より規約</h3>
+                  <p>シンプルなディレクトリ規約で、シナリオを整理。</p>
+                </div>
+              </div>
+              <pre class="tree-preview" aria-label="シナリオのディレクトリ例"><code>scenarios/
+├─ customer/
+│  ├─ create/
+│  │  └─ scenario.yaml
+│  ├─ update/
+│  └─ close/
+└─ billing/
+   ├─ invoice/
+   └─ payment/</code></pre>
+            </article>
+
+            <article class="feature-card panel">
+              <div class="card-heading">
+                <span class="card-icon pulse-icon" aria-hidden="true">⌁</span>
+                <div>
+                  <h3>すべてのステップを可視化</h3>
+                  <p>構造化ログとトレースで、実行状況をリアルタイムに把握。</p>
+                </div>
+              </div>
+              <ol class="timeline-list">
+                <li><time>12:01:02</time><span>Arrange</span><b>✓</b></li>
+                <li><time>12:01:03</time><span>Act</span><b>✓</b></li>
+                <li><time>12:01:05</time><span>Collect</span><b>✓</b></li>
+                <li><time>12:01:07</time><span>Assert</span><b>✓</b></li>
+              </ol>
+            </article>
+
+            <article class="feature-card panel" id="plugins">
+              <div class="card-heading">
+                <span class="card-icon puzzle-icon" aria-hidden="true">✣</span>
+                <div>
+                  <h3>テスト全体を自在に構成</h3>
+                  <p>プラグインでシステム、サービス、ツールを連携。</p>
+                </div>
+              </div>
+              <ul class="plugin-grid" aria-label="対応プラグイン">
+                <li>MySQL</li><li>PostgreSQL</li><li>Redis</li>
+                <li>REST</li><li>k6</li><li>SSH</li>
+              </ul>
+              <a class="more-link" href="https://github.com/scenario-test-framework/stfw#built-in-process-plugins">＋ その他のプラグイン</a>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="workflow section-grid" aria-labelledby="workflow-title">
+        <div class="shell">
+          <h2 id="workflow-title" class="section-title">明快で一貫したワークフロー</h2>
+          <ol class="workflow-steps">
+            <li class="workflow-card panel">
+              <span class="workflow-icon folder-icon" aria-hidden="true"></span>
+              <div><strong>Arrange</strong><small>データと前提条件を準備</small></div>
+            </li>
+            <li class="workflow-card panel">
+              <span class="workflow-icon terminal-icon" aria-hidden="true">&gt;_</span>
+              <div><strong>Act</strong><small>システム上の操作を実行</small></div>
+            </li>
+            <li class="workflow-card panel">
+              <span class="workflow-icon database-icon" aria-hidden="true">◫</span>
+              <div><strong>Collect</strong><small>結果と観測データを収集</small></div>
+            </li>
+            <li class="workflow-card panel workflow-success">
+              <span class="workflow-icon check-icon" aria-hidden="true">✓</span>
+              <div><strong>Assert</strong><small>結果と業務ルールを検証</small></div>
+            </li>
+          </ol>
+          <ul class="plugin-rail" aria-label="ワークフローを構成するプラグイン">
+            <li>♜ MySQL</li><li>♙ PostgreSQL</li><li>▰ Redis</li>
+            <li>◎ REST</li><li>⌁ k6</li><li>▣ SSH</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="report-section section-grid" aria-labelledby="report-title">
+        <div class="shell report-layout">
+          <div class="report-panel panel" aria-label="daily-balanceシナリオの実行レポート例">
+            <div class="report-header"><strong>実行レポート</strong><span>所要時間</span></div>
+            <div class="report-body">
+              <div class="report-tree">
+                <div class="report-row report-root"><span>⌄ daily-balance</span><b>成功</b></div>
+                <div class="report-row"><span>├─ 2026-07-01</span><b>成功</b></div>
+                <div class="report-row indent"><span>├─ Arrange</span><b>成功</b></div>
+                <div class="report-row indent"><span>├─ Act</span><b>成功</b></div>
+                <div class="report-row indent"><span>├─ Collect</span><b>成功</b></div>
+                <div class="report-row indent"><span>└─ Assert</span><b>成功</b></div>
+                <div class="report-row"><span>└─ 2026-07-02</span><b>成功</b></div>
+              </div>
+              <div class="duration-chart" aria-label="実行時間のタイムライン">
+                <div class="chart-axis"><span>0s</span><span>5s</span><span>10s</span><span>15s</span><span>20s</span><span>25s</span></div>
+                <div class="duration-line line-long"><i></i><em>18.42s</em></div>
+                <div class="duration-line line-short"><i></i><em>4.21s</em></div>
+                <div class="duration-line line-medium"><i></i><em>5.13s</em></div>
+                <div class="duration-line line-shorter"><i></i><em>4.67s</em></div>
+                <div class="duration-line line-short"><i></i><em>4.41s</em></div>
+                <div class="duration-line line-full"><i></i><em>19.03s</em></div>
+              </div>
+            </div>
+          </div>
+          <div class="report-copy">
+            <h2 id="report-title">実行から<br>根本原因まで。</h2>
+            <p>レポート、タイムライン、トレースで、失敗から修正までを高速化。</p>
+            <ul class="check-list">
+              <li>業務日ごとの概要</li>
+              <li>ステップ単位の状態</li>
+              <li>所要時間とタイムライン</li>
+              <li>ログ、トレース、メトリクス</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="quickstart section-grid" id="quickstart" aria-labelledby="quickstart-title">
+        <div class="shell quickstart-layout">
+          <h2 id="quickstart-title">1分以内に<br>スタート。</h2>
+          <div class="terminal panel" role="region" aria-label="クイックスタートコマンド">
+            <div class="terminal-bar"><span>$</span><button class="copy-button" type="button" aria-label="コマンドをコピー" data-copy-target="quickstart-code">コピー</button></div>
+            <pre id="quickstart-code"><code><span>$</span> stfw init
+<span>$</span> stfw run sample
+<span>$</span> stfw status
+<span>$</span> stfw report</code></pre>
+          </div>
+          <ul class="platform-grid" aria-label="対応プラットフォーム">
+            <li>● macOS</li><li>♙ Linux</li><li>⊞ Windows</li><li>◉ Docker</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="final-cta shell" aria-labelledby="cta-title">
+        <div class="cta-mark" aria-hidden="true">◇</div>
+        <h2 id="cta-title">すべての業務日を、<br>テスト可能に。</h2>
+        <a class="button button-primary" href="https://github.com/scenario-test-framework/stfw/blob/master/README.ja.md#quick-start">はじめる</a>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="shell footer-wrap">
+        <a class="brand" href="#top" aria-label="ページ上部へ">
+          <span class="brand-prompt" aria-hidden="true">&gt;</span><span>stfw</span>
+        </a>
+        <nav aria-label="フッターナビゲーション">
+          <a href="https://github.com/scenario-test-framework/stfw/blob/master/LICENSE">Apache 2.0</a>
+          <a href="https://github.com/scenario-test-framework/stfw/blob/master/README.ja.md">ドキュメント</a>
+          <a href="https://github.com/scenario-test-framework/stfw">GitHub</a>
+        </nav>
+      </div>
+    </footer>
+
+    <script src="script.js"></script>
+  </body>
+</html>
