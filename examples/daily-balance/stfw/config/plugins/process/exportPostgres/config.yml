@@ -1,11 +1,12 @@
 # exportPostgres の接続系をプロジェクト全体で共通化する上書き設定 (§8.1 の上書きチェーン)。
 # 各シナリオのプロセス config/config.yml は tables だけを書けばよい。
-# database / user は stfw.yml (stfw.db.*) を単一ソースとし、${stfw_db_database} / ${stfw_db_user}
-# で参照する (run 開始時に stfw.yml が環境へ export される。AS-BUILT §8.2)。
+# 接続先 identity (host_group / database / user) は stfw.yml (stfw.db.*) を単一ソースとし、
+# ${stfw_db_host_group} / ${stfw_db_database} / ${stfw_db_user} で参照する
+# (run 開始時に stfw.yml が環境へ export される。AS-BUILT §8.2)。
+# port はプラグイン既定 (5432) を使う。変える場合はここで上書きする。
 stfw:
   process:
     exportPostgres:
-      host_group: db
-      port: "5432"
+      host_group: ${stfw_db_host_group}
       database: ${stfw_db_database}
       user: ${stfw_db_user}
