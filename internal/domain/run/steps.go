@@ -3,8 +3,9 @@ package run
 import "fmt"
 
 // Steps はステップ実行結果のファーストクラスコレクション。
-// 「昇順逐次実行・エラー時 Blocked」の状態モデル (Pending → Success/Error/Blocked)
-// の遷移検証を内包する (v0.2 の scripts プラグイン bulk_exec_scripts の記録規則)。
+// 「昇順逐次実行・エラー時 Blocked」の状態モデル (Pending → Success/Warn/Error/Blocked)
+// の遷移検証を内包する (v0.2 の scripts プラグイン bulk_exec_scripts の記録規則 +
+// v1.2.0 の Warn 一級化)。
 type Steps struct {
 	order  []string
 	status map[string]StepStatus
@@ -29,7 +30,7 @@ func NewSteps(names []string) (*Steps, error) {
 	return s, nil
 }
 
-// MarkEnd はステップの終了状態 (Success | Error | Blocked) への遷移を検証して記録する。
+// MarkEnd はステップの終了状態 (Success | Warn | Error | Blocked) への遷移を検証して記録する。
 func (s *Steps) MarkEnd(name string, to StepStatus) error {
 	cur, ok := s.status[name]
 	if !ok {

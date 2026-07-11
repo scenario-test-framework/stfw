@@ -1,0 +1,2 @@
+外部システム群	外部システム	役割
+テスト支援ツール	compare-files（ファイル比較 OSS）	compareプラグインが利用するファイル比較OSS（scenario-test-framework/compare-files、別リポジトリ）。起動設定・比較レイアウトはstfwプロジェクトごとに保持し、期待値（expect）とエビデンス（actual）のディレクトリ比較を実行して比較結果を出力する。比較不一致時は exit 3 を返し、compare プラグインの on_mismatch 設定により、error（既定）では Error（exit 6）に変換されてステップ失敗（停止 + Blocked 伝播）、warn では exit 3 のまま Warn として記録・続行として扱われる

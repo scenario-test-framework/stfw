@@ -14,6 +14,7 @@
 | キー | 必須 | 説明 |
 |---|---|---|
 | `compare_files_version` | - | 取得する compare-files のリリースタグ (既定 v2.2.0) |
+| `on_mismatch` | - | 比較不一致の扱い。`error` (既定) = ステップ失敗として停止 + Blocked 伝播 (回帰テスト運用) / `warn` = Warn として記録して続行 (差分確認運用。run 終了コードは Warn あり・Error なしで 3) |
 
 比較レイアウト (`compare_layout/*.json`) は次の後勝ちマージで解決される (AS-BUILT §4.11):
 バイナリ同梱デフォルト → **プロジェクト共通** `{proj}/config/plugins/process/compare/compare_layout/`
@@ -48,7 +49,8 @@ _{seq}_{group}_compare/
 | コード | 意味 |
 |---|---|
 | 0 | 全ファイル一致 (OK / Ignore) |
-| 6 | 差分あり (NG / LeftOnly / RightOnly) またはエラー — 不一致はステップ失敗として後続を Blocked にする |
+| 3 | 差分あり (NG / LeftOnly / RightOnly) かつ `on_mismatch: warn` — Warn として記録され後続は継続する |
+| 6 | 差分あり かつ `on_mismatch: error` (既定。ステップ失敗として後続を Blocked にする)、または比較エラー |
 
 ## 既知の制約
 

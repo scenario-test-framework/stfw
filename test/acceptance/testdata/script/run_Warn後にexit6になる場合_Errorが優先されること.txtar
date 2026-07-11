@@ -1,0 +1,60 @@
+# STEP: run Warn + Error 混在系 (Warn を記録した後に exit 6 が発生 ->
+# Error が優先され、後続は Blocked・run は Error・終了コードは 6。SPEC-023-02)
+
+execcode 6 stfw run demo
+stderr 'finished with status Error'
+
+# Error 後の後続ステップは実行されない
+! exists executed_300_after.txt
+
+# ジャーナル: Warn は記録されつつ、集約は Error > Warn > Success で Error になる
+normjournal . journal_actual.jsonl
+cmp journal_actual.jsonl journal_golden.jsonl
+
+# status は Warn ステップと Error 集約を表示する
+exec stfw status
+stdout 'run \[Error\]'
+stdout '\n        - 100_warn \[Warn\]'
+stdout '\n        - 200_fail \[Error\]'
+stdout '\n        - 300_after \[Blocked\]'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  timezone: "Asia/Tokyo"
+-- scenario/demo/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_pre_scripts/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_pre_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/demo/_10_99990101/_10_pre_scripts/scripts/100_warn --
+#!/bin/bash
+echo "100_warn"
+exit 3
+-- scenario/demo/_10_99990101/_10_pre_scripts/scripts/200_fail --
+#!/bin/bash
+echo "200_fail"
+exit 6
+-- scenario/demo/_10_99990101/_10_pre_scripts/scripts/300_after --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/executed_300_after.txt"
+exit 0
+-- journal_golden.jsonl --
+{"attrs":{"params":"demo","run_id":"RUN_ID","run_mode":"--run"},"event":"node_start","node_id":"RUN_ID+run","node_type":"run","parent_id":"RUN_ID"}
+{"attrs":{"name":"demo"},"event":"node_start","node_id":"RUN_ID+run+demo","node_type":"scenario","parent_id":"RUN_ID+run"}
+{"attrs":{"bizdate":"99990101","dirname":"_10_99990101","seq":"10"},"event":"node_start","node_id":"RUN_ID+run+demo+_10_99990101","node_type":"bizdate","parent_id":"RUN_ID+run+demo"}
+{"attrs":{"dirname":"_10_pre_scripts","group":"pre","process_type":"scripts","seq":"10"},"event":"node_start","node_id":"RUN_ID+run+demo+_10_99990101+_10_pre_scripts","node_type":"process","parent_id":"RUN_ID+run+demo+_10_99990101"}
+{"event":"steps_enumerated","node_id":"RUN_ID+run+demo+_10_99990101+_10_pre_scripts","steps":["100_warn","200_fail","300_after"]}
+{"event":"step_end","exit_code":3,"node_id":"RUN_ID+run+demo+_10_99990101+_10_pre_scripts","status":"Warn","step":"100_warn"}
+{"event":"step_end","exit_code":6,"node_id":"RUN_ID+run+demo+_10_99990101+_10_pre_scripts","status":"Error","step":"200_fail"}
+{"event":"step_end","node_id":"RUN_ID+run+demo+_10_99990101+_10_pre_scripts","status":"Blocked","step":"300_after"}
+{"event":"node_end","node_id":"RUN_ID+run+demo+_10_99990101+_10_pre_scripts","status":"Error"}
+{"event":"node_end","node_id":"RUN_ID+run+demo+_10_99990101","status":"Error"}
+{"event":"node_end","node_id":"RUN_ID+run+demo","status":"Error"}
+{"event":"node_end","node_id":"RUN_ID+run","status":"Error"}

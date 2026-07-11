@@ -121,7 +121,7 @@ func (r *Run) applyStepsEnumerated(ev Event) error {
 	return nil
 }
 
-// applyStepEnd はステップの終了 (Pending → Success/Error/Blocked) を検証する。
+// applyStepEnd はステップの終了 (Pending → Success/Warn/Error/Blocked) を検証する。
 func (r *Run) applyStepEnd(ev Event) error {
 	n, err := r.startedNode(ev.NodeID)
 	if err != nil {
@@ -136,7 +136,7 @@ func (r *Run) applyStepEnd(ev Event) error {
 	return nil
 }
 
-// applyNodeEnd は階層の終了 (Started → Success/Error) を検証する。
+// applyNodeEnd は階層の終了 (Started → Success/Warn/Error) を検証する。
 func (r *Run) applyNodeEnd(ev Event) error {
 	n, ok := r.nodes[ev.NodeID]
 	if !ok {

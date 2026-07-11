@@ -257,6 +257,73 @@ func TestProjectorTreeError(t *testing.T) {
 	})
 }
 
+func TestProjectorTreeWarn(t *testing.T) {
+	t.Run("Projector_ステップWarnの場合_スパンはOkのまま属性でWarnを表現すること", func(t *testing.T) {
+		// Arrange
+		ids := testNodeIDs(t)
+		p := NewProjector()
+		// step1 が Warn 終了 → 後続 step2 は実行され Success、全階層の end が Warn
+		events := []run.Event{
+			run.NewNodeStartEvent(ts(0), ids["run"], run.NodeTypeRun,
+				map[string]string{"run_id": "_20200101120000_99", "run_mode": "--run", "params": "demo"}),
+			run.NewNodeStartEvent(ts(1), ids["scenario"], run.NodeTypeScenario,
+				map[string]string{"name": "demo"}),
+			run.NewNodeStartEvent(ts(2), ids["bizdate"], run.NodeTypeBizdate,
+				map[string]string{"dirname": "_10_99990101", "seq": "10", "bizdate": "99990101"}),
+			run.NewNodeStartEvent(ts(3), ids["process"], run.NodeTypeProcess,
+				map[string]string{"dirname": "_10_pre_scripts", "seq": "10", "group": "pre", "process_type": "scripts"}),
+			run.NewStepsEnumeratedEvent(ts(3), ids["process"], []string{"100_step1", "200_step2"}),
+			run.NewStepEndEvent(ts(4), ids["process"], "100_step1", run.StepWarn, 3, ts(3), ts(4)),
+			run.NewStepEndEvent(ts(5), ids["process"], "200_step2", run.StepSuccess, 0, ts(4), ts(5)),
+			run.NewNodeEndEvent(ts(6), ids["process"], run.NodeWarn),
+			run.NewNodeEndEvent(ts(7), ids["bizdate"], run.NodeWarn),
+			run.NewNodeEndEvent(ts(8), ids["scenario"], run.NodeWarn),
+			run.NewNodeEndEvent(ts(9), ids["run"], run.NodeWarn),
+		}
+
+		// Act
+		spans := applyAll(t, p, events)
+
+		// Assert
+		if len(spans) != 6 {
+			t.Fatalf("spans = %d, want 6", len(spans))
+		}
+
+		// Warn 終了の階層はスパンステータス Ok のまま stfw.node.status=Warn (メッセージなし)
+		for _, i := range []int{0, 1, 2, 3} {
+			if spans[i].Status != SpanStatusOK {
+				t.Errorf("span %s status = %s, want Ok", spans[i].Name, spans[i].Status)
+			}
+			if v := attrValue(spans[i], AttrNodeStatus); v != "Warn" {
+				t.Errorf("span %s %s = %v, want Warn", spans[i].Name, AttrNodeStatus, v)
+			}
+			if spans[i].StatusMessage != "" {
+				t.Errorf("span %s message = %q, want empty", spans[i].Name, spans[i].StatusMessage)
+			}
+		}
+
+		// Warn ステップはスパンステータス Ok + stfw.step.status=Warn + exit_code 3
+		step1 := spans[4]
+		if step1.Status != SpanStatusOK {
+			t.Errorf("step1 status = %s, want Ok", step1.Status)
+		}
+		if v := attrValue(step1, AttrStepStatus); v != "Warn" {
+			t.Errorf("step1 %s = %v, want Warn", AttrStepStatus, v)
+		}
+		if v := attrValue(step1, AttrStepExit); v != int64(3) {
+			t.Errorf("step1 %s = %v, want 3", AttrStepExit, v)
+		}
+		// Warn 後の Success ステップは実行されている (Ok + exit_code 0)
+		step2 := spans[5]
+		if step2.Status != SpanStatusOK {
+			t.Errorf("step2 status = %s, want Ok", step2.Status)
+		}
+		if v := attrValue(step2, AttrStepExit); v != int64(0) {
+			t.Errorf("step2 %s = %v, want 0", AttrStepExit, v)
+		}
+	})
+}
+
 func TestProjectorUnknownNode(t *testing.T) {
 	t.Run("Projector_未開始ノードへのstep_endの場合_エラーであること", func(t *testing.T) {
 		// Arrange

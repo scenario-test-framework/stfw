@@ -44,7 +44,8 @@ scenario/{シナリオ}/_{seq}_{bizdate}/_{seq}_{group}_{type}/
 | （汎用） | `scripts` | 任意言語の実行可能ファイルを昇順実行 |
 
 > プロセスは `setup → pre_execute → execute → post_execute → teardown` の順で実行され、
-> いずれかが非 0 終了すると後続はブロックされシナリオは失敗します（exit 0=成功 / 3=警告 / 6=失敗）。
+> Error（exit 6 等の非 0・非 3）で後続はブロックされシナリオは失敗します。
+> exit 3 は Warn として記録され実行は続行します（exit 0=Success / 3=Warn / 6=Error。AS-BUILT §4.6）。
 
 ## 3. 通しの例: daily-balance
 
@@ -195,7 +196,12 @@ secret は `stfw secret keygen` で鍵を作り、`stfw secret set postgres appu
 | `result/` | 生成物 | compare-files の比較結果（`CompareSummary.csv` 等） |
 
 つまり `expect/{収集プロセス名}/{database}/{table}.csv` に期待値を置けば、compare が
-同じ bizdate 内の収集エビデンスと突合します。差分があれば非 0 終了し、シナリオは失敗します。
+同じ bizdate 内の収集エビデンスと突合します。差分の扱いは設定キー `on_mismatch` で選べます
+（AS-BUILT §4.11）:
+
+- `error`（既定）: 差分でステップ失敗として停止し、後続は `Blocked`（回帰テスト運用）
+- `warn`: 差分を `Warn` として記録して最後まで実行を続け、`stfw run` は exit 3 で完走する。
+  status / HTML レポートの Warn（黄）表示がそのまま「比較 NG の鳥瞰」になる（差分確認運用）
 
 既定は行全体のテキスト比較ですが、**比較レイアウト**を定義すると項目単位の比較にできます
 （連番・更新時刻列の除外、キー列による行の対応付けなど）。シナリオを跨いで共通のレイアウトは

@@ -20,6 +20,7 @@ const (
 	AttrRunID       = "stfw.run_id"
 	AttrNodeType    = "stfw.node.type"
 	AttrNodeID      = "stfw.node.id"
+	AttrNodeStatus  = "stfw.node.status"
 	AttrRunMode     = "stfw.run.mode"
 	AttrBizdate     = "stfw.bizdate"
 	AttrSeq         = "stfw.seq"
@@ -50,6 +51,8 @@ type Span struct {
 	End   time.Time
 	// Status は実行ステータスのマッピング。Success → Ok / Error → Error /
 	// Blocked ステップ → Unset (属性 stfw.step.status で表現)。
+	// Warn は OTel にスパンステータス相当が無いため Ok + 属性で表現する
+	// (階層は stfw.node.status=Warn、step は stfw.step.status=Warn。SPEC-024-03)。
 	Status SpanStatus
 	// StatusMessage は Status が Error の場合のみ持つ。
 	StatusMessage string

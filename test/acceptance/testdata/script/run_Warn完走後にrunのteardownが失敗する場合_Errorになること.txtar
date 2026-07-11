@@ -1,0 +1,43 @@
+# STEP: Warn 完走 + run teardown フック失敗 (teardown には stfw_run_status=Warn が渡り、
+# フック失敗により run は Error へ上書きされ終了コードは 6。Error > Warn の境界)
+
+chmod 755 plugins/run/_common/teardown/90_fail
+
+execcode 6 stfw run demo
+stderr 'finished with status Error'
+
+# teardown フックには上書き前の Warn が渡っている
+cmp hooks.log hooks_golden.log
+
+# run のみ Error へ上書きされ、配下の階層は Warn のまま
+exec stfw status
+stdout 'run \[Error\]'
+stdout '\n  demo \[Warn\]'
+stdout '\n    _10_99990101 \[Warn\]'
+stdout '\n      _10_pre_scripts \[Warn\]'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  timezone: "Asia/Tokyo"
+-- scenario/demo/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_pre_scripts/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_pre_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/demo/_10_99990101/_10_pre_scripts/scripts/100_warn --
+#!/bin/bash
+echo "100_warn"
+exit 3
+-- plugins/run/_common/teardown/90_fail --
+#!/bin/bash
+echo "run teardown ${stfw_run_status}" >>"${STFW_PROJ_DIR}/hooks.log"
+exit 1
+-- hooks_golden.log --
+run teardown Warn

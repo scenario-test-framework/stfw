@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -34,6 +35,12 @@ func newRunCmd(a *app) *cobra.Command {
 			err := runscenario.Run(a.log, out, errOut,
 				a.projDir, a.config, Version, args, dryRun, time.Now)
 			if err != nil {
+				// Warn 完走 (Error なし) は exit 3 で「差分あり」を CI へ伝える (SPEC-023-03)
+				var st *runscenario.StatusError
+				if errors.As(err, &st) && st.Status == run.NodeWarn {
+					a.log.Warn(err.Error())
+					return &exitError{code: run.ExitWarn, err: err}
+				}
 				a.log.Error(err.Error())
 				return &exitError{code: run.ExitError, err: err}
 			}

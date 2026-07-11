@@ -59,7 +59,7 @@ func NewStepsEnumeratedEvent(ts time.Time, id NodeID, steps []string) Event {
 	}
 }
 
-// NewStepEndEvent はステップの実行終了 (Success | Error) イベントを組み立てる。
+// NewStepEndEvent はステップの実行終了 (Success | Warn | Error) イベントを組み立てる。
 func NewStepEndEvent(ts time.Time, id NodeID, step string, status StepStatus, exitCode int, start, end time.Time) Event {
 	code := exitCode
 	return Event{
@@ -86,7 +86,7 @@ func NewStepBlockedEvent(ts time.Time, id NodeID, step string) Event {
 	}
 }
 
-// NewNodeEndEvent は階層の実行終了 (Success | Error) イベントを組み立てる。
+// NewNodeEndEvent は階層の実行終了 (Success | Warn | Error) イベントを組み立てる。
 func NewNodeEndEvent(ts time.Time, id NodeID, status NodeStatus) Event {
 	return Event{
 		Type:   EventNodeEnd,

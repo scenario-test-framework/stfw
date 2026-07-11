@@ -23,8 +23,9 @@ convention and run them automatically from a single binary.
   engine such as digdag, no JVM).
 - **Convention-based**: just drop scripts into the `scenario/{name}/_{seq}_{bizdate}/_{seq}_{group}_{type}/`
   hierarchy.
-- **Ordered, fail-fast**: steps run sequentially in filename order; every step after a failure is
-  recorded as `Blocked`.
+- **Ordered, fail-fast**: steps run sequentially in filename order; every step after an error is
+  recorded as `Blocked`. A `Warn` (exit 3) is recorded without stopping the run — useful for
+  surveying expected diffs across scenarios (`stfw run` exits with 3 when warnings occurred).
 - **Visibility**: a JSONL execution journal + `stfw status` + a static HTML report.
 - **Observability**: run / scenario / bizdate / process / step execution is exported as OTLP traces
   (view them directly in Jaeger / Grafana Tempo / Datadog, etc.).
@@ -167,7 +168,8 @@ Process types are extensible through the following contract:
 
 - Input: environment variables (`stfw_*` = flattened settings, plus execution context such as
   `STFW_PROJ_DIR`).
-- Output: a return code (`0` = Success / `3` = Warn / `6` = Error).
+- Output: a return code (`0` = Success / `3` = Warn, recorded and execution continues /
+  `6` = Error, stops and blocks the rest).
 - Any implementation language (any executable file works).
 
 ### Built-in process plugins

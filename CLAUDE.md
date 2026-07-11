@@ -122,6 +122,10 @@ golangci-lint run                # CI と同じ v2 設定（.golangci.yml）
     `docs/AS-BUILT.md` の「未注入時 `X.Y.Z-dev`」の記載も追従 → ③ `git tag vX.Y.Z && git push origin vX.Y.Z`。
     リリースノートは goreleaser がコミットから自動生成（`feat:`/`fix:` でグルーピング、`docs:` は除外）。
     CHANGELOG ファイルは持たない。
+  - **挙動変化（後方互換に影響する変更）を含むリリース**: リリースノートに載るのは
+    **コミットタイトルのみ**のため、①挙動変化はコミットタイトル自体に含める、
+    ② goreleaser のリリース作成後に `gh release edit vX.Y.Z --notes-file ...` で
+    「挙動変化」節（変化の内容・影響対象・確認事項）を先頭に追記する。
 - **examples/daily-balance を変更したら**: ① `./run.sh` で end-to-end 確認（`sut/schema.sql` を
   変えた場合は先に `./run.sh --down` で DB を作り直す。schema は postgres コンテナ初期化時のみ実行）、
   ② `stfw scenario reverse daily-balance` で `stfw/docs/daily-balance.{yml,md}` を再生成

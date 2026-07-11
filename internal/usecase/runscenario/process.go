@@ -83,8 +83,8 @@ func (r *runner) execProcess(nodeID run.NodeID, processDir, processType string, 
 // v0.2 の scripts プラグイン (bin/run/{pre_execute,execute,post_execute}) の移植:
 //
 //	pre_execute  = scripts/ 直下への実行権限付与
-//	execute      = scripts/ 直下を昇順に逐次実行 (retcode 0 → Success / 非 0 → Error /
-//	               先行エラー後は Blocked)。dry-run 時はスキップ
+//	execute      = scripts/ 直下を昇順に逐次実行 (retcode 0 → Success / 3 → Warn 続行 /
+//	               その他非 0 → Error / 先行 Error 後は Blocked)。dry-run 時はスキップ
 //	post_execute = 何もしない (v0.2 も exit 0 のみ)。dry-run 時はスキップ
 func (r *runner) runScriptsProcess(nodeID run.NodeID, processDir string, env map[string]string) (run.NodeStatus, error) {
 	// 計画列挙: 全ステップを Pending で登録する (dry-run でも行う)
@@ -127,12 +127,14 @@ func (r *runner) runScriptsProcess(nodeID run.NodeID, processDir string, env map
 }
 
 // execSteps はステップスクリプトを昇順に逐次実行する。
-// エラー発生後の後続ステップは実行せず Blocked として記録する
+// Error 発生後の後続ステップは実行せず Blocked として記録する
 // (v0.2 の plugin.process.scripts.bulk_exec_scripts と同じ規則)。
+// exit 3 は Warn として記録して続行する (AS-BUILT §4.6)。
 func (r *runner) execSteps(nodeID run.NodeID, processDir string, steps []string, env map[string]string) (run.NodeStatus, error) {
 	scriptsDir := filepath.Join(processDir, "scripts")
 	envList := envList(env)
 	failed := false
+	warned := false
 	for _, step := range steps {
 		if failed {
 			if err := r.emit(run.NewStepBlockedEvent(r.now(), nodeID, step)); err != nil {
@@ -152,7 +154,12 @@ func (r *runner) execSteps(nodeID run.NodeID, processDir string, steps []string,
 		end := r.now()
 
 		status := run.StepSuccess
-		if code != 0 {
+		switch {
+		case code == run.ExitSuccess.Int():
+		case code == run.ExitWarn.Int():
+			status = run.StepWarn
+			warned = true
+		default:
 			status = run.StepError
 			failed = true
 		}
@@ -163,6 +170,9 @@ func (r *runner) execSteps(nodeID run.NodeID, processDir string, steps []string,
 	}
 	if failed {
 		return run.NodeError, nil
+	}
+	if warned {
+		return run.NodeWarn, nil
 	}
 	return run.NodeSuccess, nil
 }
@@ -204,6 +214,11 @@ func (r *runner) runPluginProcess(processDir string, loc repository.PluginLocati
 			code = run.ExitError.Int()
 		}
 		r.log.Info("process phase end", "phase", phase, "exit_code", code)
+		// exit 3 は Warn として記録して後続フェーズを続行する (AS-BUILT §4.6)
+		if code == run.ExitWarn.Int() {
+			status = run.NodeWarn
+			continue
+		}
 		if code != 0 {
 			status = run.NodeError
 			break
@@ -221,7 +236,11 @@ func (r *runner) runProcessTeardown(processDir string, status run.NodeStatus, en
 	env = cloneEnv(env)
 	env["stfw_run_status"] = string(status)
 	retcode := run.ExitSuccess
-	if status != run.NodeSuccess {
+	switch status {
+	case run.NodeWarn:
+		retcode = run.ExitWarn
+	case run.NodeSuccess:
+	default:
 		retcode = run.ExitError
 	}
 	env["stfw_process_retcode"] = strconv.Itoa(retcode.Int())

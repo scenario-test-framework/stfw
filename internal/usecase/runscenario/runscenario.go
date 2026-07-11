@@ -1,8 +1,9 @@
 // Package runscenario は stfw run (内蔵ランナー) のビジネスフローを制御する。
 // ScenarioTree を深さ優先で走査し、各階層で setup フック → 子の逐次実行 →
-// teardown フックを Go プロセス内で実行する。エラー時は後続の兄弟ノードを
-// 実行せず停止する (v0.2 の digdag ワークフロー実行の置き換え)。
-// 実行イベントは JSONL ジャーナル (.stfw/runs/{run_id}/journal.jsonl) へ記録する。
+// teardown フックを Go プロセス内で実行する。Error 時は後続の兄弟ノードを
+// 実行せず停止し、Warn は記録して続行する (Error > Warn > Success で上位へ集約。
+// AS-BUILT §4.6)。実行イベントは JSONL ジャーナル
+// (.stfw/runs/{run_id}/journal.jsonl) へ記録する。
 package runscenario
 
 import (
@@ -128,10 +129,22 @@ func Run(log *slog.Logger, out, errOut io.Writer, projDir string, cfg *repositor
 		return err
 	}
 	if status != run.NodeSuccess {
-		return fmt.Errorf("run %s finished with status %s", runID, status)
+		return &StatusError{RunID: runID, Status: status}
 	}
 	log.Info("run finished", "run_id", runID.String(), "status", string(status))
 	return nil
+}
+
+// StatusError は run が Success 以外のステータスで完走したことを表す。
+// インフラ障害 (ジャーナル書き込み失敗等) と区別し、presentation 層が
+// Warn=exit 3 / Error=exit 6 へ変換できるようにする (SPEC-023-03)。
+type StatusError struct {
+	RunID  run.RunID
+	Status run.NodeStatus
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("run %s finished with status %s", e.RunID, e.Status)
 }
 
 // runner は 1 回の実行のオーケストレーション状態を保持する。
@@ -190,10 +203,14 @@ func (r *runner) runRun(runID run.RunID, tree *scenario.ScenarioTree, names []st
 			if err != nil {
 				return "", err
 			}
-			// エラー時は後続の兄弟ノードを実行せず停止する
-			if st != run.NodeSuccess {
+			// Error 時は後続の兄弟ノードを実行せず停止する。
+			// Warn は記録して続行する (Error > Warn > Success で集約。§4.6)
+			if st == run.NodeError {
 				status = run.NodeError
 				break
+			}
+			if st == run.NodeWarn {
+				status = run.NodeWarn
 			}
 		}
 	}
@@ -235,9 +252,12 @@ func (r *runner) runScenario(parent run.NodeID, view scenario.ScenarioView, pare
 			if err != nil {
 				return "", err
 			}
-			if st != run.NodeSuccess {
+			if st == run.NodeError {
 				status = run.NodeError
 				break
+			}
+			if st == run.NodeWarn {
+				status = run.NodeWarn
 			}
 		}
 	}
@@ -288,9 +308,12 @@ func (r *runner) runBizdate(parent run.NodeID, scenarioDir string, view scenario
 			if err != nil {
 				return "", err
 			}
-			if st != run.NodeSuccess {
+			if st == run.NodeError {
 				status = run.NodeError
 				break
+			}
+			if st == run.NodeWarn {
+				status = run.NodeWarn
 			}
 		}
 	}

@@ -15,7 +15,10 @@
 #   symlink とする (ファイル比較時の os.Open は symlink を辿るため比較は成立する)。
 #
 # 終了コード: compare-files は 0=一致 / 3=差分 (NG/LeftOnly/RightOnly) / 6=エラー を返す。
-#   本プラグインは「比較不一致はステップ失敗」(SPEC-014-02) に従い、非 0 を一律 exit 6 とする。
+#   差分 (exit 3) の扱いは on_mismatch 設定による選択制 (SPEC-014-02):
+#     error (既定) = exit 6 に変換してステップ失敗 (停止 + Blocked 伝播。回帰テスト運用)
+#     warn         = exit 3 のまま返し、ランナーが Warn として記録して続行 (差分確認運用)
+#   比較エラー (exit 6 等の非 0・非 3) は常に exit 6。
 #   比較レイアウト (compare_layout/) は「同梱デフォルト → プロジェクト共通
 #   ({proj}/config/plugins/process/compare/。COMPAREFILES_CLASSPATH で注入) →
 #   プロセスローカル (./config/)」の後勝ちマージで解決される (AS-BUILT §4.11)。
@@ -41,6 +44,17 @@ if [ ! -x "${bin}" ]; then
   echo "compare: compare_files not provisioned: ${bin} (run \`stfw plugin install compare\`)" >&2
   exit 6
 fi
+
+# 比較不一致の扱い (config キー stfw.process.compare.on_mismatch)。
+# 比較実行前に検証し、設定不正は fail-fast する。
+on_mismatch="${stfw_process_compare_on_mismatch:-error}"
+case "${on_mismatch}" in
+  error | warn) ;;
+  *)
+    echo "compare: invalid on_mismatch: ${on_mismatch} (must be error or warn)" >&2
+    exit 6
+    ;;
+esac
 
 expect_dir="${stfw_process_dir}/expect"
 actual_dir="${stfw_process_dir}/actual"
@@ -127,6 +141,10 @@ if [ "${cf_rc}" -eq 0 ]; then
 fi
 if [ "${cf_rc}" -eq 3 ]; then
   echo "compare: mismatch detected (差分あり)。詳細は ${result_dir}/ を参照" >&2
+  if [ "${on_mismatch}" = "warn" ]; then
+    # 差分を Warn として記録して続行させる (exit 3 のまま返す)
+    exit 3
+  fi
 else
   echo "compare: compare-files failed (exit ${cf_rc})。詳細は ${result_dir}/ を参照" >&2
 fi

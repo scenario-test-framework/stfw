@@ -10,7 +10,9 @@ func TestNodeStatusTransition(t *testing.T) {
 		wantErr bool
 	}{
 		{"Transition_Started→Successの場合_成功すること", NodeStarted, NodeSuccess, false},
+		{"Transition_Started→Warnの場合_成功すること", NodeStarted, NodeWarn, false},
 		{"Transition_Started→Errorの場合_成功すること", NodeStarted, NodeError, false},
+		{"Transition_終了状態Warn→Errorの場合_エラーであること", NodeWarn, NodeError, true},
 		{"Transition_Started→Startedの場合_エラーであること", NodeStarted, NodeStarted, true},
 		{"Transition_終了状態Success→Errorの場合_エラーであること", NodeSuccess, NodeError, true},
 		{"Transition_終了状態Error→Successの場合_エラーであること", NodeError, NodeSuccess, true},
@@ -36,8 +38,10 @@ func TestStepStatusTransition(t *testing.T) {
 		wantErr bool
 	}{
 		{"Transition_Pending→Successの場合_成功すること", StepPending, StepSuccess, false},
+		{"Transition_Pending→Warnの場合_成功すること", StepPending, StepWarn, false},
 		{"Transition_Pending→Errorの場合_成功すること", StepPending, StepError, false},
 		{"Transition_Pending→Blockedの場合_成功すること", StepPending, StepBlocked, false},
+		{"Transition_終了状態Warn→Successの場合_エラーであること", StepWarn, StepSuccess, true},
 		{"Transition_Pending→Pendingの場合_エラーであること", StepPending, StepPending, true},
 		{"Transition_終了状態Success→Errorの場合_エラーであること", StepSuccess, StepError, true},
 		{"Transition_終了状態Blocked→Successの場合_エラーであること", StepBlocked, StepSuccess, true},

@@ -1,6 +1,10 @@
 # compare のデフォルト設定。
 #
 # compare_files_version : 取得する compare-files のリリースタグ
+# on_mismatch           : 比較不一致 (compare-files exit 3) の扱い (SPEC-014-02)。
+#                         error (既定) = ステップ失敗として停止 + Blocked 伝播 (回帰テスト運用)
+#                         warn         = Warn として記録して続行 (差分確認運用。
+#                                        run 終了コードは Warn あり・Error なしで 3)
 #
 # compare は期待値 (expect/) と収集エビデンス (actual/) を compare-files で突合する
 # Assert フェーズのプラグイン。接続情報は不要 (ローカルのファイル比較)。
@@ -19,3 +23,4 @@ stfw:
   process:
     compare:
       compare_files_version: v2.2.0
+      on_mismatch: error

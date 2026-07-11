@@ -1,0 +1,182 @@
+# STEP: compare on_mismatch=warn (差分を exit 3 のまま返し、Warn として記録して続行する。
+# SPEC-014-02 改訂)
+# curl(DL) はモックし、フェイク compare_files で比較を再現する。
+#
+# 検証内容:
+#   - on_mismatch: warn で差分 -> compare プロセスが Warn、後続 process は実行される
+#   - run の終了コードは 3 (Warn あり・Error なし)
+#   - on_mismatch の不正値は設定不正として exit 6 (fail-fast)
+#   - 一致は on_mismatch: warn でも Success
+
+env PATH=${WORK}/fakebin:${PATH}
+chmod 755 fakebin/curl
+chmod 755 fakebin/fakecomparefiles
+
+# compare-files リリース tarball のフィクスチャを作る (root 直下に compare_files バイナリ)
+mkdir cfsrc
+cp fakebin/fakecomparefiles cfsrc/compare_files
+chmod 755 cfsrc/compare_files
+exec tar czf cf.tar.gz -C cfsrc compare_files
+env STFW_TEST_CF_TARBALL=${WORK}/cf.tar.gz
+
+# プロビジョニング (curl はモック)
+exec stfw plugin install compare
+
+# --- warn + 差分: compare は Warn、後続 process は実行、run は exit 3 ---
+execcode 3 stfw run cmpwarn
+stderr 'mismatch detected'
+stderr 'finished with status Warn'
+exists executed_after_compare.txt
+
+# status: compare プロセスが Warn、後続 process は Success、run は Warn 集約
+exec stfw status
+stdout 'run \[Warn\]'
+stdout '\n      _20_asrt_compare \[Warn\]'
+stdout '\n      _30_post_scripts \[Success\]'
+
+# --- warn + 一致: on_mismatch: warn でも一致は Success (exit 0) ---
+exec stfw run cmpok
+stdout 'run_id: _'
+
+# --- 不正値: error / warn 以外は設定不正として fail-fast (exit 6) ---
+execcode 6 stfw run cmpbad
+stderr 'invalid on_mismatch'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+-- scenario/cmpwarn/metadata.yml --
+description:
+-- scenario/cmpwarn/_10_99990101/metadata.yml --
+description:
+-- scenario/cmpwarn/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/cmpwarn/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/cmpwarn/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1"
+printf 'hello\nworld\n' > "${stfw_process_dir}/evidence/host1/data.txt"
+exit 0
+-- scenario/cmpwarn/_10_99990101/_20_asrt_compare/metadata.yml --
+description:
+-- scenario/cmpwarn/_10_99990101/_20_asrt_compare/config/config.yml --
+stfw:
+  process:
+    compare:
+      compare_files_version: v2.2.0
+      on_mismatch: warn
+-- scenario/cmpwarn/_10_99990101/_20_asrt_compare/expect/_10_col_scripts/host1/data.txt --
+hello
+DIFFERENT
+-- scenario/cmpwarn/_10_99990101/_30_post_scripts/metadata.yml --
+description:
+-- scenario/cmpwarn/_10_99990101/_30_post_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/cmpwarn/_10_99990101/_30_post_scripts/scripts/100_marker --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/executed_after_compare.txt"
+exit 0
+-- scenario/cmpok/metadata.yml --
+description:
+-- scenario/cmpok/_10_99990101/metadata.yml --
+description:
+-- scenario/cmpok/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/cmpok/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/cmpok/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1"
+printf 'hello\nworld\n' > "${stfw_process_dir}/evidence/host1/data.txt"
+exit 0
+-- scenario/cmpok/_10_99990101/_20_asrt_compare/metadata.yml --
+description:
+-- scenario/cmpok/_10_99990101/_20_asrt_compare/config/config.yml --
+stfw:
+  process:
+    compare:
+      compare_files_version: v2.2.0
+      on_mismatch: warn
+-- scenario/cmpok/_10_99990101/_20_asrt_compare/expect/_10_col_scripts/host1/data.txt --
+hello
+world
+-- scenario/cmpbad/metadata.yml --
+description:
+-- scenario/cmpbad/_10_99990101/metadata.yml --
+description:
+-- scenario/cmpbad/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/cmpbad/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/cmpbad/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1"
+printf 'hello\nworld\n' > "${stfw_process_dir}/evidence/host1/data.txt"
+exit 0
+-- scenario/cmpbad/_10_99990101/_20_asrt_compare/metadata.yml --
+description:
+-- scenario/cmpbad/_10_99990101/_20_asrt_compare/config/config.yml --
+stfw:
+  process:
+    compare:
+      compare_files_version: v2.2.0
+      on_mismatch: bogus
+-- scenario/cmpbad/_10_99990101/_20_asrt_compare/expect/_10_col_scripts/host1/data.txt --
+hello
+world
+-- fakebin/curl --
+#!/bin/bash
+# curl -fsSL <url> -o <out> をフィクスチャ tarball のコピーで再現
+out=""
+while [ $# -gt 0 ]; do
+  case "$1" in -o) out="$2"; shift 2;; *) shift;; esac
+done
+cp "${STFW_TEST_CF_TARBALL}" "${out}"
+exit 0
+-- fakebin/fakecomparefiles --
+#!/bin/bash
+# fake compare_files: 左(expect)配下の各ファイルを右(actual)と突合し
+# CompareSummary.csv を出力する。0=全一致 / 3=差分 / 6=引数エラー。symlink は追従。
+out="result"
+args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -od | --outputDir) out="$2"; shift 2 ;;
+    -config | --configFile | -layout | --overwriteLayoutDir) shift 2 ;;
+    -*) shift ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+left="${args[0]:-}"
+right="${args[1]:-}"
+if [ -z "${left}" ] || [ -z "${right}" ]; then
+  echo "fake compare_files: need LEFT RIGHT" >&2
+  exit 6
+fi
+mkdir -p "${out}"
+summary="${out}/CompareSummary.csv"
+echo "Status,Left,Right" > "${summary}"
+rc=0
+# 左(expect)基準で OK/NG/LeftOnly を判定 (actual 側の symlink は追従して読む)
+while IFS= read -r f; do
+  rel="${f#"${left}/"}"
+  r="${right}/${rel}"
+  if [ ! -e "${r}" ]; then
+    echo "LeftOnly,${f},${r}" >> "${summary}"; rc=3
+  elif ! diff -q "${f}" "${r}" > /dev/null 2>&1; then
+    echo "NG,${f},${r}" >> "${summary}"; rc=3
+  else
+    echo "OK,${f},${r}" >> "${summary}"
+  fi
+done < <(find "${left}" -type f)
+exit ${rc}

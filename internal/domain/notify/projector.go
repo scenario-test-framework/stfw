@@ -19,8 +19,11 @@ type nodeState struct {
 	end      time.Time
 	status   SpanStatus
 	message  string
-	ended    bool
-	steps    []Span
+	// warn は階層ステータスが Warn だったことを表す (スパンステータスは Ok の
+	// まま属性 stfw.node.status=Warn で表現する。SPEC-024-03)。
+	warn  bool
+	ended bool
+	steps []Span
 }
 
 // Projector はジャーナルイベントをスパン記述へ投影する。
@@ -106,7 +109,7 @@ func (p *Projector) applyStepEnd(ev run.Event) error {
 		}
 		span.Start, span.End = ts, ts
 		span.Status = SpanStatusUnset
-	case run.StepSuccess, run.StepError:
+	case run.StepSuccess, run.StepWarn, run.StepError:
 		start, err := parseTS(ev.StartTS)
 		if err != nil {
 			return fmt.Errorf("step %s: %w", span.ID, err)
@@ -145,9 +148,13 @@ func (p *Projector) applyNodeEnd(ev run.Event) ([]Span, error) {
 	n.end = end
 	n.ended = true
 	n.status = SpanStatusOK
-	if run.NodeStatus(ev.Status) == run.NodeError {
+	switch run.NodeStatus(ev.Status) {
+	case run.NodeError:
 		n.status = SpanStatusError
 		n.message = fmt.Sprintf("%s %s finished with status Error", n.nodeType, n.name)
+	case run.NodeWarn:
+		// OTel に Warn 相当が無いため Ok + 属性 stfw.node.status=Warn で表現する
+		n.warn = true
 	}
 	if n.nodeType != run.NodeTypeRun {
 		return nil, nil
@@ -198,6 +205,9 @@ func nodeAttrs(runID string, n *nodeState) []Attr {
 		{Key: AttrRunID, Value: runID},
 		{Key: AttrNodeType, Value: string(n.nodeType)},
 		{Key: AttrNodeID, Value: n.id},
+	}
+	if n.warn {
+		attrs = append(attrs, Attr{Key: AttrNodeStatus, Value: string(run.NodeWarn)})
 	}
 	switch n.nodeType {
 	case run.NodeTypeRun:
