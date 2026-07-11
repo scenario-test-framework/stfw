@@ -17,7 +17,7 @@ import (
 )
 
 // Version はビルド時に -ldflags で注入される。
-var Version = "1.1.1-dev"
+var Version = "1.1.2-dev"
 
 type app struct {
 	log     *slog.Logger
