@@ -52,24 +52,31 @@ scenario/{シナリオ}/_{seq}_{bizdate}/_{seq}_{group}_{type}/
 
 ```
 scenario/daily-balance/
-├── _10_20240101/                     # Day1
+├── _010_20240101/                    # データ準備 (取引は流さない)
 │   ├── _10_arrange_clearPostgres/    # Arrange: truncate
-│   ├── _20_arrange_importPostgres/   # Arrange: 初期残高を投入
-│   │   └── data/appdb/accounts.csv
+│   ├── _15_arrange_importMasterData/ # Arrange: 共通マスタ投入 (カスタム)
+│   └── _20_arrange_importPostgres/   # Arrange: 初期残高を投入
+│       └── data/appdb/accounts.csv
+├── _020_20240101/                    # Day1
+│   ├── _10_arrange_updateBizdate/    # Arrange: SUT の業務日付を 20240101 へ (カスタム)
 │   ├── _30_act_invokeRest/           # Act: 取引 POST
 │   │   └── script.js
-│   ├── _40_collect_exportPostgres/   # Collect: 残高を収集
+│   ├── _40_collect_exportPostgres/   # Collect: 残高・取引履歴を収集
 │   │   └── evidence/appdb/accounts.csv   (自動生成)
 │   └── _50_assert_compare/           # Assert: 期待残高と突合
 │       └── expect/_40_collect_exportPostgres/appdb/accounts.csv
-└── _20_20240102/                     # Day2 (arrange なし = 前日を繰越)
-    ├── _10_act_invokeRest/
-    ├── _20_collect_exportPostgres/
-    └── _30_assert_compare/
+└── _030_20240102/                    # Day2 (reset/seed なし = 前日を繰越)
+    ├── _10_arrange_updateBizdate/    # Arrange: SUT の業務日付を 20240102 へ (カスタム)
+    ├── _30_act_invokeRest/
+    ├── _40_collect_exportPostgres/
+    └── _50_assert_compare/
 ```
 
 プロセスのグループ名（`_{seq}_{group}_{type}` の中央）をフェーズ名に揃えると、
-ディレクトリ名だけで A→A→C→A の流れが読めます。
+ディレクトリ名だけで A→A→C→A の流れが読めます。同じ業務日付でも「データ準備」と
+「実行」のように bizdate ディレクトリを分けられます（seq が実行順・bizdate が業務日付）。
+`updateBizdate` は stfw が注入する `stfw_bizdate` から SUT の業務日付テーブルを更新する
+カスタムプラグインの実装例です（[`examples/daily-balance`](../examples/daily-balance/) 参照）。
 
 ### Arrange — データを整える
 
@@ -140,8 +147,9 @@ acc-001,1500     # 1000 + 500
 acc-002,2300     # 2000 + 300
 ```
 
-Day2 は reset / seed を持たず、Day1 の残高（1500 / 2300）に取引（-200 / +100）を反映して
-**1300 / 2400** を検証します。これが「業務日付をまたぐ繰越」の表現です。
+Day2（`_030`）は reset / seed を持たず、updateBizdate で業務日付だけを進め、Day1 の残高
+（1500 / 2300）に取引（-200 / +100）を反映して **1300 / 2400** を検証します。
+これが「業務日付をまたぐ繰越」の表現です。
 
 ## 4. 接続情報（inventory / secret / ssh trust）
 

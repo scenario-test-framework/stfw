@@ -1,8 +1,10 @@
 description: |
   日次残高バッチのシナリオテスト (プラグインエコシステムの実プロジェクト例)。
-  業務日付をまたいで口座残高の繰越を検証する。
-  Arrange (clear/import) → Act (invokeRest) → Collect (exportPostgres) → Assert (compare)。
+  業務日付をまたいで口座残高の繰越を検証する。SUT の業務日付はカスタムプラグイン
+  updateBizdate が bizdate 階層ごとに biz_calendar テーブルへ反映する。
+  Arrange (clear/import/updateBizdate) → Act (invokeRest) → Collect (exportPostgres) → Assert (compare)。
 
 requirement_specifications:
   - "REQ-01 当日取引が口座残高へ正しく反映される"
   - "REQ-02 前業務日の残高が翌業務日へ繰り越される"
+  - "REQ-03 取引が業務日付テーブルの業務日付で記録される"

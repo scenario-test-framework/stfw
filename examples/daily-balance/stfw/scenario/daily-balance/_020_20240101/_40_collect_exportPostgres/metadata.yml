@@ -1,0 +1,4 @@
+description: |
+  取引反映後の残高と取引履歴を evidence/appdb/{accounts,transactions}.csv へ収集する。
+
+requirement_specifications:

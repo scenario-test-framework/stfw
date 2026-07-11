@@ -1,6 +1,0 @@
-# Assert: 収集した残高 (actual) を期待値 (expect) と突合する。
-# expect/_40_balances_exportPostgres/appdb/accounts.csv が期待残高。
-stfw:
-  process:
-    compare:
-      compare_files_version: v2.2.0

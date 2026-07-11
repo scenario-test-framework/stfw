@@ -1,0 +1,6 @@
+description: |
+  SUT の業務日付を 2024-01-01 へ進める (biz_calendar を更新)。
+  カスタムプラグイン updateBizdate の実装例。stfw が注入する stfw_bizdate から
+  投入 CSV を生成し、組込み clearPostgres / importPostgres へ委譲する。
+
+requirement_specifications:

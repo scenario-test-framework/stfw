@@ -1,0 +1,7 @@
+# Arrange: SUT の業務日付 (biz_calendar) をこの階層の bizdate (20240101) へ更新する。
+# updateBizdate はカスタムプラグイン (plugins/process/updateBizdate)。
+# 更新値は stfw が注入する環境変数 stfw_bizdate から取り、対象テーブルは biz_calendar 固定。
+# 接続系は config/plugins/process/updateBizdate/config.yml で共通化 (ここに設定キーは無い)。
+stfw:
+  process:
+    updateBizdate: {}

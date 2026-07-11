@@ -1,0 +1,10 @@
+# Collect: 取引反映後の残高と取引履歴を CSV エビデンス化する。
+# 出力: evidence/appdb/{accounts,transactions}.csv。
+# transactions は「取引が正しい業務日付で記録されたか」(updateBizdate の効果) の検証に使う。
+# 接続系は config/plugins/process/exportPostgres/config.yml で共通化 (ここは tables のみ)。
+stfw:
+  process:
+    exportPostgres:
+      tables:
+        - accounts
+        - transactions

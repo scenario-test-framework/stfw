@@ -14,4 +14,8 @@ result/
 
 # importMasterData が共通データ (config/plugins/process/importMasterData/data/) を
 # 実行時にプロセス配下へ symlink したもの。ソースは共通データ側なので追跡しない。
-scenario/daily-balance/_10_20240101/_15_arrange_importMasterData/data/
+scenario/daily-balance/_010_20240101/_15_arrange_importMasterData/data/
+
+# updateBizdate が stfw_bizdate から実行時に生成する投入 CSV。追跡しない。
+scenario/daily-balance/_020_20240101/_10_arrange_updateBizdate/data/
+scenario/daily-balance/_030_20240102/_10_arrange_updateBizdate/data/

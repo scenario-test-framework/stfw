@@ -1,0 +1,4 @@
+# updateBizdate: SUT の業務日付テーブル (biz_calendar) を stfw の bizdate へ更新するカスタムプラグイン。
+# DB 反映は組込み clearPostgres / importPostgres へ委譲するため psql を要件とする。
+requires:
+  - psql

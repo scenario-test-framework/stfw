@@ -1,0 +1,2 @@
+# go build ./... が生成するローカルビルド成果物 (コンテナビルドでは /out/sut に出るため不要)
+daily-balance-sut

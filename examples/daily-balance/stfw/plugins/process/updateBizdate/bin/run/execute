@@ -1,0 +1,75 @@
+#!/bin/bash
+# updateBizdate (カスタムプラグインの実装例): SUT の業務日付テーブル biz_calendar を、
+# 実行中の業務日付階層の bizdate へ更新する Arrange。
+#
+# stfw は bizdate 階層以下で環境変数 stfw_bizdate (YYYYMMDD) を注入する (AS-BUILT §8.2)。
+# 本プラグインを各 bizdate ディレクトリの先頭 (arrange) に置くことで、
+# 「SUT の業務日付を進めてから当日の取引を流す」流れをディレクトリ規約だけで表現できる。
+#
+# 主眼は importMasterData と同じく「カスタムプラグインは組込みプラグインを部品として
+# 再利用できる」こと。DB 反映ロジックは再実装せず、CSV 生成 + 組込みへの委譲で実現する:
+#   1. CSV 生成 : stfw_bizdate から biz_calendar の投入 CSV (単一行 id='system') を生成
+#   2. 委譲     : 組込み clearPostgres で biz_calendar を初期化し、importPostgres で投入
+#
+# 設定 (config.yml の stfw.process.updateBizdate):
+#   host_group / port / database / user  … clearPostgres / importPostgres と同じ接続系
+#   (更新値は stfw_bizdate・対象テーブルは biz_calendar 固定のため、これ以外の設定は無い)
+set -uo pipefail
+
+bizdate="${stfw_bizdate:-}"
+if [ -z "${bizdate}" ]; then
+  echo "updateBizdate: stfw_bizdate is not injected (must run under a bizdate directory)" >&2
+  exit 6
+fi
+
+database="${stfw_process_updateBizdate_database:-}"
+if [ -z "${database}" ]; then
+  echo "updateBizdate: database is required" >&2
+  exit 6
+fi
+
+# 委譲先の組込み clearPostgres / importPostgres を先に確保する (fail-fast)。
+# stfw plugin install は組込みプラグインを .stfw 配下へ展開する (STFW_PROJ_DIR_DATA)。
+clear_execute="${STFW_PROJ_DIR_DATA}/plugins/process/clearPostgres/bin/run/execute"
+import_execute="${STFW_PROJ_DIR_DATA}/plugins/process/importPostgres/bin/run/execute"
+if [ ! -x "${clear_execute}" ]; then
+  stfw plugin install clearPostgres || true
+fi
+if [ ! -x "${import_execute}" ]; then
+  stfw plugin install importPostgres || true
+fi
+if [ ! -x "${clear_execute}" ] || [ ! -x "${import_execute}" ]; then
+  echo "updateBizdate: built-in clearPostgres / importPostgres are not available" >&2
+  exit 6
+fi
+
+# 1) 業務日付 CSV を生成する。importPostgres の入力規約 data/{database}/{table}.csv に
+#    合わせて配置する (単一行運用: id='system' の 1 行だけを保持する)。
+dest_root="${stfw_process_dir}/data/${database}"
+mkdir -p "${dest_root}"
+printf 'id,bizdate\nsystem,%s\n' "${bizdate}" > "${dest_root}/biz_calendar.csv"
+echo "updateBizdate: generated biz_calendar.csv (bizdate=${bizdate})"
+
+# 2) 接続系 env を自分の config から写し、組込み clearPostgres へ委譲して
+#    biz_calendar を初期化する (importPostgres の COPY は追記のため先に空にする)。
+#    委譲は execute のみを呼ぶ: 組込み clearPostgres / importPostgres の
+#    pre_execute / post_execute は no-op (exit 0) であることを前提にしている。
+export stfw_process_clearPostgres_host_group="${stfw_process_updateBizdate_host_group:-}"
+export stfw_process_clearPostgres_port="${stfw_process_updateBizdate_port:-5432}"
+export stfw_process_clearPostgres_database="${database}"
+export stfw_process_clearPostgres_user="${stfw_process_updateBizdate_user:-}"
+export stfw_process_clearPostgres_tables_0="biz_calendar"
+echo "updateBizdate: delegating to built-in clearPostgres"
+if ! "${clear_execute}"; then
+  echo "updateBizdate: clearPostgres failed" >&2
+  exit 6
+fi
+
+# 3) 組込み importPostgres へ委譲して業務日付を投入する。
+export stfw_process_importPostgres_host_group="${stfw_process_updateBizdate_host_group:-}"
+export stfw_process_importPostgres_port="${stfw_process_updateBizdate_port:-5432}"
+export stfw_process_importPostgres_database="${database}"
+export stfw_process_importPostgres_user="${stfw_process_updateBizdate_user:-}"
+export stfw_process_importPostgres_tables_0="biz_calendar"
+echo "updateBizdate: delegating to built-in importPostgres"
+exec "${import_execute}"

@@ -191,7 +191,7 @@ For a **runnable, close-to-real example** and an **end-to-end walkthrough** of h
 
 - [examples/daily-balance](examples/daily-balance/) — a runnable daily-balance batch sample that
   spans business dates. It bundles postgres + a toy REST API and runs end-to-end via `./run.sh`
-  (Arrange→Act→Collect→Assert composed from built-in plugins only).
+  (Arrange→Act→Collect→Assert composed from built-in plugins plus two custom-plugin examples).
 - [docs/GUIDE.md](docs/GUIDE.md) — scenario authoring guide (the 4-phase model, connection info,
   and the evidence convention, end to end). *(Japanese)*
 

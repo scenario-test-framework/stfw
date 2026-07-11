@@ -1,0 +1,3 @@
+#!/bin/bash
+# 前処理は不要 (投入 CSV は execute が stfw_bizdate から生成する)。
+exit 0

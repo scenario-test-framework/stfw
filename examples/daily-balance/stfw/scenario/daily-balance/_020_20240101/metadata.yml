@@ -1,0 +1,5 @@
+description: |
+  Day1 (2024-01-01)。SUT の業務日付を当日へ進め、当日の取引を反映して残高を検証する。
+  業務日付更新 (updateBizdate) → 取引 POST → 残高・取引収集 → 期待値突合。
+
+requirement_specifications:

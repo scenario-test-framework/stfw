@@ -1,0 +1,7 @@
+# Assert: 収集した残高・取引履歴 (actual) を期待値 (expect) と突合する。
+# expect/_40_collect_exportPostgres/appdb/{accounts,transactions}.csv が期待値
+# (期待残高と、取引が当日の業務日付 20240101 で記録されたこと)。
+stfw:
+  process:
+    compare:
+      compare_files_version: v2.2.0

@@ -1,0 +1,5 @@
+description: |
+  SUT の業務日付を 2024-01-02 へ進める (biz_calendar を更新)。
+  残高は前業務日の状態を引き継いだまま、業務日付だけを翌日へ切り替える。
+
+requirement_specifications:

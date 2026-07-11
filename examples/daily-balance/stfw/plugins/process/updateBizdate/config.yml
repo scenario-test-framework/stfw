@@ -1,0 +1,22 @@
+# updateBizdate の既定設定。プロジェクト側で上書きする。
+#
+# SUT の業務日付テーブル biz_calendar (単一行 id='system') を、実行中の業務日付階層の
+# bizdate (環境変数 stfw_bizdate) へ更新するカスタムプラグイン。
+# 各 bizdate ディレクトリの先頭 (arrange) に置くことで「業務日付を進めてから当日の
+# 取引を流す」流れを表現する。
+#
+# 接続系は組込み clearPostgres / importPostgres と同じ:
+#   host_group : 接続先 DB ホストを解決する inventory グループ名
+#   port       : PostgreSQL ポート
+#   database   : 対象データベース名
+#   user       : 接続ユーザー (パスワードは secret {host}-{user} で解決)
+#
+# 更新値は stfw_bizdate から取り対象テーブルは biz_calendar 固定のため、これ以外の設定は無い。
+# 接続情報 (ホスト・パスワード) を config に直書きしてはならない (禁止契約)。
+stfw:
+  process:
+    updateBizdate:
+      host_group: ""
+      port: "5432"
+      database: ""
+      user: ""

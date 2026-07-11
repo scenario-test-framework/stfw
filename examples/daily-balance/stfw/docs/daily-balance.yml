@@ -1,17 +1,19 @@
 scenario: daily-balance
 description: |
     日次残高バッチのシナリオテスト (プラグインエコシステムの実プロジェクト例)。
-    業務日付をまたいで口座残高の繰越を検証する。
-    Arrange (clear/import) → Act (invokeRest) → Collect (exportPostgres) → Assert (compare)。
+    業務日付をまたいで口座残高の繰越を検証する。SUT の業務日付はカスタムプラグイン
+    updateBizdate が bizdate 階層ごとに biz_calendar テーブルへ反映する。
+    Arrange (clear/import/updateBizdate) → Act (invokeRest) → Collect (exportPostgres) → Assert (compare)。
 requirement_specifications:
     - REQ-01 当日取引が口座残高へ正しく反映される
     - REQ-02 前業務日の残高が翌業務日へ繰り越される
+    - REQ-03 取引が業務日付テーブルの業務日付で記録される
 bizdates:
-    - seq: "10"
+    - seq: "010"
       bizdate: "20240101"
       description: |
-        Day1 (2024-01-01)。初期残高を投入し、当日の取引を反映して残高を検証する。
-        reset(truncate) → seed(口座マスタ投入) → 取引 POST → 残高収集 → 期待値突合。
+        データ準備 (2024-01-01)。実行系の業務日付に先立ち、DB を初期状態にする。
+        reset(truncate) → seed(口座名義マスタ投入) → seed(初期残高投入)。取引は流さない。
       processes:
         - seq: "10"
           group: arrange
@@ -41,6 +43,19 @@ bizdates:
           config:
             tables:
                 - accounts
+    - seq: "020"
+      bizdate: "20240101"
+      description: |
+        Day1 (2024-01-01)。SUT の業務日付を当日へ進め、当日の取引を反映して残高を検証する。
+        業務日付更新 (updateBizdate) → 取引 POST → 残高・取引収集 → 期待値突合。
+      processes:
+        - seq: "10"
+          group: arrange
+          type: updateBizdate
+          description: |
+            SUT の業務日付を 2024-01-01 へ進める (biz_calendar を更新)。
+            カスタムプラグイン updateBizdate の実装例。stfw が注入する stfw_bizdate から
+            投入 CSV を生成し、組込み clearPostgres / importPostgres へ委譲する。
         - seq: "30"
           group: act
           type: invokeRest
@@ -53,26 +68,35 @@ bizdates:
           group: collect
           type: exportPostgres
           description: |
-            取引反映後の残高を evidence/appdb/accounts.csv へ収集する。
+            取引反映後の残高と取引履歴を evidence/appdb/{accounts,transactions}.csv へ収集する。
           config:
             tables:
                 - accounts
+                - transactions
         - seq: "50"
           group: assert
           type: compare
           description: |
-            当日残高が期待値 (acc-001=1500 / acc-002=2300) と一致することを検証する。
+            当日残高 (acc-001=1500 / acc-002=2300) と取引の業務日付 (20240101) を期待値と突合する。
           requirement_specifications:
             - REQ-01 当日取引が口座残高へ正しく反映される
+            - REQ-03 取引が業務日付テーブルの業務日付で記録される
           config:
             compare_files_version: v2.2.0
-    - seq: "20"
+    - seq: "030"
       bizdate: "20240102"
       description: |
         Day2 (2024-01-02)。Day1 の残高を「繰り越して」当日の取引を反映する。
-        reset/seed は行わず (前日状態を引き継ぐ)、取引 POST → 残高収集 → 累積残高の突合。
+        reset/seed は行わず (前日状態を引き継ぐ)、業務日付更新 (updateBizdate) →
+        取引 POST → 残高・取引収集 → 累積残高の突合。
       processes:
         - seq: "10"
+          group: arrange
+          type: updateBizdate
+          description: |
+            SUT の業務日付を 2024-01-02 へ進める (biz_calendar を更新)。
+            残高は前業務日の状態を引き継いだまま、業務日付だけを翌日へ切り替える。
+        - seq: "30"
           group: act
           type: invokeRest
           description: |
@@ -80,21 +104,23 @@ bizdates:
           config:
             host_group: api
             script: script.js
-        - seq: "20"
+        - seq: "40"
           group: collect
           type: exportPostgres
           description: |
-            取引反映後の累積残高を evidence/appdb/accounts.csv へ収集する。
+            取引反映後の累積残高と取引履歴を evidence/appdb/{accounts,transactions}.csv へ収集する。
           config:
             tables:
                 - accounts
-        - seq: "30"
+                - transactions
+        - seq: "50"
           group: assert
           type: compare
           description: |
-            繰越後の累積残高が期待値 (acc-001=1300 / acc-002=2400) と一致することを検証する。
+            繰越後の累積残高 (acc-001=1300 / acc-002=2400) と Day2 取引の業務日付 (20240102) を期待値と突合する。
           requirement_specifications:
             - REQ-01 当日取引が口座残高へ正しく反映される
             - REQ-02 前業務日の残高が翌業務日へ繰り越される
+            - REQ-03 取引が業務日付テーブルの業務日付で記録される
           config:
             compare_files_version: v2.2.0

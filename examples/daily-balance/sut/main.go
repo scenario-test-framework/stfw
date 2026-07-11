@@ -1,9 +1,13 @@
 // daily-balance-sut は example 用のトイ「テスト対象システム (SUT)」。
 // 口座残高を PostgreSQL で管理する最小の REST API。
 //
-//	POST /transactions  {"account_id","amount","bizdate"}  取引を記録し残高を加減算
-//	GET  /accounts                                          口座残高一覧 (デバッグ用)
-//	GET  /healthz                                           ヘルスチェック
+//	POST /transactions  {"account_id","amount"}  取引を記録し残高を加減算
+//	GET  /accounts                               口座残高一覧 (デバッグ用)
+//	GET  /healthz                                ヘルスチェック
+//
+// 取引の業務日付は payload では受け取らず、業務日付テーブル biz_calendar (単一行
+// id='system') から解決する。biz_calendar はテスト側のカスタムプラグイン updateBizdate
+// が業務日付ごとに更新する。
 //
 // これは stfw の example を end-to-end で動かすためのダミー実装であり、
 // 認証・バリデーション・トランザクション分離などは意図的に最小限にしている。
@@ -24,7 +28,6 @@ import (
 type transaction struct {
 	AccountID string `json:"account_id"`
 	Amount    int64  `json:"amount"`
-	Bizdate   string `json:"bizdate"`
 }
 
 type account struct {
@@ -77,9 +80,22 @@ func main() {
 			http.Error(w, "account_id is required", http.StatusBadRequest)
 			return
 		}
+		// 業務日付は biz_calendar (updateBizdate が更新する単一行) から解決する。
+		// 未設定は運転前提の不備なので取引を受け付けない。
+		var bizdate string
+		if err := db.QueryRow(
+			`SELECT bizdate FROM biz_calendar WHERE id = 'system'`,
+		).Scan(&bizdate); err != nil {
+			if err == sql.ErrNoRows {
+				http.Error(w, "business date is not set (biz_calendar)", http.StatusConflict)
+				return
+			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		if _, err := db.Exec(
 			`INSERT INTO transactions (account_id, amount, bizdate) VALUES ($1, $2, $3)`,
-			tx.AccountID, tx.Amount, tx.Bizdate,
+			tx.AccountID, tx.Amount, bizdate,
 		); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
