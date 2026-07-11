@@ -61,9 +61,6 @@ bizdates:
           type: invokeRest
           description: |
             取引を API へ POST する (acc-001 +500 / acc-002 +300)。
-          config:
-            host_group: api
-            script: script.js
         - seq: "40"
           group: collect
           type: exportPostgres
@@ -81,8 +78,6 @@ bizdates:
           requirement_specifications:
             - REQ-01 当日取引が口座残高へ正しく反映される
             - REQ-03 取引が業務日付テーブルの業務日付で記録される
-          config:
-            compare_files_version: v2.2.0
     - seq: "030"
       bizdate: "20240102"
       description: |
@@ -101,9 +96,6 @@ bizdates:
           type: invokeRest
           description: |
             前業務日の残高に対して取引を POST する (acc-001 -200 / acc-002 +100)。
-          config:
-            host_group: api
-            script: script.js
         - seq: "40"
           group: collect
           type: exportPostgres
@@ -122,5 +114,3 @@ bizdates:
             - REQ-01 当日取引が口座残高へ正しく反映される
             - REQ-02 前業務日の残高が翌業務日へ繰り越される
             - REQ-03 取引が業務日付テーブルの業務日付で記録される
-          config:
-            compare_files_version: v2.2.0

@@ -1,0 +1,8 @@
+# compare の設定をプロジェクト全体で共通化する上書き設定 (§8.1 の上書きチェーン)。
+# 各シナリオのプロセス config/config.yml には差分のみを書く (本 example では差分なし)。
+# ※ このディレクトリには compare-files 用の compare_layout/ (シナリオ共通の比較レイアウト)
+#    も同居する (AS-BUILT §4.11)。この config.yml は stfw の設定チェーン側。
+stfw:
+  process:
+    compare:
+      compare_files_version: v2.2.0

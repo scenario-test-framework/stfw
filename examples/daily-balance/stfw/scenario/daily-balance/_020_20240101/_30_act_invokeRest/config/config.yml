@@ -1,7 +1,6 @@
 # Act: トイ API へ当日の取引を POST する (grafana k6)。
-# host_group=api の先頭ホストが __ENV.stfw_target_host として k6 に渡る。
+# 接続先 (host_group=api) は config/plugins/process/invokeRest/config.yml で共通化。
+# スクリプトは既定の script.js (このプロセスディレクトリ直下) を使うため、差分なし。
 stfw:
   process:
-    invokeRest:
-      host_group: api
-      script: script.js
+    invokeRest: {}

@@ -1,6 +1,6 @@
-# Act: Day2 の取引を POST する。前日の残高に対して加減算される。
+# Act: 前日残高に対して当日の取引を POST する (grafana k6)。
+# 接続先 (host_group=api) は config/plugins/process/invokeRest/config.yml で共通化。
+# スクリプトは既定の script.js (このプロセスディレクトリ直下) を使うため、差分なし。
 stfw:
   process:
-    invokeRest:
-      host_group: api
-      script: script.js
+    invokeRest: {}

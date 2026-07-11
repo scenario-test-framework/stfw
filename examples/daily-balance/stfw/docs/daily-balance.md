@@ -74,12 +74,6 @@ Arrange (clear/import/updateBizdate) → Act (invokeRest) → Collect (exportPos
 
 - グループ: act
 - 要求仕様: -
-- 設定:
-
-    ```yaml
-    host_group: api
-    script: script.js
-    ```
 
 ### _40_collect_exportPostgres
 
@@ -97,11 +91,6 @@ Arrange (clear/import/updateBizdate) → Act (invokeRest) → Collect (exportPos
 
 - グループ: assert
 - 要求仕様: REQ-01 当日取引が口座残高へ正しく反映される, REQ-03 取引が業務日付テーブルの業務日付で記録される
-- 設定:
-
-    ```yaml
-    compare_files_version: v2.2.0
-    ```
 
 ## _030_20240102 — Day2 (2024-01-02)。Day1 の残高を「繰り越して」当日の取引を反映する。
 
@@ -121,12 +110,6 @@ Arrange (clear/import/updateBizdate) → Act (invokeRest) → Collect (exportPos
 
 - グループ: act
 - 要求仕様: -
-- 設定:
-
-    ```yaml
-    host_group: api
-    script: script.js
-    ```
 
 ### _40_collect_exportPostgres
 
@@ -144,8 +127,3 @@ Arrange (clear/import/updateBizdate) → Act (invokeRest) → Collect (exportPos
 
 - グループ: assert
 - 要求仕様: REQ-01 当日取引が口座残高へ正しく反映される, REQ-02 前業務日の残高が翌業務日へ繰り越される, REQ-03 取引が業務日付テーブルの業務日付で記録される
-- 設定:
-
-    ```yaml
-    compare_files_version: v2.2.0
-    ```

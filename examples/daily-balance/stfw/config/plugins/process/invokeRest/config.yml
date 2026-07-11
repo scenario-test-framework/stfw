@@ -1,0 +1,8 @@
+# invokeRest の設定をプロジェクト全体で共通化する上書き設定 (§8.1 の上書きチェーン)。
+# 接続先 (host_group) は全シナリオ共通のため、ここに一本化する。
+# 各シナリオのプロセス config/config.yml には差分のみを書く
+# (スクリプトパスは既定の script.js を使うため、本 example では差分なし)。
+stfw:
+  process:
+    invokeRest:
+      host_group: api

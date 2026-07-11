@@ -80,17 +80,29 @@ scenario/daily-balance/
 
 ### Arrange — データを整える
 
-各プロセスの `config/config.yml` に `stfw.process.{type}` 配下で設定します。**接続情報
-（ホスト・パスワード）は config に直書きせず**、inventory と secret から解決します（§4）。
+プラグインの設定は `stfw.process.{type}` 配下に書き、3 層の上書きチェーンで解決されます
+（プラグイン既定 → プロジェクト共通 `config/plugins/process/{type}/config.yml` →
+プロセス `config/config.yml`。全プラグイン共通の仕組み。AS-BUILT §8.1）。
+
+**シナリオを跨いで同じ設定（接続系・バージョン指定など）はプロジェクト共通に置き、
+プロセスには差分だけを書く**のが規約です。**接続情報（ホスト・パスワード）は config に
+直書きせず**、inventory と secret から解決します（§4）。
 
 ```yaml
-# _20_arrange_importPostgres/config/config.yml
+# config/plugins/process/importPostgres/config.yml — プロジェクト共通 (全シナリオに効く)
 stfw:
   process:
     importPostgres:
       host_group: db        # inventory グループ → 接続先ホスト
       database: appdb
       user: appuser          # パスワードは secret {host}-{user} で解決
+```
+
+```yaml
+# _20_arrange_importPostgres/config/config.yml — プロセスは差分のみ
+stfw:
+  process:
+    importPostgres:
       tables: [accounts]     # data/appdb/accounts.csv を投入
 ```
 
