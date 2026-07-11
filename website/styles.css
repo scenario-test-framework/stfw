@@ -122,18 +122,13 @@ a {
   display: inline-flex;
   align-items: center;
   width: max-content;
-  font-size: 2rem;
-  font-weight: 900;
-  letter-spacing: -0.06em;
   line-height: 1;
 }
 
-.brand-prompt {
-  color: var(--cyan);
-  font-size: 1.25em;
-  font-weight: 900;
-  letter-spacing: -0.28em;
-  transform: translateX(-0.08em);
+.brand-logo {
+  display: block;
+  width: 96px;
+  height: auto;
 }
 
 .main-nav,
