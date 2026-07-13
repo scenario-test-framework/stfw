@@ -66,7 +66,7 @@ BC 間の共有は ID とジャーナルイベントのみである。notify・H
 
 | 項目 | 仕様 |
 |---|---|
-| バージョン | `stfw --version`。ビルド時に `-ldflags -X ...cli.Version=` で注入（未注入時 `1.2.0-dev`） |
+| バージョン | `stfw --version`。ビルド時に `-ldflags -X ...cli.Version=` で注入（未注入時 `1.3.0-dev`） |
 | グローバルフラグ | `-l, --log-level <error\|warn\|info\|debug\|trace>`（未指定時は stfw.yml の `stfw.loglevel`、不明値は info） |
 | ログ出力 | slog TextHandler を **stderr** へ出力（stdout はコマンド出力専用）。マスキング Writer（§9.4）を必ず経由する |
 | プロジェクトディレクトリ解決 | ① 環境変数 `STFW_PROJ_DIR` → ② カレントから上位への `stfw.yml` 探索 → ③ カレントディレクトリ（未初期化とみなす） |
