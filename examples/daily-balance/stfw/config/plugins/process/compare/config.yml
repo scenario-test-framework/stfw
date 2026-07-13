@@ -6,3 +6,7 @@ stfw:
   process:
     compare:
       compare_files_version: v2.2.0
+      # 比較不一致 (compare-files exit 3) の扱い。既定値の明示 (README「わざと失敗させてみる」の切替ポイント)。
+      #   error = 回帰テスト運用: 不一致を Error として停止 (後続は実行されない)
+      #   warn  = 差分確認運用: 不一致を Warn として記録し、後続を継続 (レポートが比較 NG の鳥瞰ビューになる)
+      on_mismatch: error
