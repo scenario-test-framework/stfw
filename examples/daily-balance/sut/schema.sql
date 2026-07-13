@@ -23,13 +23,15 @@ CREATE TABLE IF NOT EXISTS accounts (
     balance BIGINT NOT NULL DEFAULT 0
 );
 
--- transactions: 取引履歴。連番 id は TRUNCATE でシーケンスがリセットされず再実行で
--- ずれるが、エビデンス突合はプロジェクト共通の比較レイアウト
+-- transactions: 取引履歴。連番 id は clear (全行 DELETE) でシーケンスがリセットされず
+-- 再実行でずれるが、エビデンス突合はプロジェクト共通の比較レイアウト
 -- (stfw/config/plugins/process/compare/compare_layout/) で id を Ignore・
 -- account_id + bizdate を比較キーにして決定性を保つ。
+-- account_id は accounts への FK。clearPostgres の tables を FK の子 → 親順
+-- (transactions → accounts) に列挙する根拠になっている。
 CREATE TABLE IF NOT EXISTS transactions (
     id         BIGSERIAL PRIMARY KEY,
-    account_id TEXT      NOT NULL,
+    account_id TEXT      NOT NULL REFERENCES accounts (id),
     amount     BIGINT    NOT NULL,
     bizdate    TEXT      NOT NULL
 );

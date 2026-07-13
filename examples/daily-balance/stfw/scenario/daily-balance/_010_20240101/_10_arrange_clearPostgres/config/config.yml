@@ -1,4 +1,5 @@
-# Arrange: 前回実行の状態を消す (冪等化)。transactions → accounts → users の順に truncate。
+# Arrange: 前回実行の状態を消す (冪等化)。transactions → accounts → users の順に全行削除 (DELETE)。
+# transactions.account_id は accounts への FK のため、子 → 親の順が必須 (clearPostgres README)。
 # 接続系は config/plugins/process/clearPostgres/config.yml で共通化 (ここは tables のみ)。
 stfw:
   process:

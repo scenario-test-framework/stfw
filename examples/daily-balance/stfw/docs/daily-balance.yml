@@ -13,13 +13,13 @@ bizdates:
       bizdate: "20240101"
       description: |
         データ準備 (2024-01-01)。実行系の業務日付に先立ち、DB を初期状態にする。
-        reset(truncate) → seed(口座名義マスタ投入) → seed(初期残高投入)。取引は流さない。
+        reset(全行削除) → seed(口座名義マスタ投入) → seed(初期残高投入)。取引は流さない。
       processes:
         - seq: "10"
           group: arrange
           type: clearPostgres
           description: |
-            users / accounts / transactions を truncate して初期状態にする (reset)。
+            users / accounts / transactions を全行削除して初期状態にする (reset)。
           config:
             tables:
                 - transactions

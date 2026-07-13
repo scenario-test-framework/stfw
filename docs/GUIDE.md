@@ -32,7 +32,7 @@ scenario/{シナリオ}/_{seq}_{bizdate}/_{seq}_{group}_{type}/
 | フェーズ | プラグイン | 役割 |
 |---|---|---|
 | Arrange | `importMysql` / `importPostgres` / `importRedis` | データストアへ期待データを投入 |
-| | `clearMysql` / `clearPostgres` / `clearRedis` | データストアを初期化（truncate / flush） |
+| | `clearMysql` / `clearPostgres` / `clearRedis` | データストアを初期化（全行 DELETE / キー削除） |
 | | `scpPut` | ローカルのファイル群をリモートホストへ配置 |
 | Act | `invokeRest` | API へ取引入力・レスポンス検証（grafana k6） |
 | | `invokeWeb` | ブラウザ操作（k6 browser、headless Chromium） |
@@ -54,7 +54,7 @@ scenario/{シナリオ}/_{seq}_{bizdate}/_{seq}_{group}_{type}/
 ```
 scenario/daily-balance/
 ├── _010_20240101/                    # データ準備 (取引は流さない)
-│   ├── _10_arrange_clearPostgres/    # Arrange: truncate
+│   ├── _10_arrange_clearPostgres/    # Arrange: 全行削除
 │   ├── _15_arrange_importMasterData/ # Arrange: 共通マスタ投入 (カスタム)
 │   └── _20_arrange_importPostgres/   # Arrange: 初期残高を投入
 │       └── data/appdb/accounts.csv

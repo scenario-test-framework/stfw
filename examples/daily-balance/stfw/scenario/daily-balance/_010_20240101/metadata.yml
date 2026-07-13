@@ -1,5 +1,5 @@
 description: |
   データ準備 (2024-01-01)。実行系の業務日付に先立ち、DB を初期状態にする。
-  reset(truncate) → seed(口座名義マスタ投入) → seed(初期残高投入)。取引は流さない。
+  reset(全行削除) → seed(口座名義マスタ投入) → seed(初期残高投入)。取引は流さない。
 
 requirement_specifications:

@@ -22,16 +22,22 @@ stderr '\[secret\]'
 cmp scenario/pg/_10_99990101/_30_grp_exportPostgres/evidence/pgdb/t1.csv t1.csv.golden
 
 # clear / import が期待した SQL / \copy を発行している
+# clear は全テーブルの DELETE を単一 --command で発行する (psql -c の複数文 = 単一トランザクション)
 exec cat ${WORK}/psql.log
-stdout 'TRUNCATE TABLE "t1"'
+stdout 'DELETE FROM "t1"; DELETE FROM "t""x"'
 stdout 'COPY "t1" FROM STDIN'
-# 識別子内のダブルクオートが二重化エスケープされている
-stdout 'TRUNCATE TABLE "t""x"'
 
 # export 失敗 (psql 非 0) は握りつぶさず exit 6
 env STFW_TEST_PSQL_FAIL=1
 execcode 6 stfw run pgexp
 stderr 'export failed'
+env STFW_TEST_PSQL_FAIL=0
+
+# clear 失敗 (psql 非 0。FK 違反等) は DBMS のエラーを露出して exit 6
+env STFW_TEST_PSQL_FAIL=1
+execcode 6 stfw run pg
+stderr 'psql: simulated failure'
+stderr 'delete failed'
 env STFW_TEST_PSQL_FAIL=0
 
 # import のソース CSV 不在は exit 6
@@ -172,7 +178,7 @@ case "$cmd" in
     cat > /dev/null
     echo "$cmd" >> "${STFW_TEST_PSQL_LOG}"
     ;;
-  'TRUNCATE TABLE'*) echo "$cmd" >> "${STFW_TEST_PSQL_LOG}" ;;
+  'DELETE FROM'*) echo "$cmd" >> "${STFW_TEST_PSQL_LOG}" ;;
   *)
     echo "psql: unsupported command: $cmd" >&2
     exit 1

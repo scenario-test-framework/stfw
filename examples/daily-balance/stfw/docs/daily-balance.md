@@ -17,7 +17,7 @@ Arrange (clear/import/updateBizdate) → Act (invokeRest) → Collect (exportPos
 
 | # | process | グループ | プラグイン | 説明 |
 |---|---|---|---|---|
-| _10 | _10_arrange_clearPostgres | arrange | clearPostgres | users / accounts / transactions を truncate して初期状態にする (reset)。 |
+| _10 | _10_arrange_clearPostgres | arrange | clearPostgres | users / accounts / transactions を全行削除して初期状態にする (reset)。 |
 | _15 | _15_arrange_importMasterData | arrange | importMasterData | シナリオ共通の口座名義マスタ (users) を投入する (seed)。 |
 | _20 | _20_arrange_importPostgres | arrange | importPostgres | 初期残高 CSV (acc-001=1000 / acc-002=2000) を accounts へ投入する (seed)。 |
 

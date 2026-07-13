@@ -1,8 +1,10 @@
 #!/bin/bash
-# clearPostgres: PostgreSQL のテーブルを truncate する (Arrange の初期化)。
+# clearPostgres: PostgreSQL のテーブルの全行を DELETE する (Arrange の初期化)。
 #
 # 設定 (config.yml の stfw.process.clearPostgres): host_group / port / database / user / tables
-# 処理: 各テーブルを TRUNCATE TABLE する。
+# 処理: 全テーブルの DELETE FROM を単一 --command で発行する (psql -c の複数文は
+# 単一トランザクション処理のため all-or-nothing)。FK 制約は無効化しないので、
+# tables は FK の子 → 親順に列挙する。参照行が残る親の削除は DBMS のエラーで失敗する。
 #
 # 接続情報 (ホスト/パスワード) は inventory / secret から解決し config に直書きしない。
 set -uo pipefail
@@ -11,7 +13,6 @@ host_group="${stfw_process_clearPostgres_host_group:-}"
 port="${stfw_process_clearPostgres_port:-5432}"
 database="${stfw_process_clearPostgres_database:-}"
 user="${stfw_process_clearPostgres_user:-}"
-rc=0
 
 if [ -z "${host_group}" ] || [ -z "${database}" ] || [ -z "${user}" ]; then
   echo "clearPostgres: host_group / database / user are required" >&2
@@ -39,6 +40,7 @@ if ! password="$(stfw secret show "${host}" "${user}")"; then
   exit 6
 fi
 
+sql=""
 i=0
 while :; do
   t_var="stfw_process_clearPostgres_tables_${i}"
@@ -48,13 +50,20 @@ while :; do
 
   # 識別子はダブルクオート内のダブルクオートを二重化してエスケープする。
   t_esc="$(printf '%s' "${table}" | sed 's/"/""/g')"
-  if ! PGPASSWORD="${password}" psql --host="${host}" --port="${port}" \
-      --username="${user}" --dbname="${database}" \
-      --set=ON_ERROR_STOP=1 --no-psqlrc --quiet \
-      --command="TRUNCATE TABLE \"${t_esc}\""; then
-    echo "clearPostgres: truncate failed: ${database}.${table}" >&2
-    rc=6
-  fi
+  sql="${sql:+${sql}; }DELETE FROM \"${t_esc}\""
 done
 
-exit ${rc}
+# tables 0 件は no-op (設定漏れ検知は validate / README の注意書きに委ねる)
+if [ -z "${sql}" ]; then
+  exit 0
+fi
+
+if ! PGPASSWORD="${password}" psql --host="${host}" --port="${port}" \
+    --username="${user}" --dbname="${database}" \
+    --set=ON_ERROR_STOP=1 --no-psqlrc --quiet \
+    --command="${sql}"; then
+  echo "clearPostgres: delete failed: ${database}" >&2
+  exit 6
+fi
+
+exit 0

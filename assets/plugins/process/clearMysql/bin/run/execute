@@ -1,8 +1,11 @@
 #!/bin/bash
-# clearMysql: MySQL のテーブルを truncate する (Arrange の初期化)。
+# clearMysql: MySQL のテーブルの全行を DELETE する (Arrange の初期化)。
 #
 # 設定 (config.yml の stfw.process.clearMysql): host_group / port / database / user / tables
-# 処理: 各テーブルを TRUNCATE TABLE する。
+# 処理: START TRANSACTION〜COMMIT で括った DELETE FROM 群を単一 --execute で発行する
+# (mysql はバッチモードで最初のエラーで停止し、未 COMMIT の変更は切断時にロールバック
+# されるため all-or-nothing)。FK 制約は無効化しない (FOREIGN_KEY_CHECKS に触れない) ので、
+# tables は FK の子 → 親順に列挙する。参照行が残る親の削除は DBMS のエラーで失敗する。
 #
 # 接続情報 (ホスト/パスワード) は inventory / secret から解決し config に直書きしない。
 set -uo pipefail
@@ -11,7 +14,6 @@ host_group="${stfw_process_clearMysql_host_group:-}"
 port="${stfw_process_clearMysql_port:-3306}"
 database="${stfw_process_clearMysql_database:-}"
 user="${stfw_process_clearMysql_user:-}"
-rc=0
 
 if [ -z "${host_group}" ] || [ -z "${database}" ] || [ -z "${user}" ]; then
   echo "clearMysql: host_group / database / user are required" >&2
@@ -39,6 +41,7 @@ if ! password="$(stfw secret show "${host}" "${user}")"; then
   exit 6
 fi
 
+sql=""
 i=0
 while :; do
   t_var="stfw_process_clearMysql_tables_${i}"
@@ -48,12 +51,19 @@ while :; do
 
   # 識別子はバッククオート内のバッククオートを二重化してエスケープする。
   t_esc="$(printf '%s' "${table}" | sed 's/`/``/g')"
-  if ! MYSQL_PWD="${password}" mysql --host="${host}" --port="${port}" \
-      --user="${user}" --database="${database}" \
-      --execute="TRUNCATE TABLE \`${t_esc}\`"; then
-    echo "clearMysql: truncate failed: ${database}.${table}" >&2
-    rc=6
-  fi
+  sql="${sql:+${sql}; }DELETE FROM \`${t_esc}\`"
 done
 
-exit ${rc}
+# tables 0 件は no-op (設定漏れ検知は validate / README の注意書きに委ねる)
+if [ -z "${sql}" ]; then
+  exit 0
+fi
+
+if ! MYSQL_PWD="${password}" mysql --host="${host}" --port="${port}" \
+    --user="${user}" --database="${database}" \
+    --execute="START TRANSACTION; ${sql}; COMMIT"; then
+  echo "clearMysql: delete failed: ${database}" >&2
+  exit 6
+fi
+
+exit 0

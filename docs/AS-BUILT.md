@@ -399,12 +399,13 @@ Arrange（clear / import）と Collect（export）の組込みプラグイン。
 | exportPostgres | `psql COPY (SELECT * FROM t) TO STDOUT WITH (FORMAT csv, HEADER, NULL '\N')` をシェルリダイレクトで受ける（ネイティブ RFC4180） | `evidence/{database}/{table}.csv` |
 | importMysql | `LOAD DATA LOCAL INFILE ... FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' IGNORE 1 LINES` | 入力 `{process}/data/{database}/{table}.csv` |
 | importPostgres | `psql COPY t FROM STDIN WITH (FORMAT csv, HEADER, NULL '\N')` をシェルリダイレクトで与える | 入力 `{process}/data/{database}/{table}.csv` |
-| clearMysql | `TRUNCATE TABLE t` | — |
-| clearPostgres | `TRUNCATE TABLE t`（`ON_ERROR_STOP=1`） | — |
+| clearMysql | `START TRANSACTION; DELETE FROM t; ...; COMMIT` を単一 `--execute` で発行（全削除が原子的） | — |
+| clearPostgres | `DELETE FROM t; ...` を単一 `--command` で発行（psql の `-c` は複数文を単一トランザクションで処理・`ON_ERROR_STOP=1`） | — |
 
 - CSV は 1 行目ヘッダー・NULL は `\N`（空文字と区別、mysqldump 慣行）。export / import は下記制約の範囲でラウンドトリップ可能。
 - 入力 CSV（import）は `{process}/data/{database}/{table}.csv`（テスト作者が用意・git 管理）。ソース不在・DB クライアント非 0 は exit 6。
 - **MySQL import の制約**: `LOAD DATA LOCAL INFILE` は既定で `ESCAPED BY '\\'` のため、`\N`→NULL は正しく解釈される一方、RFC4180 CSV（バックスラッシュを特別扱いしない）中の**リテラルのバックスラッシュを含む値**は MySQL のエスケープ解釈で変化し得る。厳密なラウンドトリップはバックスラッシュを含まないデータで保証される（PostgreSQL の `\copy` はこの制約を受けない）。RFC4180 と LOAD DATA の本質的な非整合。
+- **clear の削除セマンティクス**: TRUNCATE ではなく DELETE を使い、**FK 制約は無効化しない**（`FOREIGN_KEY_CHECKS` 等に触れない。整合性検証は常に DBMS に委ねる）。`tables[]` は**FK の子 → 親の順に列挙**する（行単位で FK 検証されるため）。参照行が残る親を削除しようとした場合は DBMS の FK 違反エラーを stderr にそのまま露出して exit 6。全削除は 1 トランザクションで原子的（部分削除は残らない。MySQL は対象テーブルが InnoDB 等のトランザクション対応エンジンであることが前提）。`ON DELETE CASCADE` は DDL 宣言どおり波及する。シーケンス / AUTO_INCREMENT はリセットしない（必要ならカスタムプラグインで行う）。
 - テーブルループは添字を**読み取り直後にインクリメント**し、`continue` でも無限ループしない（P2 の教訓）。
 - SQL 組み立て時、テーブル名は識別子クオート（MySQL=バッククオート / PostgreSQL=ダブルクオート）内でクオート文字を二重化してエスケープする。ファイルパスについては、PostgreSQL は `COPY ... TO STDOUT / FROM STDIN` をシェルリダイレクトで扱いパスを SQL に載せない（psql メタコマンド `\copy` のバックスラッシュ解釈を回避）。MySQL import は LOAD DATA のパスを SQL 文字列リテラルとしてバックスラッシュ（MySQL のエスケープ文字）→シングルクオートの順に二重化する（`'`・`\` を含むシナリオ名・テーブル名でも壊れない）。
 - プラグイン stdout/stderr は行バッファ方式の Masker を通すため、`gateway.RunScript` が各スクリプト完了時に Flush し、未改行の出力が後続ログより遅れて出力順が崩れないようにする。出力順序の保証は**各ストリーム内（stdout 内・stderr 内それぞれ）**まで。stdout と stderr の相対順序は、別ストリーム・別コピー goroutine のため（バッファの有無に関わらず）保証しない。
@@ -971,7 +972,7 @@ bizdates:
       - seq: "10"                       # _{seq}_{group}_{type} の seq
         group: arrange                  # NewGroup で検証（"_" 禁止）
         type: clearPostgres             # プラグイン type（解決可否は validate で担保）
-        description: truncate
+        description: 全行削除
         requirement_specifications:
           - SPEC-013-01
         config:                         # config/config.yml の stfw.process.{type} 配下

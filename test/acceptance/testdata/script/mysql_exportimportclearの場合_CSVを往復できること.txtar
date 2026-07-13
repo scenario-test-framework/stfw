@@ -23,12 +23,11 @@ cmp scenario/db/_10_99990101/_30_grp_exportMysql/evidence/testdb/t1.csv t1.csv.g
 exists scenario/db/_10_99990101/_30_grp_exportMysql/evidence/testdb/t2.csv
 
 # clear / import が期待した SQL を発行している
+# clear は全テーブルの DELETE を START TRANSACTION〜COMMIT で括った単一 --execute で発行する
 exec cat ${WORK}/mysql.log
-stdout 'TRUNCATE TABLE `t1`'
+stdout 'START TRANSACTION; DELETE FROM `t1`; DELETE FROM `t``x`; COMMIT'
 stdout 'LOAD DATA LOCAL INFILE'
 stdout 'INTO TABLE `t1`'
-# 識別子内のバッククオートが二重化エスケープされている
-stdout 'TRUNCATE TABLE `t``x`'
 # ファイルパス内のバックスラッシュが SQL 文字列として二重化されている (identifier 側は単一のまま)
 stdout 't\\\\x\.csv'
 
@@ -36,6 +35,13 @@ stdout 't\\\\x\.csv'
 env STFW_TEST_MYSQL_FAIL=1
 execcode 6 stfw run exp
 stderr 'export failed'
+env STFW_TEST_MYSQL_FAIL=0
+
+# clear 失敗 (mysql 非 0。FK 違反等) は DBMS のエラーを露出して exit 6
+env STFW_TEST_MYSQL_FAIL=1
+execcode 6 stfw run db
+stderr 'mysql: simulated failure'
+stderr 'delete failed'
 env STFW_TEST_MYSQL_FAIL=0
 
 # import のソース CSV 不在は exit 6
@@ -180,7 +186,7 @@ case "$sql" in
     fi
     ;;
   "LOAD DATA"*) echo "$sql" >> "${STFW_TEST_MYSQL_LOG}" ;;
-  "TRUNCATE TABLE"*) echo "$sql" >> "${STFW_TEST_MYSQL_LOG}" ;;
+  "START TRANSACTION"*) echo "$sql" >> "${STFW_TEST_MYSQL_LOG}" ;;
   *)
     echo "mysql: unsupported sql: $sql" >&2
     exit 1

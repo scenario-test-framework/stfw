@@ -4,7 +4,7 @@
 # port       : PostgreSQL ポート
 # database   : 対象データベース名
 # user       : 接続ユーザー (パスワードは secret {host}-{user} で解決)
-# tables     : truncate 対象テーブル名のリスト
+# tables     : 削除対象テーブル名のリスト (FK の子 → 親順)
 #
 # 接続情報 (ホスト・パスワード) を config に直書きしてはならない (禁止契約)。
 stfw:
