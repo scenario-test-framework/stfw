@@ -1,0 +1,141 @@
+# STEP: run 部分実行 --from (指定ノードより実行順で前をスキップし、そこから最後まで実行する)
+
+chmod 755 plugins/run/_common/setup/10_mark
+chmod 755 plugins/run/_common/teardown/90_mark
+chmod 755 plugins/scenario/_common/setup/10_mark
+chmod 755 plugins/scenario/_common/teardown/90_mark
+chmod 755 plugins/bizdate/_common/setup/10_mark
+chmod 755 plugins/bizdate/_common/teardown/90_mark
+
+exec stfw run demo --from _10_99990101/_20_d1b_scripts
+stdout 'run_id: '
+
+# 指定ノードより前の process は実行されず、指定ノード以降と後続 bizdate の全 process は実行される
+! exists executed_d1a.txt
+exists executed_d1b.txt
+exists executed_d2a.txt
+exists executed_d2b.txt
+
+# ジャーナルのイベント列 (ts 以外) がゴールデン一致
+# (スキップされた process のイベントが存在しないこと・run attrs に from が入ることも固定する)
+normjournal . journal_actual.jsonl
+cmp journal_actual.jsonl journal_golden.jsonl
+
+# 実行対象を含む階層のフック (run / scenario / 両 bizdate) は通常どおり実行される
+cmp hooks.log hooks_golden.log
+
+# status はフィルタ後の実行計画のみを表示する
+exec stfw status
+stdout 'run \[Success\]'
+! stdout '_10_d1a_scripts'
+stdout '_20_d1b_scripts'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  timezone: "Asia/Tokyo"
+-- scenario/demo/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_d1a_scripts/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_d1a_scripts/config/config.yml --
+stfw:
+  process:
+    scripts:
+      some_key: value
+-- scenario/demo/_10_99990101/_10_d1a_scripts/scripts/100_mark --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/executed_d1a.txt"
+exit 0
+-- scenario/demo/_10_99990101/_20_d1b_scripts/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_20_d1b_scripts/config/config.yml --
+stfw:
+  process:
+    scripts:
+      some_key: value
+-- scenario/demo/_10_99990101/_20_d1b_scripts/scripts/100_mark --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/executed_d1b.txt"
+exit 0
+-- scenario/demo/_20_99990102/metadata.yml --
+description:
+-- scenario/demo/_20_99990102/_10_d2a_scripts/metadata.yml --
+description:
+-- scenario/demo/_20_99990102/_10_d2a_scripts/config/config.yml --
+stfw:
+  process:
+    scripts:
+      some_key: value
+-- scenario/demo/_20_99990102/_10_d2a_scripts/scripts/100_mark --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/executed_d2a.txt"
+exit 0
+-- scenario/demo/_20_99990102/_20_d2b_scripts/metadata.yml --
+description:
+-- scenario/demo/_20_99990102/_20_d2b_scripts/config/config.yml --
+stfw:
+  process:
+    scripts:
+      some_key: value
+-- scenario/demo/_20_99990102/_20_d2b_scripts/scripts/100_mark --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/executed_d2b.txt"
+exit 0
+-- plugins/run/_common/setup/10_mark --
+#!/bin/bash
+echo "run setup" >>"${STFW_PROJ_DIR}/hooks.log"
+exit 0
+-- plugins/run/_common/teardown/90_mark --
+#!/bin/bash
+echo "run teardown ${stfw_run_status}" >>"${STFW_PROJ_DIR}/hooks.log"
+exit 0
+-- plugins/scenario/_common/setup/10_mark --
+#!/bin/bash
+echo "scenario setup ${stfw_scenario_name}" >>"${STFW_PROJ_DIR}/hooks.log"
+exit 0
+-- plugins/scenario/_common/teardown/90_mark --
+#!/bin/bash
+echo "scenario teardown ${stfw_scenario_name} ${stfw_run_status}" >>"${STFW_PROJ_DIR}/hooks.log"
+exit 0
+-- plugins/bizdate/_common/setup/10_mark --
+#!/bin/bash
+echo "bizdate setup ${stfw_bizdate_dirname}" >>"${STFW_PROJ_DIR}/hooks.log"
+exit 0
+-- plugins/bizdate/_common/teardown/90_mark --
+#!/bin/bash
+echo "bizdate teardown ${stfw_bizdate_dirname} ${stfw_run_status}" >>"${STFW_PROJ_DIR}/hooks.log"
+exit 0
+-- journal_golden.jsonl --
+{"attrs":{"from":"_10_99990101/_20_d1b_scripts","params":"demo","run_id":"RUN_ID","run_mode":"--run"},"event":"node_start","node_id":"RUN_ID+run","node_type":"run","parent_id":"RUN_ID"}
+{"attrs":{"name":"demo"},"event":"node_start","node_id":"RUN_ID+run+demo","node_type":"scenario","parent_id":"RUN_ID+run"}
+{"attrs":{"bizdate":"99990101","dirname":"_10_99990101","seq":"10"},"event":"node_start","node_id":"RUN_ID+run+demo+_10_99990101","node_type":"bizdate","parent_id":"RUN_ID+run+demo"}
+{"attrs":{"dirname":"_20_d1b_scripts","group":"d1b","process_type":"scripts","seq":"20"},"event":"node_start","node_id":"RUN_ID+run+demo+_10_99990101+_20_d1b_scripts","node_type":"process","parent_id":"RUN_ID+run+demo+_10_99990101"}
+{"event":"steps_enumerated","node_id":"RUN_ID+run+demo+_10_99990101+_20_d1b_scripts","steps":["100_mark"]}
+{"event":"step_end","exit_code":0,"node_id":"RUN_ID+run+demo+_10_99990101+_20_d1b_scripts","status":"Success","step":"100_mark"}
+{"event":"node_end","node_id":"RUN_ID+run+demo+_10_99990101+_20_d1b_scripts","status":"Success"}
+{"event":"node_end","node_id":"RUN_ID+run+demo+_10_99990101","status":"Success"}
+{"attrs":{"bizdate":"99990102","dirname":"_20_99990102","seq":"20"},"event":"node_start","node_id":"RUN_ID+run+demo+_20_99990102","node_type":"bizdate","parent_id":"RUN_ID+run+demo"}
+{"attrs":{"dirname":"_10_d2a_scripts","group":"d2a","process_type":"scripts","seq":"10"},"event":"node_start","node_id":"RUN_ID+run+demo+_20_99990102+_10_d2a_scripts","node_type":"process","parent_id":"RUN_ID+run+demo+_20_99990102"}
+{"event":"steps_enumerated","node_id":"RUN_ID+run+demo+_20_99990102+_10_d2a_scripts","steps":["100_mark"]}
+{"event":"step_end","exit_code":0,"node_id":"RUN_ID+run+demo+_20_99990102+_10_d2a_scripts","status":"Success","step":"100_mark"}
+{"event":"node_end","node_id":"RUN_ID+run+demo+_20_99990102+_10_d2a_scripts","status":"Success"}
+{"attrs":{"dirname":"_20_d2b_scripts","group":"d2b","process_type":"scripts","seq":"20"},"event":"node_start","node_id":"RUN_ID+run+demo+_20_99990102+_20_d2b_scripts","node_type":"process","parent_id":"RUN_ID+run+demo+_20_99990102"}
+{"event":"steps_enumerated","node_id":"RUN_ID+run+demo+_20_99990102+_20_d2b_scripts","steps":["100_mark"]}
+{"event":"step_end","exit_code":0,"node_id":"RUN_ID+run+demo+_20_99990102+_20_d2b_scripts","status":"Success","step":"100_mark"}
+{"event":"node_end","node_id":"RUN_ID+run+demo+_20_99990102+_20_d2b_scripts","status":"Success"}
+{"event":"node_end","node_id":"RUN_ID+run+demo+_20_99990102","status":"Success"}
+{"event":"node_end","node_id":"RUN_ID+run+demo","status":"Success"}
+{"event":"node_end","node_id":"RUN_ID+run","status":"Success"}
+-- hooks_golden.log --
+run setup
+scenario setup demo
+bizdate setup _10_99990101
+bizdate teardown _10_99990101 Success
+bizdate setup _20_99990102
+bizdate teardown _20_99990102 Success
+scenario teardown demo Success
+run teardown Success

@@ -1,0 +1,2 @@
+コンテキスト	バリエーション	値	説明
+実行管理	部分実行指定	--from {bizdate_dir}[/{process_dir}]（再開）、--only {bizdate_dir}[/{process_dir}]（ピンポイント実行）、指定なし（全体実行）	stfw run の部分実行の指定方法の区分。--from は指定ノードより実行順で前のノードをスキップし、指定ノードから最後まで実行する（process まで指定した場合はその bizdate 内の先行 process のみスキップし、後続 bizdate は全 process を実行）。--only は指定ノードのサブツリーのみ実行する（bizdate 指定なら配下全 process、process 指定ならその process のみ）。指定パスはシナリオ相対の {bizdate_dir}[/{process_dir}]（ディレクトリ名の完全一致）で、--from と --only は排他、--dry-run とは併用できる。失敗した run の途中からの再開と特定ノードのピンポイント実行を可能にする

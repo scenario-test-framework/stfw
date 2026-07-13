@@ -1,0 +1,109 @@
+# STEP: run 部分実行の異常系 (指定不正はジャーナル作成前に fail-fast する)
+
+# 存在しない bizdate ディレクトリ
+! exec stfw run demo --from _99_99990909
+stderr 'bizdate directory not found'
+! exists .stfw/runs
+
+# 存在しない process ディレクトリ (--only)
+! exec stfw run demo --only _10_99990101/_99_x_scripts
+stderr 'process directory not found'
+! exists .stfw/runs
+
+# 存在しない process ディレクトリ (--from。bizdate は存在するケース)
+! exec stfw run demo --from _10_99990101/_99_x_scripts
+stderr 'process directory not found'
+! exists .stfw/runs
+
+# パス形式違反 (3 セグメント以上)
+! exec stfw run demo --from _10_99990101/_10_d1a_scripts/extra
+stderr 'format'
+! exists .stfw/runs
+
+# 空値の明示指定は「フィルタ未指定 = 全体実行」に化けず fail-fast する
+! exec stfw run demo --from=
+stderr 'non-empty'
+! exists .stfw/runs
+! exec stfw run demo --only=
+stderr 'non-empty'
+! exists .stfw/runs
+
+# --from と --only は排他
+! exec stfw run demo --from _10_99990101 --only _10_99990101
+stderr 'none of the others can be'
+! exists .stfw/runs
+
+# 部分実行はシナリオ 1 つ指定時のみ
+! exec stfw run demo demo2 --from _10_99990101
+stderr 'requires exactly one scenario'
+! exists .stfw/runs
+
+# 同名シナリオの重複指定も部分実行では受け付けない (重複除去前の個数で判定)
+! exec stfw run demo demo --from _10_99990101
+stderr 'requires exactly one scenario'
+! exists .stfw/runs
+
+# 静的検証はフィルタ前のシナリオ全体に対して行う
+# (スキップされる側の process に違反があっても run は開始されない)
+! exec stfw run demo3 --only _10_99990101/_10_ok_scripts
+stderr 'validation failed'
+! exists .stfw/runs
+
+# どのケースでも process は 1 つも実行されていない
+! exists executed_d1a.txt
+! exists executed_ok.txt
+
+# fail-fast はハウスキープより前で起きる (期限切れ run が削除されずに残る)
+mkdir .stfw/runs/_20200101000000_1
+cp expired_journal.jsonl .stfw/runs/_20200101000000_1/journal.jsonl
+! exec stfw run demo --from _99_99990909
+stderr 'bizdate directory not found'
+exists .stfw/runs/_20200101000000_1/journal.jsonl
+
+# 裏取り: 検証ゲートを通過する正常実行ではハウスキープが動き、期限切れ run は削除される
+exec stfw run demo
+! exists .stfw/runs/_20200101000000_1
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  timezone: "Asia/Tokyo"
+  housekeep:
+    retention_days: 1
+-- expired_journal.jsonl --
+{"event":"node_start","ts":"2020-01-01T00:00:00+09:00","node_id":"_20200101000000_1+run","parent_id":"_20200101000000_1","node_type":"run"}
+-- scenario/demo/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_d1a_scripts/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_d1a_scripts/config/config.yml --
+stfw:
+  process:
+    scripts:
+      some_key: value
+-- scenario/demo/_10_99990101/_10_d1a_scripts/scripts/100_mark --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/executed_d1a.txt"
+exit 0
+-- scenario/demo2/metadata.yml --
+description:
+-- scenario/demo3/metadata.yml --
+description:
+-- scenario/demo3/_10_99990101/metadata.yml --
+description:
+-- scenario/demo3/_10_99990101/_10_ok_scripts/metadata.yml --
+description:
+-- scenario/demo3/_10_99990101/_10_ok_scripts/config/config.yml --
+stfw:
+  process:
+    scripts:
+      some_key: value
+-- scenario/demo3/_10_99990101/_10_ok_scripts/scripts/100_mark --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/executed_ok.txt"
+exit 0
+-- scenario/demo3/_10_99990101/_20_bad_scripts/metadata.yml --
+description:

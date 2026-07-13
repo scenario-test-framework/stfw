@@ -1,0 +1,46 @@
+変更要望: stfw run への部分実行機能（--from / --only）の追加
+
+※ 本要望は実装・実装契約（docs/AS-BUILT.md §2.3 / §3.4 / §5.3）反映済みの機能を、
+上流（USDM / RDRA）へ逆方向に追従させるためのもの。仕様は確定済み。
+
+## 背景・理由
+
+シナリオテストは業務日付をまたぐ長い逐次実行になるため、途中の process が失敗した場合に
+先頭から全体を再実行すると時間がかかる。また、特定 process の動作確認をしたい場合にも
+全体実行しか手段がなかった。失敗した run のやり直し（途中から再開）と、特定ノードの
+ピンポイント実行を可能にしたい。
+
+## 要求
+
+テスト実行者が、シナリオの部分実行を行える:
+
+1. 再開（--from {bizdate_dir}[/{process_dir}]）:
+   指定ノードより実行順で前のノードをスキップし、指定ノードから最後まで実行する。
+   process まで指定した場合、その bizdate 内の先行 process のみスキップし、
+   後続 bizdate は全 process を実行する。
+2. ピンポイント実行（--only {bizdate_dir}[/{process_dir}]）:
+   指定ノードのサブツリーのみ実行する（bizdate 指定なら配下全 process、
+   process 指定ならその process のみ）。
+
+## 確定済み仕様（制約）
+
+- パスはシナリオ相対の {bizdate_dir}[/{process_dir}]（ディレクトリ名の完全一致）
+- --from と --only は排他（同時指定はエラー）。空値の明示指定（--from= / --only=）もエラー
+- 部分実行時に run へ指定できるシナリオは 1 つのみ（複数・重複指定はエラー）
+- --dry-run とは併用できる
+- 指定ノードが存在しない場合は fail-fast（run_id 採番・ジャーナル作成・ハウスキープの前にエラー）
+- 静的検証（validate 相当・プラグイン requires・接続情報直書き禁止）はフィルタ前のシナリオ全体に実施
+- スキップされたノードは実行されず、ジャーナルへ一切記録されない（node_start / node_end もフックも無い）
+- 実行されるノードの祖先階層のフック（run / scenario / 実行対象を含む bizdate の setup・teardown）は通常どおり実行
+- 実行ジャーナルの run node_start の attrs に、部分実行時のみ from / only（指定パス）を記録する
+- スキップしたノードの副作用（データ投入等）の再現はユーザー責務（ツールは前提を再現しない）
+
+## 根拠
+
+- 契約: docs/AS-BUILT.md §2.3（コマンド一覧 run 行）/ §3.4（部分実行）/ §5.3（run attrs）
+- 実装: internal/domain/scenario/filter.go（RunFilter 値オブジェクト）,
+  internal/usecase/runscenario/runscenario.go, internal/presentation/cli/run.go
+- テスト: internal/domain/scenario/filter_test.go + 受け入れテスト txtar 3 本
+  （run_fromを指定する場合_指定ノード以降のみ実行すること /
+    run_onlyを指定する場合_指定サブツリーのみ実行すること /
+    run_部分実行の指定が不正な場合_failfastすること）

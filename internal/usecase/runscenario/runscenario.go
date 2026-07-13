@@ -23,10 +23,17 @@ import (
 	"github.com/scenario-test-framework/stfw/internal/repository"
 )
 
+// Options は stfw run の実行オプション。
+type Options struct {
+	DryRun bool
+	From   string // 部分実行: 指定ノード以降を実行 (AS-BUILT §3.4)
+	Only   string // 部分実行: 指定サブツリーのみ実行 (AS-BUILT §3.4)
+}
+
 // Run はシナリオを内蔵ランナーで実行する。
 // 実行前にディレクトリ規約を静的検証する (v0.2 では dig 生成時に行われていた検証に相当)。
 // now は採番・ジャーナル記録に使う時刻源 (テスト容易性のため引数で受け取る)。
-func Run(log *slog.Logger, out, errOut io.Writer, projDir string, cfg *repository.Config, version string, names []string, dryRun bool, now func() time.Time) error {
+func Run(log *slog.Logger, out, errOut io.Writer, projDir string, cfg *repository.Config, version string, names []string, opts Options, now func() time.Time) error {
 	projDir, err := filepath.Abs(projDir)
 	if err != nil {
 		return err
@@ -85,6 +92,31 @@ func Run(log *slog.Logger, out, errOut io.Writer, projDir string, cfg *repositor
 		return fmt.Errorf("forbidden connection config in %d place(s)", len(forbidden))
 	}
 
+	// 部分実行フィルタ (--from / --only) の解決。指定ノードの不存在は
+	// ハウスキープ・ジャーナル作成前に fail-fast する (AS-BUILT §3.4)。
+	filter, err := scenario.NewRunFilter(opts.From, opts.Only)
+	if err != nil {
+		return err
+	}
+	// 契約 (§3.4) は「シナリオ 1 つのみ」。重複除去前の指定個数で判定する
+	// (`demo demo` のような重複指定も部分実行では受け付けない)。
+	if filter.Active() && len(names) != 1 {
+		return fmt.Errorf("--from / --only requires exactly one scenario")
+	}
+	targets := targetOrder(tree, names)
+	views := make([]scenario.ScenarioView, 0, len(targets))
+	for _, name := range targets {
+		view, ok := tree.ScenarioView(name)
+		if !ok {
+			return fmt.Errorf("scenario: %s is not exist", name)
+		}
+		view, err := filter.Apply(view)
+		if err != nil {
+			return err
+		}
+		views = append(views, view)
+	}
+
 	// run 開始時のハウスキープ (REQ-019): 保存日数を過ぎた過去の実行結果を削除する。
 	// 検証ゲート通過後に行う (誤ったコマンドで削除だけが走ることを防ぐ)。
 	housekeep(log, projDir, cfg, now)
@@ -114,17 +146,18 @@ func Run(log *slog.Logger, out, errOut io.Writer, projDir string, cfg *repositor
 		out:      out,
 		errOut:   errOut,
 		projDir:  projDir,
-		dryRun:   dryRun,
+		dryRun:   opts.DryRun,
+		filter:   filter,
 		now:      now,
 		journal:  journal,
 		agg:      run.NewRun(runID),
-		baseEnv:  baseEnv(cfg, projDir, version, runID, dryRun),
+		baseEnv:  baseEnv(cfg, projDir, version, runID, opts.DryRun),
 		notifier: notifier,
 		reporter: newReporter(log, projDir, runID),
 	}
 
 	fmt.Fprintf(out, "run_id: %s\n", runID)
-	status, err := r.runRun(runID, tree, names)
+	status, err := r.runRun(runID, views, names)
 	if err != nil {
 		return err
 	}
@@ -154,6 +187,7 @@ type runner struct {
 	errOut   io.Writer
 	projDir  string
 	dryRun   bool
+	filter   scenario.RunFilter
 	now      func() time.Time
 	journal  *repository.Journal
 	agg      *run.Run
@@ -178,12 +212,17 @@ func (r *runner) emit(ev run.Event) error {
 }
 
 // runRun は run 階層を実行する: setup フック → シナリオの逐次実行 → teardown フック。
-func (r *runner) runRun(runID run.RunID, tree *scenario.ScenarioTree, names []string) (run.NodeStatus, error) {
+// views は部分実行フィルタ適用済みの実行計画 (AS-BUILT §3.4)。
+func (r *runner) runRun(runID run.RunID, views []scenario.ScenarioView, names []string) (run.NodeStatus, error) {
 	nodeID := run.NewRunNodeID(runID)
 	attrs := map[string]string{
 		"run_id":   runID.String(),
 		"run_mode": r.baseEnv["run_mode"],
 		"params":   strings.Join(names, " "),
+	}
+	// 部分実行時はフィルタ指定を attrs へ記録する (この run が全体実行でないことの証跡)
+	if key, value := r.filter.Attr(); key != "" {
+		attrs[key] = value
 	}
 	if err := r.emit(run.NewNodeStartEvent(r.now(), nodeID, run.NodeTypeRun, attrs)); err != nil {
 		return "", err
@@ -194,11 +233,7 @@ func (r *runner) runRun(runID run.RunID, tree *scenario.ScenarioTree, names []st
 	if !r.runHooks(run.NodeTypeRun, "setup", env) {
 		status = run.NodeError
 	} else {
-		for _, name := range targetOrder(tree, names) {
-			view, ok := tree.ScenarioView(name)
-			if !ok {
-				return "", fmt.Errorf("scenario: %s is not exist", name)
-			}
+		for _, view := range views {
 			st, err := r.runScenario(nodeID, view, env)
 			if err != nil {
 				return "", err

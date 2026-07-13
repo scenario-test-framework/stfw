@@ -229,6 +229,17 @@ stfw status [run_id]              # 実行ジャーナルの状態表示
 stfw report [run_id]              # HTML レポート再生成
 ```
 
+失敗した run のやり直しや特定ノードの動作確認には部分実行を使います
+（パスはシナリオ相対の `{bizdate_dir}[/{process_dir}]`。`--from` / `--only` は排他）。
+
+```sh
+stfw run {scenario} --from _20_20240102/_30_batch_scripts   # 指定ノードから最後まで再開
+stfw run {scenario} --only _20_20240102/_30_batch_scripts   # 指定ノードだけピンポイント実行
+```
+
+スキップしたノードは実行もジャーナル記録もされません。飛ばしたノードの副作用
+（データ投入等）は再現されないため、前提が満たされていることは利用者が保証してください。
+
 `stfw run` はプラグインの外部バイナリを自動 install しません。k6（invokeRest/invokeWeb）や
 compare-files（compare）を使うシナリオは、事前に `stfw plugin install {type}` が必要です
 （`stfw init` は全プラグインの install をまとめて行います）。

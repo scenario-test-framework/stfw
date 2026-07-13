@@ -208,7 +208,7 @@ See [docs/AS-BUILT.md](docs/AS-BUILT.md) §4 for the detailed contract and setti
 | `stfw scenario reverse <name> [-o dir]` | generate spec (`.yml`) + doc (`.md`) from a scenario (tree → spec + doc; default output dir `docs/`) |
 | `stfw scenario scaffold <spec.yml> [--sync]` | generate a scenario skeleton from a spec (spec → tree, round-trip entry). `--sync` diff-syncs an existing scenario (add/keep/delete) |
 | `stfw validate [scenario...]` | static validation of the directory convention and plugin resolution |
-| `stfw run [--dry-run] <scenario...>` | run scenarios automatically in bulk |
+| `stfw run [--dry-run] [--from <path>] [--only <path>] <scenario...>` | run scenarios automatically in bulk; `--from` resumes from a node, `--only` pinpoints a subtree (path is `{bizdate_dir}[/{process_dir}]`) |
 | `stfw status [run_id]` | show the result tree |
 | `stfw report [run_id] [--out dir]` | regenerate the HTML report |
 | `stfw inventory list/exists` | inspect host groups |
