@@ -132,6 +132,21 @@ $ stfw new process 10 web scripts              # process (seq + group + type)
 $ stfw validate release_test                   # static validation of the convention
 ```
 
+## Building scenarios with an AI agent (Claude Code)
+
+This repository ships [`stfw-scenario`](.claude/skills/stfw-scenario/), an agent skill for
+[Claude Code](https://claude.com/claude-code) that generates a complete scenario suite
+(inventory, secret setup script, custom plugins, scenario tree, expectations) from your SUT's
+design documents (requirements, OpenAPI spec, DDL, ...) and a test goal, iterating until
+`stfw validate` passes.
+
+```console
+$ npx skills add scenario-test-framework/stfw --skill stfw-scenario -a claude-code
+```
+
+After installing, open Claude Code in your stfw project and ask something like
+"create a scenario suite from this OpenAPI spec and DDL".
+
 ## Docker Compose (with HTML report serving)
 
 `compose.yaml` bundles stfw + nginx + reports-init (a one-shot that initializes volume ownership).
