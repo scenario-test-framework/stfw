@@ -37,7 +37,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/metadata-action@v5
+      - uses: docker/metadata-action@v6
         id: meta
         with:
           images: ghcr.io/scenario-test-framework/stfw
@@ -55,7 +55,7 @@ jobs:
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}
       # 全組込みプラグインのランタイム同梱版 (stfw:{version}-full / stfw:full)
-      - uses: docker/metadata-action@v5
+      - uses: docker/metadata-action@v6
         id: meta-full
         with:
           images: ghcr.io/scenario-test-framework/stfw
