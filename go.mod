@@ -7,7 +7,7 @@ toolchain go1.26.4
 require (
 	filippo.io/age v1.3.1
 	github.com/rogpeppe/go-internal v1.15.0
-	github.com/smallstep/pkcs7 v0.2.1
+	github.com/smallstep/pkcs7 v0.2.2
 	github.com/spf13/cobra v1.10.2
 	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.44.0
