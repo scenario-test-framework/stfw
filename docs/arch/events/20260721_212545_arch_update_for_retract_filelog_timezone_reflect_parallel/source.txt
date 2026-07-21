@@ -1,0 +1,3 @@
+RDRA 差分 20260721_210722_retract_filelog_timezone_reflect_parallel と NFR 差分 20260721_211823_nfr_update_for_retract_filelog_timezone_reflect_parallel に基づくアーキテクチャ再評価。
+変更要望 .tmp/change-request-20260721.md（ファイルログ要求撤回 DIST-002 / timezone 要求撤回 DIST-003 / v1.5.0 実装済み組込み parallel プロセスタイプの反映）。
+構造（ティア・レイヤー・BC）は不変。記述整合のみ。実装契約の正本は docs/AS-BUILT.md §4.14 / §2.1。

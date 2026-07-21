@@ -1,0 +1,233 @@
+meta:
+  event_id: "20260721_212545_arch_update_for_retract_filelog_timezone_reflect_parallel"
+  trigger_event: "rdra:20260721_210722_retract_filelog_timezone_reflect_parallel, nfr:20260721_211823_nfr_update_for_retract_filelog_timezone_reflect_parallel"
+  created_at: "2026-07-21T21:25:45"
+technology_context:
+  languages:
+    - "Go（CLI 本体）"
+    - "任意言語スクリプト（プラグイン・ステップ: シェルスクリプト等）"
+  frameworks:
+    - "cobra（CLI フレームワーク）"
+    - "log/slog（構造化ログ）"
+    - "yaml.v3（設定パース）"
+    - "html/template + go:embed（静的 HTML レポート・テンプレート同梱）"
+    - "filippo.io/age（X25519 資格情報暗号化）"
+    - "OpenTelemetry SDK（OTLP トレースエクスポート）"
+    - "testscript（受け入れテスト）"
+  constraints:
+    - "Go 単一バイナリ（サーバレス・常駐サービスなし・実行エンジン内包・逐次実行）"
+    - "外部データストアなし（プロジェクトディレクトリ配下のファイルベース永続化）"
+    - "互換境界 3 つの維持: ディレクトリ規約 / プラグイン env 契約（stfw_* + 終了コード 0/3/6）/ エビデンスディレクトリ規約"
+    - "追加ランタイム不要（JVM / Python 2 / Ruby 依存の廃止）"
+    - "実行モデルは逐次実行（1 実行 = 1 プロセス）。例外として組込み parallel プロセスタイプにより、プロセスディレクトリ配下に定義した子プロセスの並走を選択できる（max_parallel で同時実行数を制御。互換境界は不変）"
+system_architecture:
+  tiers:
+    - id: "tier-cli"
+      name: "CLI 本体（stfw コマンド）"
+      description: "Go 単一バイナリの CLI。presentation〜gateway の 5 層と実行エンジン（内蔵ランナー）を内包し、init / new / validate / run / status / report / inventory / secret / ssh / plugin の各コマンドを提供する"
+      policies: []
+      technology_candidates:
+        - "CLI（単一バイナリ配布・ランタイム依存なし）"
+        - "内蔵実行エンジン（木構造の逐次実行 + parallel 子プロセス並走）"
+        - "構造化ログ（stderr 出力）"
+      rules:
+        - id: "SR-002"
+          name: "実行ログ運用"
+          description: "実行ログは stderr への構造化ログ（シークレットマスキング済み）として出力する（stdout はコマンド出力専用）。ファイルログ（.stfw/stfw.log への集約・日次ローテーション・terminal 実行時のカラー出力）は要求撤回により持たない。ログレベル（trace〜error、デフォルト info）は stfw.yml またはコマンドオプションで変更できる。ログの保管は呼び出し元（terminal / CI のログ保持）に委ね、実行結果の保管期間（1 ヶ月）は実行ジャーナル・HTML レポートのハウスキープ（stfw.housekeep.retention）で担保する"
+          reason: "NFR C.6.1.1 ログ保管期間(Lv1) / C.6.1.2 ログ種別への対応。ユーザー指定: ファイルログ要求（DIST-002）はプロダクトオーナー決定で撤回され、stderr 構造化ログと HTML レポート・OTLP トレースの可視化で運用要求を満たす"
+          source_model: "情報: 実行ログ, バリエーション: ログレベル, NFR C.6.1.1, NFR C.6.1.2"
+          confidence: "user"
+        - id: "SR-007"
+          name: "parallel 子プロセスの並走実行"
+          description: "組込み parallel プロセスタイプは、プロセスディレクトリ配下に定義した子プロセス（親と同形式 _{seq}_{group}_{type}。入れ子禁止・子 0 件は定義不正）を並走させる。子プロセス 1 件 = 実行ジャーナル上の 1 ステップとし、process 階層フック（setup / teardown）は親で 1 回のみ実行する。子同士に Blocked は無く（並走に順序依存が無いため先行子が Error でも全子を最後まで実行）、親のステータスは全子の悪い方（Error > Warn > Success）で集約する。同時実行数は max_parallel（0 = 上限なし、正整数 = 上限（超過分は seq 順に待機）、負数・非整数は設定不正として親 Error）を設定チェーン（同梱デフォルト stfw.yml → プロジェクト stfw.yml → プロジェクト config/plugins/process/parallel/config.yml → プロセス config/config.yml、後勝ち）で解決する。部分実行（--from / --only）で指定できるのは親 parallel プロセスまで。互換境界（ディレクトリ規約・プラグイン実行契約・エビデンスディレクトリ規約・ジャーナル）は不変"
+          reason: "条件「parallel 子プロセスの並走実行」に順序依存の無い処理の実行時間短縮の要求があるため（v1.5.0 で実装・リリース済み機能の反映。実装契約の正本は AS-BUILT §4.14）"
+          source_model: "条件: parallel 子プロセスの並走実行, バリエーション: parallel 同時実行数設定, プロセスタイプ, 状態モデル「ステップ実行ステータス」, BUC: シナリオ一括自動実行フロー"
+          confidence: "user"
+  cross_tier_policies:
+    - id: "CTP-007"
+      name: "性能・拡張性は単一利用者・逐次実行前提"
+      description: "同時アクセス・スループットのスケールアウトはスコープ外とする（利用者ローカルで 1 実行 = 1 プロセス）。業務日付をまたぐ長時間バッチ実行は増分レポートと OTel トレースで進捗確認する。性能テストは実施しない。組込み parallel プロセスタイプによる子プロセス並走は単一実行内の実行時間短縮であり、複数利用者の同時アクセスやスループットのスケールアウトとは区別する（NFR B.x のグレードは引き上げない）。実行ホストの性能向上はスケールアップで対応する"
+      reason: "NFR B.1.1.1 同時アクセス(Lv1) / B.1.1.3 / B.1.2.1 / B.2.1.2 スループット(Lv1) / B.2.2.1 バッチ処理時間(Lv1・ユーザー確定) / B.3.1.1 CPU 拡張性(Lv1) / B.4.1.1 性能テスト(Lv0) への対応。ユーザー指定: parallel は単一実行内の子プロセス並走でありスケールアウト要求（NFR B.x）の対象外とする位置づけを変更要望で確定"
+      source_model: "条件: parallel 子プロセスの並走実行, NFR B.1.1.1, NFR B.1.1.3, NFR B.1.2.1, NFR B.2.1.2, NFR B.2.2.1, NFR B.3.1.1, NFR B.4.1.1"
+      confidence: "user"
+  cross_tier_rules:
+    - id: "CTR-003"
+      name: "構造化ログの stderr 出力"
+      description: "CLI 本体のログは stderr への構造化ログとして出力する（stdout はコマンド出力専用）。単一ファイル（.stfw/stfw.log）への集約は要求撤回により行わない。OTLP 送信失敗等の警告も本ログに記録する"
+      reason: "NFR C.6.1.2 ログ種別への対応。ユーザー指定: ファイルログ要求の撤回（障害調査は stderr 構造化ログ + HTML レポート / OTLP トレースで行う）"
+      source_model: "情報: 実行ログ, NFR C.6.1.2"
+      confidence: "user"
+app_architecture:
+  tier_layers:
+    - tier_id: "tier-cli"
+      layers:
+        - id: "L-cli-presentation"
+          name: "プレゼンテーション層"
+          responsibility: "Driver Side の入出力。CLI フレームワークによるコマンド・引数パース、入力バリデーション、出力フォーマット、ロガーのセットアップ（構造化ログ + マスキング Writer）"
+          allowed_dependencies:
+            - "L-cli-usecase"
+          policies: []
+          rules: []
+      cross_layer_rules: []
+      diagram_mermaid: |
+        graph TD
+          P["presentation（cobra CLI + logger/masker）"] --> U["usecase（runscenario / scaffold / validate 等）"]
+          U --> D["domain（scenario / run / notify / project・依存ゼロ）"]
+          U --> R["repository（journal / scenariotree / config / secret 等）"]
+          R --> D
+          R --> G["gateway（scriptexec / otlptrace / sshkeyscan / htmlwriter）"]
+      cross_layer_policies:
+        - id: "CLP-003"
+          name: "ロギング方針"
+          description: "構造化ログを stderr へ出力する（シークレットマスキング済み）。ファイルログ（.stfw/stfw.log・日次ローテーション・terminal 実行時カラー）は要求撤回により持たない。ドメイン層はログ出力しない。ログレベルは trace〜error でデフォルト info"
+          reason: "NFR C.6.1.2 ログ種別への対応と、レイヤー別ログ責務の明確化（ファイルログ要求はプロダクトオーナー決定で撤回）"
+          source_model: "情報: 実行ログ, バリエーション: ログレベル, NFR C.6.1.2"
+          confidence: "user"
+data_architecture:
+  entities:
+    - id: "E-003"
+      name: "プロジェクト設定（stfw.yml）"
+      source_info: "情報: プロジェクト設定（stfw.yml）"
+      model_type: "resource_mutable"
+      attributes:
+        - name: "file_path"
+          type: "string"
+          description: "stfw.yml のパス（プロジェクトに 1 つ）"
+          nullable: false
+          primary_key: true
+        - name: "project_version"
+          type: "string"
+          description: "project_version"
+          nullable: false
+          primary_key: false
+        - name: "loglevel"
+          type: "string"
+          description: "ログレベル（trace〜error、デフォルト info）"
+          nullable: false
+          primary_key: false
+        - name: "inventory_ref"
+          type: "string"
+          description: "参照する inventory ファイル名"
+          nullable: false
+          primary_key: false
+        - name: "otel_endpoint"
+          type: "string"
+          description: "OTLP エクスポート先（未設定時は送信しない）"
+          nullable: true
+          primary_key: false
+        - name: "timezone"
+          type: "string"
+          description: "timezone（env 公開のみの任意キー。実装は業務日付判定・レポート時刻表記に参照しない。時刻はプロセスのローカルタイムゾーンが正）"
+          nullable: true
+          primary_key: false
+        - name: "process_parallel_max_parallel"
+          type: "integer"
+          description: "組込み parallel プロセスの同時実行数上限の既定（stfw.process.parallel.max_parallel。同梱デフォルト 0 = 上限なし。プロジェクト config/plugins/process/parallel/config.yml・プロセス config/config.yml で上書き可・後勝ち）"
+          nullable: true
+          primary_key: false
+      relationships:
+        - target_entity: "E-002"
+          type: "1:1"
+          description: "プロジェクトに 1 つの設定ファイル"
+    - id: "E-011"
+      name: "プロセス"
+      source_info: "情報: プロセス"
+      model_type: "resource_mutable"
+      attributes:
+        - name: "dir_name"
+          type: "string"
+          description: "ディレクトリ名（_{seq}_{group}_{process_type}）"
+          nullable: false
+          primary_key: true
+        - name: "seq"
+          type: "integer"
+          description: "実行順（数値のみ）"
+          nullable: false
+          primary_key: false
+        - name: "group_name"
+          type: "string"
+          description: "グループ（「_」を含まない）"
+          nullable: false
+          primary_key: false
+        - name: "process_type"
+          type: "string"
+          description: "プロセスタイプ（プラグインで拡張可）"
+          nullable: false
+          primary_key: false
+        - name: "children"
+          type: "text"
+          description: "子プロセス（組込み parallel タイプ配下のみ。親と同形式 _{seq}_{group}_{type}。入れ子禁止・子 0 件は定義不正。子にも通常プロセスと同じ検証を適用）"
+          nullable: true
+          primary_key: false
+      relationships:
+        - target_entity: "E-010"
+          type: "N:1"
+          description: "業務日付内のまとまった処理単位"
+        - target_entity: "E-007"
+          type: "N:1"
+          description: "プロセスタイプに対応するプラグインで実行される"
+        - target_entity: "E-011"
+          type: "1:N"
+          description: "組込み parallel タイプのプロセスは配下に子プロセス（親と同形式）を持ち、子を並走実行する（子 1 件 = ジャーナル上の 1 ステップ）"
+    - id: "E-017"
+      name: "実行ログ"
+      source_info: "情報: 実行ログ"
+      model_type: "event"
+      attributes:
+        - name: "log_stream"
+          type: "string"
+          description: "出力先ストリーム（stderr への構造化ログ。stdout はコマンド出力専用。ファイルログは要求撤回により持たない）"
+          nullable: false
+          primary_key: true
+        - name: "log_level"
+          type: "string"
+          description: "ログレベル（trace〜error）"
+          nullable: false
+          primary_key: false
+        - name: "masked"
+          type: "boolean"
+          description: "シークレットマスキング済みか（常に true）"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-002"
+          type: "N:1"
+          description: "プロジェクト操作時の障害調査ログとして stderr へ出力される（ファイル保管しない）"
+        - target_entity: "E-015"
+          type: "N:1"
+          description: "run 実行中のログ（OTLP 送信失敗の警告を含む）として出力される"
+  storage_mapping:
+    - entity_id: "E-017"
+      storage_type: "cache"
+      reason: "stderr ストリームへの出力のみ（ファイル永続化なし。保持は呼び出し元の terminal / CI ログに委ねる。実行結果の永続化はジャーナル E-020・HTML レポート E-021 が担う）"
+      confidence: "user"
+  diagram_mermaid: |
+    erDiagram
+      STFW_HONTAI ||--o{ PLUGIN : bundles
+      PROJECT }o--|| STFW_HONTAI : managed_by
+      PROJECT ||--|| STFW_YML : has
+      PROJECT ||--o{ INVENTORY : has
+      PROJECT ||--|| ENCRYPT_KEY : has
+      ENCRYPT_KEY ||--o{ PASSWORD : encrypts
+      INVENTORY ||--o{ PASSWORD : targets
+      INVENTORY ||--o{ KNOWN_HOSTS : registers
+      PROJECT ||--o{ SCENARIO : contains
+      SCENARIO ||--o{ BIZDATE : contains
+      BIZDATE ||--o{ PROCESS : contains
+      PROCESS ||--o{ PROCESS : parallel_children
+      PROCESS ||--o{ STEP_SCRIPT : contains
+      PROCESS ||--|| CONFIG_YML : configured_by
+      PROCESS }o--|| PLUGIN : executed_by
+      SCENARIO ||--o{ METADATA : described_by
+      RUN }o--o{ SCENARIO : executes
+      RUN ||--|| JOURNAL : records
+      RUN ||--o{ RUN_CONTEXT : holds
+      JOURNAL ||--o{ STEP_RESULT : contains
+      JOURNAL ||--|| OTEL_TRACE : projected_to
+      JOURNAL ||--o{ HTML_REPORT : projected_to
+      SCENARIO ||--o{ EXPECT : keeps
+      PROCESS ||--o{ EVIDENCE : collects
+      EXPECT ||--|| EVIDENCE : corresponds
+      EVIDENCE ||--|| COMPARE_RESULT : compared_as
+      COMPARE_RESULT ||--|| STEP_RESULT : fails_step
+      GUIDE ||--o{ PLUGIN : guides

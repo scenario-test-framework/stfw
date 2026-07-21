@@ -1,0 +1,44 @@
+# NFR グレード差分イベント（変更メトリクスのみ。マージキー: メトリクス id）
+version: "1.0"
+event_id: "20260721_211823_nfr_update_for_retract_filelog_timezone_reflect_parallel"
+created_at: "2026-07-21T21:18:23"
+source: "RDRA 差分 20260721_210722_retract_filelog_timezone_reflect_parallel に基づく NFR 再評価（ファイルログ・timezone 要求の撤回、組込み parallel プロセスタイプの反映。グレード値の変更なし、記述の追従のみ）"
+trigger_event: "rdra:20260721_210722_retract_filelog_timezone_reflect_parallel"
+
+categories:
+  - id: "B"
+    name: "性能・拡張性"
+    subcategories:
+      - id: "B.3"
+        name: "リソース拡張性"
+        items:
+          - id: "B.3.1"
+            name: "CPU"
+            important: true
+            metrics:
+              - id: "B.3.1.1"
+                name: "CPU拡張性"
+                important: true
+                grade: 1
+                grade_description: "スケールアップ（CPU追加・交換）"
+                reason: "実行モデルは逐次実行（例外として組込み parallel プロセス配下の子プロセスのみ単一実行内で並走）であり、1 run = 単一ホスト上の 1 プロセスのため、性能向上は実行ホストのスケールアップで対応する（複数ホストへのスケールアウトは要求しない）"
+                source_model: "条件: 逐次実行・エラー時 Blocked、parallel 子プロセスの並走実行、バリエーション: parallel 同時実行数設定"
+                confidence: "medium"
+  - id: "C"
+    name: "運用・保守性"
+    subcategories:
+      - id: "C.6"
+        name: "その他の運用管理方針"
+        items:
+          - id: "C.6.1"
+            name: "ログ管理"
+            important: true
+            metrics:
+              - id: "C.6.1.2"
+                name: "ログ種別"
+                important: false
+                grade: 1
+                grade_description: "実行ログ（stderr への構造化ログ（slog）、trace〜error、シークレットマスキング済み）+ 実行ジャーナル（journal.jsonl、追記専用）"
+                reason: "障害調査用の実行ログは stderr への構造化ログとして出力され（ファイルログ .stfw/stfw.log への集約・日次ローテーション・カラー出力の要求は撤回）、実行結果の唯一のソースである追記専用ジャーナルと合わせて 2 種が定義されているため"
+                source_model: "情報: 実行ログ（stderr への構造化ログ）、実行ジャーナル（journal.jsonl）"
+                confidence: "high"

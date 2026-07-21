@@ -1,0 +1,37 @@
+schema_version: "1.0"
+artifact_type: "decision_record"
+skill_type: "architecture"
+artifact_id: "arch-decision-012"
+title: "実装ギャップの要求撤回: ファイルログ（DIST-002）・timezone（DIST-003）"
+status: "approved"
+generated_at: "2026-07-21T21:25:45"
+context: |
+  AS-BUILT 照合で検出した実装ギャップ DIST-002（ファイルログ .stfw/stfw.log への集約・
+  日次ローテーション・terminal カラー出力が未実装）と DIST-003（stfw.timezone が
+  業務日付判定・レポート時刻表記に未参照）について、プロダクトオーナーが
+  「実装しない（要求を撤回する）」と決定した（変更要望 .tmp/change-request-20260721.md）。
+  アーキテクチャ設計には SR-002 / CTR-003 / CLP-003 / E-017 / E-003.timezone として
+  撤回対象の記述が残っており、実装（AS-BUILT §2.1: slog TextHandler を stderr へ出力）と
+  矛盾していた。
+decision: |
+  ファイルログ関連の記述（.stfw/stfw.log への集約・日次ローテーション・terminal カラー出力）を
+  撤回し、stderr への構造化ログ（シークレットマスキング済み・stdout はコマンド出力専用）へ
+  一本化する。実行状況の可視化は HTML レポート・OTLP トレースが担う。
+  ログ保管期間（NFR C.6.1.1・1 ヶ月）は、stderr ログの保持を呼び出し元（terminal / CI）に
+  委ねたうえで、実行結果（実行ジャーナル・HTML レポート）のハウスキープ
+  （stfw.housekeep.retention）で担保する。
+  timezone は stfw.yml の env 公開のみの任意キーとして残し、実装は業務日付判定・
+  レポート時刻表記に参照しない（時刻はプロセスのローカルタイムゾーンが正）。
+consequences:
+  positive:
+    - "実装（AS-BUILT §2.1）とアーキテクチャ契約の矛盾が解消される"
+    - "ファイルローテーション・ファイル管理の実装・運用コストを持たない"
+    - "CI・コンテナ環境の標準的なログ収集（stderr キャプチャ）とそのまま整合する"
+  negative:
+    - "単一ファイルでのログ追跡はできない（障害調査は stderr キャプチャ・HTML レポート・OTLP トレースに依存する）"
+    - "NFR C.6.1.1（ログ保管期間）の充足は呼び出し元のログ保持とハウスキープ設定に依存する"
+alternatives_considered:
+  - name: "ファイルログ（DIST-002）を実装して要求どおりにする"
+    reason_rejected: "stderr 構造化ログ + HTML レポート + OTLP トレースで運用要求を満たせるとプロダクトオーナーが判断。追加実装・運用の価値がない"
+  - name: "timezone 参照（DIST-003）を実装して要求どおりにする"
+    reason_rejected: "利用実態はローカルタイムゾーンで完結しており、実装するとローカル時刻とレポート時刻の不一致リスクを持ち込む。現実装（ローカルタイムゾーンが正）を要求側に採用"

@@ -1,0 +1,4 @@
+RDRA 差分 20260721_210722_retract_filelog_timezone_reflect_parallel に基づく NFR 再評価。
+変更要望 .tmp/change-request-20260721.md（ファイルログ要求の撤回 / timezone 要求の撤回 /
+組込み parallel プロセスタイプの反映）を受けた RDRA 更新への追従であり、
+グレード値の変更・引き上げは行わず、記述（grade_description / reason / source_model）のみ追従した。
