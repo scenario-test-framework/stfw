@@ -131,6 +131,13 @@ golangci-lint run                # CI と同じ v2 設定（.golangci.yml）
   ② `stfw scenario reverse daily-balance` で `stfw/docs/daily-balance.{yml,md}` を再生成
   （spec/doc はツリーからの生成物。手で編集しない）、③ example README と `docs/GUIDE.md` §3 の
   ツリー・表を追従。
+  - **未リリースのローカル機能を E2E 確認するときは、先に `docker compose build stfw`**。
+    run.sh は postgres / api / jaeger しか `--build` せず、stfw は既存イメージ
+    （= リリース版）をそのまま使うため、新機能が入っていないバイナリで動いてしまう。
+  - ポート競合時は `STFW_JAEGER_PORT=16690 ./run.sh`（16686 は他プロセスと衝突しがち）。
+  - **シナリオディレクトリを移動・リネームしたら `stfw/.gitignore` も追従**。実行時生成物
+    （プロセス配下 `data/` 等）の ignore はパス直書きのため、移動すると外れて
+    untracked の生成物がコミットに紛れ込む。
 - **README は bilingual**: `README.md`=英語 / `README.ja.md`=日本語（バッジ直下に相互リンク）。
   内部ドキュメント（`docs/`）とコメントは日本語。
 - プラグインバイナリ（k6 / compare-files）はイメージに同梱せず、`stfw plugin install {type}` で
