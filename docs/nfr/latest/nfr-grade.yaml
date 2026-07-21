@@ -1,8 +1,8 @@
 version: "1.0"
-event_id: "20260721_211823_nfr_update_for_retract_filelog_timezone_reflect_parallel"
-created_at: "2026-07-21T21:18:23"
-source: "RDRA 差分 20260721_210722_retract_filelog_timezone_reflect_parallel に基づく NFR 再評価（ファイルログ・timezone 要求の撤回、組込み parallel プロセスタイプの反映。グレード値の変更なし、記述の追従のみ）"
-trigger_event: "rdra:20260721_210722_retract_filelog_timezone_reflect_parallel"
+event_id: "20260722_025511_nfr_wording_followup_user_approved"
+created_at: "2026-07-22T02:55:11"
+source: "前イベント 20260721_211823 で confidence: user 保護によりスキップした C.6.1.1 / B.1.1.4 の説明文言追従。ユーザー（プロダクトオーナー）が本 2 項目の文言更新を明示承認したため、保護ルールの例外として文言のみ追従する（グレード Lv・confidence: user は不変）"
+trigger_event: "nfr:20260721_211823_nfr_update_for_retract_filelog_timezone_reflect_parallel"
 
 model_system:
   type: "model1"
@@ -230,9 +230,9 @@ categories:
                 name: "バッチ処理件数"
                 important: false
                 grade: 1
-                grade_description: "小規模（シナリオ×業務日付×プロセス×ステップの逐次実行、データ量は GB オーダー以内）"
-                reason: "ユーザー指定: データ量規模は Lv1（GB オーダー以内）で確定"
-                source_model: "BUC: シナリオ一括自動実行フロー"
+                grade_description: "小規模（シナリオ×業務日付×プロセス×ステップの逐次実行（組込み parallel 配下の子プロセスのみ単一実行内で並走）、データ量は GB オーダー以内）"
+                reason: "ユーザー指定: データ量規模は Lv1（GB オーダー以内）で確定。実行モデルの記述は逐次実行 + 組込み parallel 配下の子プロセスのみ単一実行内で並走の実態へ追従（規模判断は不変）"
+                source_model: "BUC: シナリオ一括自動実行フロー、条件: parallel 子プロセスの並走実行"
                 confidence: "user"
           - id: "B.1.2"
             name: "ピーク時の業務量"
@@ -601,8 +601,8 @@ categories:
                 important: true
                 grade: 1
                 grade_description: "1ヶ月"
-                reason: "ユーザー指定: ログ・実行成果物の保管期間は 1 ヶ月（Lv1）で確定"
-                source_model: "情報: 実行ログ（日次ローテーション）"
+                reason: "ユーザー指定: ログ・実行成果物の保管期間は 1 ヶ月（Lv1）で確定。保管期間は実行成果物（実行ジャーナル・HTML レポート）の run 開始時ハウスキープ（stfw.yml の stfw.housekeep.retention_days）で担保し、stderr へ出力される実行ログの保管は呼び出し元の terminal / CI に委ねる"
+                source_model: "情報: 実行ジャーナル（journal.jsonl）、HTML レポート、実行ログ（stderr への構造化ログ）、バリエーション: 実行結果保存期間設定"
                 confidence: "user"
               - id: "C.6.1.2"
                 name: "ログ種別"

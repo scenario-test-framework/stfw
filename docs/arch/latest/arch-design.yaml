@@ -1,8 +1,8 @@
 version: "1.0"
-event_id: "20260721_212545_arch_update_for_retract_filelog_timezone_reflect_parallel"
-created_at: "2026-07-21T21:25:45"
-source: "ファイルログ（DIST-002）・timezone（DIST-003）要求撤回と v1.5.0 実装済み組込み parallel プロセスタイプの反映（trigger_event: rdra:20260721_210722_retract_filelog_timezone_reflect_parallel, nfr:20260721_211823_nfr_update_for_retract_filelog_timezone_reflect_parallel）"
-trigger_event: "rdra:20260721_210722_retract_filelog_timezone_reflect_parallel, nfr:20260721_211823_nfr_update_for_retract_filelog_timezone_reflect_parallel"
+event_id: "20260722_025855_arch_update_for_dist004_backlog"
+created_at: "2026-07-22T02:58:55"
+source: "DIST-004: arch 未追従の RDRA 要素 14 件（20260709 remote_housekeep / 20260711 spec_roundtrip_invoke_config / 20260712 warn_first_class_status / 20260713 partial_run 由来）の反映。実装はすべて実装・リリース済みで、実装契約の正本は docs/AS-BUILT.md"
+trigger_event: "rdra:20260709_071603_remote_housekeep, rdra:20260711_041310_spec_roundtrip_invoke_config, rdra:20260712_015850_warn_first_class_status, rdra:20260713_130252_partial_run"
 
 technology_context:
   languages:
@@ -77,6 +77,8 @@ domain_architecture:
           definition: "業務日付内のまとまった処理単位。_{seq}_{group}_{process_type} 形式でプロセスタイプ（プラグイン）と結びつく"
         - term: "ステップ"
           definition: "プロセス内 scripts/ 直下の実行可能ファイル。ファイル名昇順が実行順"
+        - term: "spec / doc"
+          definition: "シナリオツリー（規約ベースの記述 = 正）から stfw scenario reverse で生成する機械可読 spec（<name>.yml）と人間可読ドキュメント（<name>.md）。stfw scaffold が spec からツリー骨格を再生成する（往復可逆）"
       related_subdomain_id: "SD-001"
       owned_entity_ids:
         - "E-009"
@@ -86,12 +88,14 @@ domain_architecture:
         - "E-013"
         - "E-014"
         - "E-023"
+        - "E-026"
+        - "E-027"
       owned_buc_ids:
         - "テストシナリオ作成フロー"
         - "シナリオ静的検証フロー"
       team_ownership: null
-      reason: "情報.tsv のコンテキスト「シナリオ構造管理」に対応。シナリオ記述の語彙（規約・階層）が実行時の語彙（run_id・ステータス）と独立"
-      source_model: "情報: シナリオ, 業務日付, プロセス, スクリプト（ステップ）, 実装: internal/domain/scenario"
+      reason: "情報.tsv のコンテキスト「シナリオ構造管理」に対応。シナリオ記述の語彙（規約・階層）が実行時の語彙（run_id・ステータス）と独立。E-026 / E-027（シナリオ spec / ドキュメント）は情報.tsv のコンテキスト割当（シナリオ構造管理）に従い追加（既存のユーザー確定内容は不変・追記のみ）"
+      source_model: "情報: シナリオ, 業務日付, プロセス, スクリプト（ステップ）, シナリオ spec（scenario.yml）, シナリオドキュメント（scenario.md）, 実装: internal/domain/scenario"
       confidence: "user"
     - id: "BC-002"
       name: "run（実行管理コンテキスト）"
@@ -274,7 +278,7 @@ system_architecture:
   tiers:
     - id: "tier-cli"
       name: "CLI 本体（stfw コマンド）"
-      description: "Go 単一バイナリの CLI。presentation〜gateway の 5 層と実行エンジン（内蔵ランナー）を内包し、init / new / validate / run / status / report / inventory / secret / ssh / plugin の各コマンドを提供する"
+      description: "Go 単一バイナリの CLI。presentation〜gateway の 5 層と実行エンジン（内蔵ランナー）を内包し、init / new / scaffold / validate / run / status / report / inventory / secret / ssh / plugin / scenario の各コマンドを提供する"
       technology_candidates:
         - "CLI（単一バイナリ配布・ランタイム依存なし）"
         - "内蔵実行エンジン（木構造の逐次実行 + parallel 子プロセス並走）"
@@ -310,6 +314,12 @@ system_architecture:
           reason: "実行結果の唯一のソースをジャーナルに一元化し、障害検知・失敗調査の起点を単純化するため"
           source_model: "情報: 実行ジャーナル（journal.jsonl）, アクター: テスト結果確認者, NFR C.3.1.1"
           confidence: "user"
+        - id: "SP-006"
+          name: "シナリオ構造の spec / doc 往復（単一ファイル運用）"
+          description: "stfw scenario reverse がシナリオツリー（規約ベースの記述 = 正）から機械可読な spec（<name>.yml）と人間可読なドキュメント（<name>.md。各プロセスの group / type / description・要求トレーサビリティ・config サブツリーの表形式）を既定出力先 docs/ へセット生成し、stfw scaffold <spec.yml> が spec からツリー骨格（scenario > bizdate > process のディレクトリ・metadata.yml・config）を生成・差分同期する。シナリオ構造を単一ファイルでレビュー・共有・版管理・移送し、そこからツリーを再生成できるようにする"
+          reason: "情報「シナリオ spec（scenario.yml）」「シナリオドキュメント（scenario.md）」が単一ファイルでの版管理・移送・レビューを目的とするため（実装・リリース済み機能の反映。実装契約の正本は AS-BUILT §12）"
+          source_model: "情報: シナリオ spec（scenario.yml）, シナリオドキュメント（scenario.md）, メタ情報（metadata.yml）, BUC: テストシナリオ作成フロー"
+          confidence: "high"
       rules:
         - id: "SR-001"
           name: "run_id の採番・保持"
@@ -353,9 +363,57 @@ system_architecture:
           reason: "条件「parallel 子プロセスの並走実行」に順序依存の無い処理の実行時間短縮の要求があるため（v1.5.0 で実装・リリース済み機能の反映。実装契約の正本は AS-BUILT §4.14）"
           source_model: "条件: parallel 子プロセスの並走実行, バリエーション: parallel 同時実行数設定, プロセスタイプ, 状態モデル「ステップ実行ステータス」, BUC: シナリオ一括自動実行フロー"
           confidence: "user"
+        - id: "SR-008"
+          name: "実行ステータスと終了コードの集約"
+          description: "上位階層（process / bizdate / scenario / run）の実行ステータスは、配下の実行ステータスを Error > Warn > Success の優先度で集約して確定する（子に Warn があれば親も Warn、子に Error があれば親は Error）。stfw run の終了コードは全 Success = 0 / Warn あり（Error なし）= 3 / Error あり = 6 とし、CI は stfw run の終了コードだけで「差分あり（Warn）」を検知できる"
+          reason: "Warn を一級実行ステータスとして全階層に伝搬させ、差分発生（比較 NG 等）の検知を階層単位・終了コードで可能にするため（実装契約の正本は AS-BUILT §4.6）"
+          source_model: "条件: 実行ステータス集約（Error > Warn > Success）, run 終了コードの集約（0/3/6）, 状態モデル「階層実行ステータス」, 状態モデル「ステップ実行ステータス」, バリエーション: 終了コード"
+          confidence: "high"
+        - id: "SR-009"
+          name: "Warn ステータスの後方互換"
+          description: "実行ジャーナルの status に Warn を追加しても、旧バージョンの run のジャーナル（Warn なし）と混在した状態で stfw report の再生成・stfw status の表示・stfw run 開始時のハウスキープ（保存期間判定・削除）が壊れないこと"
+          reason: "バージョン更新後も過去の実行結果をそのまま参照・管理できるようにするため（実装契約の正本は AS-BUILT §4.6）"
+          source_model: "条件: Warn ステータスの後方互換（旧ジャーナル混在）, 情報: 実行ジャーナル（journal.jsonl）"
+          confidence: "high"
+        - id: "SR-010"
+          name: "実行結果ハウスキープ"
+          description: "stfw run の開始時に、保存期間（stfw.yml の stfw.housekeep.retention）を過ぎた実行ジャーナル（.stfw/runs/{run_id}）と HTML レポート（.stfw/reports/runs/{run_id}.html）を物理削除し、レポート index を再生成して削除済み run を index に残さない。専用サブコマンド・常駐ジョブは設けず、定期実行が必要な場合は外部スケジューラ（cron 等）から stfw run を回す運用とする（run 都度ハウスキープにより保存期間が実質維持される）。エビデンスは scenario 配下の固定パスで毎回上書きされ累積しないため対象外とする。部分実行で指定ノードが存在しない場合は fail-fast が先行し、ハウスキープは実行しない"
+          reason: "NFR C.6.1.1 ログ保管期間(Lv1) への対応。常駐ジョブなしで実行結果の保存期間を担保するため（実装契約の正本は AS-BUILT §5.6）"
+          source_model: "条件: 実行結果ハウスキープ, バリエーション: 実行結果保存期間設定, 情報: 実行ジャーナル（journal.jsonl）, HTML レポート, NFR C.6.1.1"
+          confidence: "high"
+        - id: "SR-011"
+          name: "部分実行の指定制約"
+          description: "部分実行（--from / --only）の指定パスはシナリオ相対の {bizdate_dir}[/{process_dir}]（ディレクトリ名の完全一致）とする。--from と --only は排他（同時指定はエラー）、空値の明示指定（--from= / --only=）もエラー、部分実行時に run へ指定できるシナリオは 1 つのみ（複数・重複指定はエラー）とし、--dry-run とは併用できる。指定ノードが存在しない場合は run_id の採番・ジャーナル作成・ハウスキープの前に fail-fast でエラー終了する。静的検証（validate 相当・プラグイン requires・接続情報直書き禁止）はフィルタ前のシナリオ全体に実施する（実行範囲の絞り込みは検証範囲を狭めない）。parallel の子プロセスは指定不可（指定できるのは親 parallel プロセスまで）"
+          reason: "誤指定による中途半端な実行と、不要な実行結果の残骸（run_id・ジャーナル）の発生を防ぐため（実装契約の正本は AS-BUILT §3.4）"
+          source_model: "条件: 部分実行の指定制約, run 実行の前提条件, run 前静的検証, バリエーション: 部分実行指定"
+          confidence: "high"
+        - id: "SR-012"
+          name: "部分実行のスキップ意味論"
+          description: "部分実行でスキップされたノードは実行されず、実行ジャーナルへ一切記録されない（node_start / node_end もフックも無い）。実行されるノードの祖先階層のフック（run / scenario / 実行対象を含む bizdate の setup・teardown）は通常どおり実行する。実行ジャーナルの run node_start の attrs に、部分実行時のみ from / only（指定パス）を記録する（部分実行の指定なしの run では記録しない）。スキップしたノードの副作用（データ投入等）の再現はユーザー責務とし、ツールは前提を再現しない"
+          reason: "部分実行の実行範囲・記録の解釈を一意にし、ジャーナルから部分実行であったことを追跡可能にするため（実装契約の正本は AS-BUILT §3.4）"
+          source_model: "条件: 部分実行のスキップ意味論, 情報: 実行ジャーナル（journal.jsonl）, バリエーション: 部分実行指定"
+          confidence: "high"
+        - id: "SR-013"
+          name: "scaffold の差分同期（--sync）"
+          description: "stfw scaffold <spec.yml> [--sync] は spec からディレクトリ骨格（scenario > bizdate > process のディレクトリ・metadata.yml・config）を生成する。既存ツリーが無い場合はそのまま生成し、既存ツリーがある場合 --sync は差分同期（spec に有りツリーに無いディレクトリは追加、両方に有るディレクトリは維持、spec に無くなったディレクトリは削除）を行う。--sync 無しで既存ツリーがある場合はエラー終了する。対話的 scaffold 生成（stfw new）とは別に、spec ファイルを単一ソースとしたツリー生成・差分同期の入口を提供する"
+          reason: "spec ファイルを単一ソースとしてツリーを安全に再生成・同期できるようにするため（実装契約の正本は AS-BUILT §12）"
+          source_model: "条件: scaffold の差分同期（--sync）, 情報: シナリオ spec（scenario.yml）, BUC: テストシナリオ作成フロー"
+          confidence: "high"
+        - id: "SR-014"
+          name: "spec / doc 往復の可逆性"
+          description: "reverse → scaffold → reverse は骨格（seq / bizdate / group / type / description / requirement_specifications / config サブツリー）が完全一致する（可逆）。data CSV・テストスクリプト・expect などの葉ファイルは往復の対象外とする"
+          reason: "シナリオ構造を単一ファイルでレビュー・共有し、そこからツリーを再生成できるようにして版管理・移送を容易にするため（実装契約の正本は AS-BUILT §12）"
+          source_model: "条件: spec/doc 往復の可逆性, 情報: シナリオ spec（scenario.yml）, シナリオドキュメント（scenario.md）"
+          confidence: "high"
+        - id: "SR-015"
+          name: "config の ${...} 環境変数展開"
+          description: "プラグイン / プロセスの config チェーン（プラグイン既定 → プロジェクト config/plugins/process/{type}/ → プロセス config/config.yml）の値中の ${VAR} は、実行環境の環境変数を参照して展開する。stfw run 開始時に stfw.yml（+ 同梱デフォルト）のフラット化結果を実行環境へ export する（v0.2 の export_yaml 互換）ため、config から stfw.yml の設定値を ${stfw_...} で参照できる（例: DB 接続先の identity を stfw.yml の stfw.db.database / stfw.db.user に集約し、config から ${stfw_db_database} / ${stfw_db_user} で参照する）。これは共通 identity の集約であって、接続情報（ホスト・パスワード）の config 直書き解禁ではない（接続先ホストは inventory、パスワードは secret から解決する禁止契約を維持する）"
+          reason: "各シナリオのプロセス config には固有値（テーブル名等）だけを書けばよくし、共通設定値の重複記述によるメンテ漏れを防ぐため（実装契約の正本は AS-BUILT §8.2）"
+          source_model: "条件: config の ${...} 環境変数展開（stfw.yml 値参照）, 情報: Process / Plugin 設定（config.yml）, プロジェクト設定（stfw.yml）"
+          confidence: "high"
     - id: "tier-plugin"
       name: "プラグイン実行"
-      description: "プロセスタイプごとの実行方式を提供する拡張ポイント。組込みプラグイン群（収集系・データストア系・検証系・実行系）とプロジェクト側カスタムプラグインの 2 層構造。CLI 本体から外部プロセスとして任意言語スクリプトを起動する"
+      description: "プロセスタイプごとの実行方式を提供する拡張ポイント。組込みプラグイン群（収集系・データストア系・検証系・実行系・リモートアクセス系）とプロジェクト側カスタムプラグインの 2 層構造。CLI 本体から外部プロセスとして任意言語スクリプトを起動する"
       technology_candidates:
         - "外部プロセス実行（任意言語スクリプト・env 注入）"
         - "リモート接続 CLI（ssh / scp）"
@@ -423,6 +481,24 @@ system_architecture:
           reason: "テストの 4 段階構造を明示し、カスタムプラグインの実装指針を与えるため"
           source_model: "バリエーション: プラグインフェーズ, 情報: カスタムプラグイン実装ガイド"
           confidence: "medium"
+        - id: "SR-104"
+          name: "sshExec のリモートスクリプト一括実行"
+          description: "sshExec は自プロセスの scripts/ ディレクトリ配下のスクリプトを、inventory グループで解決した各ホストへ ssh 経由で送り、ファイル名昇順に一括実行する（Act フェーズのリモート実行）。ログインユーザは config.yml（stfw.process.{type} 配下）で指定し、パスワードは secret（age 暗号化）の {host}-{user} を自動参照する（config.yml への直書きは禁止）。SSH ホストキーは ssh trust（known_hosts）の既存機構を利用する。途中のスクリプトがエラー終了した場合は以降のスクリプトを実行せず、リターンコード 6 で即時終了する"
+          reason: "リモートホスト上の一連の操作を既存の inventory / secret / ssh trust 機構に載せて安全に一括実行するため（実装契約の正本は AS-BUILT §4.13）"
+          source_model: "条件: sshExec のリモートスクリプト一括実行, プラグイン接続情報のグループ名参照, バリエーション: プロセスタイプ, 外部システム: テスト対象ホスト群"
+          confidence: "high"
+        - id: "SR-105"
+          name: "scpPut の原子的配置"
+          description: "scpPut は scp でローカルの target/{グループ} 配下のディレクトリ構成を、inventory グループで解決した各ホストへ一括で put する（Arrange フェーズのファイル配置）。グループ毎の配置先ディレクトリを config.yml（stfw.process.{type} 配下）で指定でき、まず一時ディレクトリへ scp put した後に指定した配置先ディレクトリへ mv して原子的に配置する。ログインユーザは config.yml 指定、パスワードは secret（age 暗号化）の {host}-{user} 自動参照（config.yml への直書きは禁止）、SSH ホストキーは ssh trust（known_hosts）の既存機構を利用する"
+          reason: "配置途中の中間状態をテスト対象側から観測させないため（実装契約の正本は AS-BUILT §4.13）"
+          source_model: "条件: scpPut の原子的配置, プラグイン接続情報のグループ名参照, バリエーション: プロセスタイプ, 外部システム: テスト対象ホスト群"
+          confidence: "high"
+        - id: "SR-106"
+          name: "invoke エビデンス HTML レポート生成の優先順"
+          description: "invokeRest / invokeWeb の HTML レポート（{process}/evidence/report.html）生成の優先順は、(1) k6 web dashboard が十分なデータ（テスト実行時間が集計周期の 2 倍以上、実時間およそ 1 秒以上）でレポートを生成した場合はそれを採用、(2) 生成されない場合（単発 Act 等でデータ不足）は summary.json から自己完結の HTML をプラグイン側でフォールバック生成する。k6 が閾値割れ等で失敗してもサマリ（summary.json）が出力されるため report.html は常に残る"
+          reason: "単発 Act から負荷試験まで、invoke 系の実行エビデンスを常に HTML レポートとして残すため（実装契約の正本は AS-BUILT §4.12）"
+          source_model: "条件: invoke エビデンス HTML レポート生成の優先順, 外部システム: grafana k6, 情報: エビデンス, バリエーション: プロセスタイプ"
+          confidence: "high"
     - id: "tier-file-datastore"
       name: "ファイルデータストア"
       description: "プロジェクトディレクトリ配下のファイルベース永続化。外部データストア（RDB / KVS 等）を持たない。実行ジャーナル（追記専用 JSONL）・設定 YAML・age 暗号化ファイル・エビデンス・静的 HTML を保持する"
@@ -655,7 +731,7 @@ app_architecture:
               confidence: "user"
         - id: "L-cli-usecase"
           name: "ユースケース層"
-          responsibility: "ビジネスフロー制御。initialize / scaffold / validate / runscenario / status / report / inventory / secret / sshtrust / plugin の各ユースケース。runscenario が実行オーケストレーション（ツリー走査 → スクリプト実行 → ジャーナル追記 → 投影）を担う"
+          responsibility: "ビジネスフロー制御。initialize / scaffold / validate / runscenario / status / report / inventory / secret / sshtrust / plugin / scenariodoc（spec / doc 生成）の各ユースケース。runscenario が実行オーケストレーション（ツリー走査 → スクリプト実行 → ジャーナル追記 → 投影）を担う"
           allowed_dependencies:
             - "L-cli-domain"
             - "L-cli-repository"
@@ -705,7 +781,7 @@ app_architecture:
               confidence: "user"
         - id: "L-cli-repository"
           name: "リポジトリ層"
-          responsibility: "aggregate root 単位のファイルアクセス抽象（journal / scenariotree / config / secret / inventory / plugin / scaffold / report）。ドメインモデルとファイル表現の相互変換を隠蔽する"
+          responsibility: "aggregate root 単位のファイルアクセス抽象（journal / scenariotree / config / secret / inventory / plugin / scaffold / report / scenariospec / scenariodoc）。ドメインモデルとファイル表現の相互変換を隠蔽する"
           allowed_dependencies:
             - "L-cli-domain"
             - "L-cli-gateway"
@@ -731,7 +807,7 @@ app_architecture:
               confidence: "user"
         - id: "L-cli-gateway"
           name: "ゲートウェイ層"
-          responsibility: "Driven Side の入出力。scriptexec（外部プロセス起動 + env 注入）、otlptrace（OTLP エクスポート）、sshkeyscan（SSH サーバキー取得）、htmlwriter（静的 HTML 書き出し）"
+          responsibility: "Driven Side の入出力。scriptexec（外部プロセス起動 + env 注入）、otlptrace（OTLP エクスポート）、sshkeyscan（SSH サーバキー取得）、htmlwriter（静的 HTML 書き出し）、mdwriter（シナリオドキュメント Markdown 書き出し）"
           allowed_dependencies: []
           policies:
             - id: "LP-006"
@@ -797,7 +873,7 @@ app_architecture:
           U --> D["domain（scenario / run / notify / project・依存ゼロ）"]
           U --> R["repository（journal / scenariotree / config / secret 等）"]
           R --> D
-          R --> G["gateway（scriptexec / otlptrace / sshkeyscan / htmlwriter）"]
+          R --> G["gateway（scriptexec / otlptrace / sshkeyscan / htmlwriter / mdwriter）"]
     - tier_id: "tier-plugin"
       layers:
         - id: "L-plugin-contract"
@@ -1588,6 +1664,69 @@ data_architecture:
         - target_entity: "E-018"
           type: "1:1"
           description: "比較不一致は該当ステップの Error として結果に反映される"
+    - id: "E-026"
+      name: "シナリオ spec（scenario.yml）"
+      source_info: "情報: シナリオ spec（scenario.yml）"
+      model_type: "resource_mutable"
+      attributes:
+        - name: "spec_path"
+          type: "string"
+          description: "spec ファイル（<name>.yml、既定出力先 docs/）"
+          nullable: false
+          primary_key: true
+        - name: "skeleton"
+          type: "text"
+          description: "骨格（seq / bizdate / group / type / description / requirement_specifications / config サブツリー）"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-009"
+          type: "1:1"
+          description: "シナリオツリー（規約ベースの記述 = 正）から stfw scenario reverse で生成され、stfw scaffold でツリー骨格を再生成・差分同期（--sync）する（往復可逆）"
+        - target_entity: "E-014"
+          type: "1:N"
+          description: "骨格に各階層の metadata.yml（description / requirement_specifications）を取り込む"
+        - target_entity: "E-013"
+          type: "1:N"
+          description: "骨格に config サブツリー（config.yml）を取り込む"
+        - target_entity: "E-027"
+          type: "1:1"
+          description: "reverse がセット生成する人間可読ドキュメントと対になる"
+    - id: "E-027"
+      name: "シナリオドキュメント（scenario.md）"
+      source_info: "情報: シナリオドキュメント（scenario.md）"
+      model_type: "resource_mutable"
+      attributes:
+        - name: "doc_path"
+          type: "string"
+          description: "ドキュメントファイル（<name>.md、既定出力先 docs/）"
+          nullable: false
+          primary_key: true
+        - name: "process_table"
+          type: "text"
+          description: "各プロセスの group / type / description（表形式）"
+          nullable: false
+          primary_key: false
+        - name: "requirement_traceability"
+          type: "text"
+          description: "要求トレーサビリティ（metadata.yml の requirement_specifications = どの要求をどの process が検証するか。表形式）"
+          nullable: false
+          primary_key: false
+        - name: "config_table"
+          type: "text"
+          description: "config サブツリー（表形式）"
+          nullable: false
+          primary_key: false
+      relationships:
+        - target_entity: "E-009"
+          type: "1:1"
+          description: "シナリオ構造を単一ファイルでレビュー・共有するための人間可読ドキュメント"
+        - target_entity: "E-026"
+          type: "1:1"
+          description: "stfw scenario reverse が spec とセットで生成する"
+        - target_entity: "E-014"
+          type: "1:N"
+          description: "metadata.yml の requirement_specifications を要求トレーサビリティ表として出力する"
   storage_mapping:
     - entity_id: "E-001"
       storage_type: "file"
@@ -1689,6 +1828,14 @@ data_architecture:
       storage_type: "file"
       reason: "result / actual ディレクトリ（gitignore 対象の派生データ）"
       confidence: "high"
+    - entity_id: "E-026"
+      storage_type: "file"
+      reason: "docs/ 配下の YAML ファイル（ツリーからの生成物。版管理・移送対象）"
+      confidence: "high"
+    - entity_id: "E-027"
+      storage_type: "file"
+      reason: "docs/ 配下の Markdown ファイル（ツリーからの生成物。レビュー・共有対象）"
+      confidence: "high"
   diagram_mermaid: |
     erDiagram
       STFW_HONTAI ||--o{ PLUGIN : bundles
@@ -1707,6 +1854,9 @@ data_architecture:
       PROCESS ||--|| CONFIG_YML : configured_by
       PROCESS }o--|| PLUGIN : executed_by
       SCENARIO ||--o{ METADATA : described_by
+      SCENARIO ||--o| SCENARIO_SPEC : reversed_to
+      SCENARIO ||--o| SCENARIO_DOC : documented_as
+      SCENARIO_SPEC ||--|| SCENARIO_DOC : paired_with
       RUN }o--o{ SCENARIO : executes
       RUN ||--|| JOURNAL : records
       RUN ||--o{ RUN_CONTEXT : holds

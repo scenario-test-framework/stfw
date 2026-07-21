@@ -1,0 +1,41 @@
+schema_version: "1.0"
+artifact_type: "decision_record"
+skill_type: "architecture"
+artifact_id: "arch-decision-014"
+title: "DIST-004: arch 未追従 RDRA 要素 14 件は構造不変のまま SP/SR/情報モデル追加で反映"
+status: "approved"
+generated_at: "2026-07-22T02:58:55"
+context: |
+  前イベント（arch:20260721_212545）の coverage 再生成で、arch 未更新のまま RDRA だけ先行した過去イベント
+  （20260709 remote_housekeep / 20260711 spec_roundtrip_invoke_config / 20260712 warn_first_class_status /
+  20260713 partial_run）由来の未カバー 14 要素（情報 2 件 + 条件 12 件）が顕在化した（RDRA 網羅率 84%）。
+  該当機能はすべて実装・リリース済みで、実装契約の正本は docs/AS-BUILT.md（§3.4 / §4.6 / §4.12 / §4.13 /
+  §5.6 / §8.2 / §12）。設計ドキュメント側だけが未追従という状態であった。
+  BC-001（scenario コンテキスト）は confidence: user のユーザー確定項目であり、差分更新での上書きは
+  イベントソーシングルールで保護されている。一方、RDRA 情報.tsv は新情報 2 件（シナリオ spec / ドキュメント）
+  のコンテキストを「シナリオ構造管理」と確定しており、割当を放置すると RDRA（上流の正本）と矛盾する。
+decision: |
+  (1) アーキテクチャの構造（ティア 5・レイヤー・BC 4・集約仮説 3）は変えず、tier-cli に SP-006 +
+  SR-008〜SR-015、tier-plugin に SR-104〜SR-106 を新規 ID で追加して条件 12 件をカバーする。
+  既存の user 確定 SP/SR/CTP/CTR は一切書き換えない。
+  (2) 情報 2 件は data_architecture のエンティティ E-026 / E-027（storage: file）として追加し、
+  SP-006（spec / doc 往復の方針）から参照する。
+  (3) BC-001 の owned_entity_ids へは E-026 / E-027 を「追記のみ」行う（既存の確定内容・語彙・境界は不変、
+  confidence: user 維持）。これは上書きではなく、RDRA のコンテキスト割当（シナリオ構造管理）への追従である。
+  (4) 追加項目の confidence は high とする（実装・リリース済みかつ AS-BUILT 文書化済みの事実の反映であり、
+  本イベントで個別のユーザー確認対話は経ていないため user とはしない）。
+consequences:
+  positive:
+    - "RDRA 網羅率が 84%（73/87）→ 100%（87/87）になり、設計と要件のトレーサビリティが回復する"
+    - "NFR 網羅率 100%・BC への entity 割当率 100% を維持したまま、構造変更ゼロ・実装変更ゼロで反映できる"
+    - "AS-BUILT（実装契約）と arch（設計）の対応が SP/SR の source_model・reason に明示され、往復参照できる"
+  negative:
+    - "tier-cli の rules が 15 件に増え、粒度の細かい実装契約が設計文書に載る（詳細の二重管理リスク。正本は AS-BUILT のまま）"
+    - "BC-001（confidence: user）への追記はユーザー確定項目の変更保護の例外運用であり、_changes.md への明記で追跡性を担保する必要がある"
+alternatives_considered:
+  - name: "既存の user 確定 SP/SR の source_model に未カバー要素名を追記して網羅する"
+    reason_rejected: "最小差分に見えるが、ユーザー確定項目の書き換えになりイベントソーシングの保護ルールに反する。また 1 項目に無関係な根拠が集積し、方針・規則の意味が薄まる"
+  - name: "spec/doc 変換を独立レイヤーまたは BC として切り出す構造変更"
+    reason_rejected: "DIST-004 のスコープ（SP/SR/情報モデルの追加・改訂のみ。構造変更・実装変更は不要）を超える。実装も usecase(scenariodoc) + repository(scenariospec/scenariodoc) で既存 5 層に収まっている"
+  - name: "E-026 / E-027 を BC 未割当のまま追加する（BC-001 に触れない）"
+    reason_rejected: "RDRA 情報.tsv のコンテキスト割当（シナリオ構造管理）と矛盾し、BC への entity 割当率が 100% から低下する。追記のみで既存確定内容を変えないため、割当追従を採用"

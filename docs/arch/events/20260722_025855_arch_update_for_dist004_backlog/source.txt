@@ -1,0 +1,13 @@
+DIST-004（docs/todo.md）: arch 未追従の RDRA 要素 14 件の反映。
+
+前イベント（arch:20260721_212545）の coverage 再生成で、arch 未更新のまま RDRA だけ先行した
+過去イベント（20260709_071603_remote_housekeep / 20260711_041310_spec_roundtrip_invoke_config /
+20260712_015850_warn_first_class_status / 20260713_130252_partial_run）由来の未カバー 14 要素
+（情報 2 件 + 条件 12 件）が顕在化した（RDRA 網羅率 84%）。
+
+実装はすべて実装・リリース済みで、実装契約の正本は docs/AS-BUILT.md
+（§3.4 部分実行 / §4.6 ステータス集約・終了コード・Warn 後方互換 / §4.12 invoke HTML レポート /
+§4.13 sshExec・scpPut / §5.6 ハウスキープ / §8.2 config の ${...} 展開 / §12 spec/doc 往復・scaffold --sync）。
+
+アーキテクチャの構造（ティア・レイヤー・BC・集約）は変えず、SP / SR / 情報モデル（エンティティ）の
+追加・追記のみで 14 要素をカバーする。
