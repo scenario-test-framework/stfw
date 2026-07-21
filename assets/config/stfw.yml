@@ -9,3 +9,8 @@ stfw:
   # stfw run の開始時に、保存日数を過ぎた実行結果を物理削除する。0 で無効 (無期限保存)。
   housekeep:
     retention_days: 0
+
+  # 組込み parallel プロセスの同時実行数の上限。0 = 上限なし。
+  process:
+    parallel:
+      max_parallel: 0

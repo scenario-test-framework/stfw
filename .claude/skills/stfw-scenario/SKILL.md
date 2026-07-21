@@ -89,6 +89,9 @@ scenario/{name}/
 
 - **プラグイン選定**: まず組込み (GUIDE §2 の一覧) で組む。組込みで表現できない処理
   (SUT 固有の業務日付更新、独自プロトコルなど) だけカスタムプラグインにする。
+- **並走の検討**: 互いに独立なプロセス (FK 依存の無い投入、複数 DB / 複数ホストからの収集など) は
+  組込み `parallel` の子 (`_{seq}_{group}_parallel/` 配下に `_{seq}_{group}_{type}`) として並走できる。
+  依存があるものは従来どおり seq の逐次に置く (実例: examples/daily-balance の `_15_arrange_parallel`)。
 - **inventory グループ設計**: プラグインの `host_group` から逆算 (例: `db` / `api` / `batch`)。
 - **secret 一覧**: `{host}-{user}` のペアを列挙 (DB 接続、SSH 接続)。
 - **compare の運用**: 回帰テスト (差分で停止 = `on_mismatch: error` 既定) か、

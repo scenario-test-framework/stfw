@@ -1,0 +1,95 @@
+# STEP: parallel の worse-wins 集約 (AS-BUILT §4.14)
+# 子に Warn (exit 3) と Error (exit 6) が混在する場合、全子を最後まで実行した上で
+# 親は Error になる。親が Error のため後続の兄弟プロセスは実行されない。
+
+chmod 755 plugins/process/warnproc/bin/install/is_installed
+chmod 755 plugins/process/warnproc/bin/run/pre_execute
+chmod 755 plugins/process/warnproc/bin/run/execute
+chmod 755 plugins/process/warnproc/bin/run/post_execute
+chmod 755 plugins/process/errproc/bin/install/is_installed
+chmod 755 plugins/process/errproc/bin/run/pre_execute
+chmod 755 plugins/process/errproc/bin/run/execute
+chmod 755 plugins/process/errproc/bin/run/post_execute
+
+# run は Error で完走し exit 6
+execcode 6 stfw run demo
+
+# 先行子の Error に関わらず、全子が実行されている (子同士に Blocked は無い)
+exists warn.ran
+exists err.ran
+
+# 後続の兄弟プロセスは実行されない (親 Error → 停止)
+! exists after.ran
+
+exec stfw status
+stdout '\nrun \[Error\]'
+stdout '\n      _10_par_parallel \[Error\]'
+stdout '\n        - _10_a_warnproc \[Warn\]'
+stdout '\n        - _20_b_errproc \[Error\]'
+! stdout '_20_x_scripts'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  timezone: "Asia/Tokyo"
+-- scenario/demo/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_par_parallel/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_par_parallel/config/config.yml --
+stfw:
+  process:
+    parallel: {}
+-- scenario/demo/_10_99990101/_10_par_parallel/_10_a_warnproc/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_par_parallel/_10_a_warnproc/config/config.yml --
+stfw:
+  process:
+    warnproc: {}
+-- scenario/demo/_10_99990101/_10_par_parallel/_20_b_errproc/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_par_parallel/_20_b_errproc/config/config.yml --
+stfw:
+  process:
+    errproc: {}
+-- scenario/demo/_10_99990101/_20_x_scripts/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_20_x_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/demo/_10_99990101/_20_x_scripts/scripts/100_after --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/after.ran"
+exit 0
+-- plugins/process/warnproc/bin/install/is_installed --
+#!/bin/bash
+echo "true"
+exit 0
+-- plugins/process/warnproc/bin/run/pre_execute --
+#!/bin/bash
+exit 0
+-- plugins/process/warnproc/bin/run/execute --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/warn.ran"
+exit 3
+-- plugins/process/warnproc/bin/run/post_execute --
+#!/bin/bash
+exit 0
+-- plugins/process/errproc/bin/install/is_installed --
+#!/bin/bash
+echo "true"
+exit 0
+-- plugins/process/errproc/bin/run/pre_execute --
+#!/bin/bash
+exit 0
+-- plugins/process/errproc/bin/run/execute --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/err.ran"
+exit 6
+-- plugins/process/errproc/bin/run/post_execute --
+#!/bin/bash
+exit 0

@@ -26,10 +26,11 @@ type DocBizdate struct {
 // DocProcess は doc 上のプロセス 1 行 / 1 節分のデータ。
 type DocProcess struct {
 	SeqLabel                  string // "_" + seq (プロセス一覧表の # 列)
-	DirName                   string
+	DirName                   string // 子プロセスは "{親 dir}/{子 dir}" の連結表示 (repository が組み立てる)
 	Group                     string // ディレクトリ名 `_{seq}_{group}_{type}` の group 部 (作者が宣言した確定値)
 	Type                      string
 	Description               string // 1 行 (説明の先頭行。テーブルセルが改行で壊れないよう畳む)
 	RequirementSpecifications []string
-	ConfigYAML                string // config/config.yml の stfw.process.{type} サブツリー。空なら「設定」節を省略
+	ConfigYAML                string       // config/config.yml の stfw.process.{type} サブツリー。空なら「設定」節を省略
+	Children                  []DocProcess // parallel タイプのみ持てる子プロセス (AS-BUILT §4.14)
 }

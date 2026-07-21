@@ -54,6 +54,7 @@ stfw_plugin_cache_dir=PROJ_DIR/.stfw/cache/plugins/scripts
 stfw_process_dir=PROJ_DIR/scenario/envtest/_10_99990101/_10_pre_scripts
 stfw_process_dirname=_10_pre_scripts
 stfw_process_group=pre
+stfw_process_parallel_max_parallel=0
 stfw_process_scripts_some_key=env-contract
 stfw_process_seq=10
 stfw_process_type=scripts

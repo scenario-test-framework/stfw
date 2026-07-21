@@ -2,6 +2,7 @@ package runscenario
 
 import (
 	"fmt"
+	"io"
 	"path/filepath"
 	"strconv"
 
@@ -40,7 +41,7 @@ func (r *runner) runProcess(parent run.NodeID, bizdateDir string, view scenario.
 	env["stfw_process_seq"] = view.Seq
 	env["stfw_process_group"] = view.Group
 
-	status, err := r.execProcess(nodeID, processDir, view.ProcessType, env)
+	status, err := r.execProcess(nodeID, processDir, view, env)
 	if err != nil {
 		return "", err
 	}
@@ -51,9 +52,9 @@ func (r *runner) runProcess(parent run.NodeID, bizdateDir string, view scenario.
 }
 
 // execProcess はプロセスの実体を実行し、階層ステータスを返す。
-func (r *runner) execProcess(nodeID run.NodeID, processDir, processType string, env map[string]string) (run.NodeStatus, error) {
+func (r *runner) execProcess(nodeID run.NodeID, processDir string, view scenario.ProcessView, env map[string]string) (run.NodeStatus, error) {
 	// プラグイン解決 (プロジェクト plugins/ → 同梱の順)
-	loc, err := repository.ResolveProcessPlugin(r.projDir, processType)
+	loc, err := repository.ResolveProcessPlugin(r.projDir, view.ProcessType)
 	if err != nil {
 		r.log.Error(err.Error())
 		return run.NodeError, nil
@@ -61,7 +62,7 @@ func (r *runner) execProcess(nodeID run.NodeID, processDir, processType string, 
 
 	// プラグイン設定 (config.yml の上書きチェーン) を env へ注入
 	// (v0.2 の export_config + scripts プラグイン execute の export_yaml 相当)
-	confEnv, err := repository.ProcessConfigEnv(r.projDir, loc, processType, processDir)
+	confEnv, err := repository.ProcessConfigEnv(r.projDir, loc, view.ProcessType, processDir)
 	if err != nil {
 		r.log.Error(err.Error())
 		return run.NodeError, nil
@@ -71,10 +72,13 @@ func (r *runner) execProcess(nodeID run.NodeID, processDir, processType string, 
 	}
 	// プラグインが install でプロビジョニングした資産の永続キャッシュ
 	// (collectLog の logfilter バイナリ等) を実行時にも参照できるようにする。
-	env["stfw_plugin_cache_dir"] = repository.PluginCacheDir(r.projDir, processType)
+	env["stfw_plugin_cache_dir"] = repository.PluginCacheDir(r.projDir, view.ProcessType)
 
-	if loc.Embedded && processType == scriptsPluginType {
+	if loc.Embedded && view.ProcessType == scriptsPluginType {
 		return r.runScriptsProcess(nodeID, processDir, env)
+	}
+	if loc.Embedded && view.ProcessType == scenario.ParallelProcessType {
+		return r.runParallelProcess(nodeID, processDir, view, env)
 	}
 	return r.runPluginProcess(processDir, loc, env)
 }
@@ -200,6 +204,17 @@ func (r *runner) runPluginProcess(processDir string, loc repository.PluginLocati
 		return run.NodeError, nil
 	}
 
+	status := r.execPluginPhases(processDir, pluginDir, env, r.out, r.errOut)
+
+	r.runProcessTeardown(processDir, status, env)
+	return status, nil
+}
+
+// execPluginPhases は exec 契約のフェーズ (pre_execute → execute → post_execute) を
+// 実行し、階層ステータスを返す。dry-run 時は pre_execute のみ実行する。
+// 通常プロセス (runPluginProcess) と parallel の子 (execChildProcess) が共用する。
+func (r *runner) execPluginPhases(processDir, pluginDir string, env map[string]string, out, errOut io.Writer) run.NodeStatus {
+	envList := envList(env)
 	status := run.NodeSuccess
 	phases := []string{"pre_execute"}
 	if !r.dryRun {
@@ -207,13 +222,13 @@ func (r *runner) runPluginProcess(processDir string, loc repository.PluginLocati
 	}
 	for _, phase := range phases {
 		script := filepath.Join(pluginDir, "bin", "run", phase)
-		r.log.Info("process phase start", "phase", phase)
-		code, err := gateway.RunScript(processDir, script, envList, r.out, r.errOut)
+		r.log.Info("process phase start", "phase", phase, "process_dir", filepath.Base(processDir))
+		code, err := gateway.RunScript(processDir, script, envList, out, errOut)
 		if err != nil {
 			r.log.Error(err.Error())
 			code = run.ExitError.Int()
 		}
-		r.log.Info("process phase end", "phase", phase, "exit_code", code)
+		r.log.Info("process phase end", "phase", phase, "process_dir", filepath.Base(processDir), "exit_code", code)
 		// exit 3 は Warn として記録して後続フェーズを続行する (AS-BUILT §4.6)
 		if code == run.ExitWarn.Int() {
 			status = run.NodeWarn
@@ -224,9 +239,7 @@ func (r *runner) runPluginProcess(processDir string, loc repository.PluginLocati
 			break
 		}
 	}
-
-	r.runProcessTeardown(processDir, status, env)
-	return status, nil
+	return status
 }
 
 // runProcessTeardown はプロセスの teardown フックを実行する。

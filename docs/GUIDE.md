@@ -42,6 +42,7 @@ scenario/{シナリオ}/_{seq}_{bizdate}/_{seq}_{group}_{type}/
 | | `exportMysql` / `exportPostgres` / `exportRedis` | データストアの内容を CSV エビデンス化 |
 | Assert | `compare` | 期待値（expect/）と収集結果（actual/）を突合 |
 | （汎用） | `scripts` | 任意言語の実行可能ファイルを昇順実行 |
+| （汎用） | `parallel` | 配下に定義した子プロセス（`_{seq}_{group}_{type}`）を並走。親のステータスは全子の悪い方。同時実行数は `max_parallel`（0=上限なし）で制御 |
 
 > プロセスは `setup → pre_execute → execute → post_execute → teardown` の順で実行され、
 > Error（exit 6 等の非 0・非 3）で後続はブロックされシナリオは失敗します。
@@ -55,8 +56,9 @@ scenario/{シナリオ}/_{seq}_{bizdate}/_{seq}_{group}_{type}/
 scenario/daily-balance/
 ├── _010_20240101/                    # データ準備 (取引は流さない)
 │   ├── _10_arrange_clearPostgres/    # Arrange: 全行削除
-│   ├── _15_arrange_importMasterData/ # Arrange: 共通マスタ投入 (カスタム)
-│   └── _20_arrange_importPostgres/   # Arrange: 初期残高を投入
+│   └── _15_arrange_parallel/         # Arrange: 独立な投入 2 つを並走 (組込み parallel)
+│       ├── _10_master_importMasterData/  #   子: 共通マスタ投入 (カスタム)
+│       └── _20_balance_importPostgres/   #   子: 初期残高を投入
 │       └── data/appdb/accounts.csv
 ├── _020_20240101/                    # Day1
 │   ├── _10_arrange_updateBizdate/    # Arrange: SUT の業務日付を 20240101 へ (カスタム)
@@ -100,7 +102,7 @@ stfw:
 ```
 
 ```yaml
-# _20_arrange_importPostgres/config/config.yml — プロセスは差分のみ
+# _15_arrange_parallel/_20_balance_importPostgres/config/config.yml — プロセスは差分のみ
 stfw:
   process:
     importPostgres:

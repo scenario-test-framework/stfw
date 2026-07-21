@@ -133,7 +133,7 @@ func ScaffoldFromSpec(log *slog.Logger, out io.Writer, projDir string, spec repo
 
 	// 差分同期: spec に無い bizdate/process ディレクトリを削除する (追加・上書きの後に実施)。
 	if sync && existed {
-		removed, err := repository.PruneScenarioTree(scenarioDir, keptBizdateDirs(plan), keptProcessDirs(plan))
+		removed, err := repository.PruneScenarioTree(scenarioDir, keptBizdateDirs(plan), keptProcessDirs(plan), keptChildDirs(plan))
 		if err != nil {
 			return fmt.Errorf("scenario scaffold sync: %w", err)
 		}
@@ -167,6 +167,28 @@ func keptProcessDirs(plan specPlan) map[string]map[string]bool {
 	return kept
 }
 
+// keptChildDirs は plan の各 parallel process 配下で残す子ディレクトリ名の集合を返す。
+// parallel タイプの process のみキーを持つ (非 parallel の配下は prune 対象外)。
+func keptChildDirs(plan specPlan) map[string]map[string]map[string]bool {
+	kept := make(map[string]map[string]map[string]bool, len(plan.bizdates))
+	for _, b := range plan.bizdates {
+		for _, p := range b.processes {
+			if p.processType != scenario.ParallelProcessType {
+				continue
+			}
+			cs := make(map[string]bool, len(p.children))
+			for _, c := range p.children {
+				cs[c.dirName] = true
+			}
+			if kept[b.dirName] == nil {
+				kept[b.dirName] = map[string]map[string]bool{}
+			}
+			kept[b.dirName][p.dirName] = cs
+		}
+	}
+	return kept
+}
+
 // specPlan は spec を検証済みのディレクトリ名へ変換した中間表現。
 // 書き込み前に spec 全体を検証しきることで、途中で VO 検証エラーになった場合の
 // 部分書き込みを避ける。
@@ -187,6 +209,7 @@ type specProcessPlan struct {
 	processType string
 	meta        repository.Metadata
 	config      map[string]any
+	children    []specProcessPlan // parallel タイプのみ持てる子プロセス (AS-BUILT §4.14)
 }
 
 // planFromSpec は spec を検証し specPlan を組み立てる。
@@ -234,36 +257,68 @@ func planFromSpec(spec repository.ScenarioSpec) (specPlan, error) {
 
 		seenProcessDirs := map[string]bool{}
 		for _, p := range b.Processes {
-			pSeq, err := scenario.NewSeq(p.Seq)
+			pPlan, err := planProcessFromSpec(p, true)
 			if err != nil {
 				return specPlan{}, err
 			}
-			group, err := scenario.NewGroup(p.Group)
-			if err != nil {
-				return specPlan{}, err
+			if seenProcessDirs[pPlan.dirName] {
+				return specPlan{}, fmt.Errorf("duplicate process directory: %s in %s", pPlan.dirName, bDirName)
 			}
-			if err := scenario.ValidateProcessType(p.Type); err != nil {
-				return specPlan{}, err
-			}
-			pDirName := scenario.ProcessDirName(pSeq, group, p.Type)
-			if seenProcessDirs[pDirName] {
-				return specPlan{}, fmt.Errorf("duplicate process directory: %s in %s", pDirName, bDirName)
-			}
-			seenProcessDirs[pDirName] = true
-
-			bPlan.processes = append(bPlan.processes, specProcessPlan{
-				dirName:     pDirName,
-				processType: p.Type,
-				meta: repository.Metadata{
-					Description:               p.Description,
-					RequirementSpecifications: p.RequirementSpecifications,
-				},
-				config: p.Config,
-			})
+			seenProcessDirs[pPlan.dirName] = true
+			bPlan.processes = append(bPlan.processes, pPlan)
 		}
 		plan.bizdates = append(plan.bizdates, bPlan)
 	}
 	return plan, nil
+}
+
+// planProcessFromSpec はプロセス 1 件の spec を検証し specProcessPlan を組み立てる。
+// 子プロセス (processes) は parallel タイプのみ持てる (AS-BUILT §4.14):
+// 非 parallel の子指定・子への入れ子はエラーにする。
+func planProcessFromSpec(p repository.ProcessSpec, allowChildren bool) (specProcessPlan, error) {
+	pSeq, err := scenario.NewSeq(p.Seq)
+	if err != nil {
+		return specProcessPlan{}, err
+	}
+	group, err := scenario.NewGroup(p.Group)
+	if err != nil {
+		return specProcessPlan{}, err
+	}
+	if err := scenario.ValidateProcessType(p.Type); err != nil {
+		return specProcessPlan{}, err
+	}
+	pDirName := scenario.ProcessDirName(pSeq, group, p.Type)
+	pPlan := specProcessPlan{
+		dirName:     pDirName,
+		processType: p.Type,
+		meta: repository.Metadata{
+			Description:               p.Description,
+			RequirementSpecifications: p.RequirementSpecifications,
+		},
+		config: p.Config,
+	}
+
+	if len(p.Processes) > 0 {
+		if !allowChildren || p.Type != scenario.ParallelProcessType {
+			return specProcessPlan{}, fmt.Errorf("process %s: processes is only allowed for type %q", pDirName, scenario.ParallelProcessType)
+		}
+		seenChildDirs := map[string]bool{}
+		for _, c := range p.Processes {
+			cPlan, err := planProcessFromSpec(c, false)
+			if err != nil {
+				return specProcessPlan{}, err
+			}
+			if cPlan.processType == scenario.ParallelProcessType {
+				return specProcessPlan{}, fmt.Errorf("process %s: parallel process can not be nested", pDirName)
+			}
+			if seenChildDirs[cPlan.dirName] {
+				return specProcessPlan{}, fmt.Errorf("duplicate process directory: %s in %s", cPlan.dirName, pDirName)
+			}
+			seenChildDirs[cPlan.dirName] = true
+			pPlan.children = append(pPlan.children, cPlan)
+		}
+	}
+	return pPlan, nil
 }
 
 // writeSpecPlan は検証済みの specPlan をディスクへ書き出す。
@@ -284,18 +339,36 @@ func writeSpecPlan(scenarioDir string, plan specPlan) ([]string, error) {
 		created = append(created, filepath.Join(bDir, "metadata.yml"))
 
 		for _, p := range b.processes {
-			pDir := filepath.Join(bDir, p.dirName)
-			if err := repository.CreateSpecNode(pDir, p.meta); err != nil {
+			pCreated, err := writeProcessPlan(filepath.Join(bDir, p.dirName), p)
+			if err != nil {
 				return nil, err
 			}
-			if err := repository.WriteProcessConfig(pDir, p.processType, p.config); err != nil {
-				return nil, err
-			}
-			created = append(created, filepath.Join(pDir, "metadata.yml"), filepath.Join(pDir, "config", "config.yml"))
+			created = append(created, pCreated...)
 		}
 	}
 
 	sort.Strings(created)
+	return created, nil
+}
+
+// writeProcessPlan はプロセス 1 件 (parallel の場合は子を含む) をディスクへ書き出す。
+func writeProcessPlan(pDir string, p specProcessPlan) ([]string, error) {
+	var created []string
+	if err := repository.CreateSpecNode(pDir, p.meta); err != nil {
+		return nil, err
+	}
+	if err := repository.WriteProcessConfig(pDir, p.processType, p.config); err != nil {
+		return nil, err
+	}
+	created = append(created, filepath.Join(pDir, "metadata.yml"), filepath.Join(pDir, "config", "config.yml"))
+
+	for _, c := range p.children {
+		cCreated, err := writeProcessPlan(filepath.Join(pDir, c.dirName), c)
+		if err != nil {
+			return nil, err
+		}
+		created = append(created, cCreated...)
+	}
 	return created, nil
 }
 

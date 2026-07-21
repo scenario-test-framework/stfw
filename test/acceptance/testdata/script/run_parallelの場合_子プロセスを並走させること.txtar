@@ -1,0 +1,117 @@
+# STEP: 組込み parallel タイプの並走実行 (AS-BUILT §4.14)
+# 2 つの子が互いのマーカーを待ち合うため、並走していなければタイムアウトで失敗する。
+# 子はステップとして記録され、stfw_process_dir が子を指す (evidence の分離)。
+
+chmod 755 plugins/process/childa/bin/install/is_installed
+chmod 755 plugins/process/childa/bin/run/pre_execute
+chmod 755 plugins/process/childa/bin/run/execute
+chmod 755 plugins/process/childa/bin/run/post_execute
+chmod 755 plugins/process/childb/bin/install/is_installed
+chmod 755 plugins/process/childb/bin/run/pre_execute
+chmod 755 plugins/process/childb/bin/run/execute
+chmod 755 plugins/process/childb/bin/run/post_execute
+
+exec stfw run demo
+
+# 両方の子が完走している (並走の証跡マーカー)
+exists childa.done
+exists childb.done
+
+# 子の evidence は子ディレクトリ配下に分離される (stfw_process_dir の上書き)
+exists scenario/demo/_10_99990101/_10_par_parallel/_10_a_childa/evidence/out.txt
+grep '_10_a_childa' scenario/demo/_10_99990101/_10_par_parallel/_10_a_childa/evidence/out.txt
+exists scenario/demo/_10_99990101/_10_par_parallel/_20_b_childb/evidence/out.txt
+grep '_20_b_childb' scenario/demo/_10_99990101/_10_par_parallel/_20_b_childb/evidence/out.txt
+
+# 子はステップとして記録され、表示順は seq 昇順で安定する
+exec stfw status
+stdout '\n      _10_par_parallel \[Success\]'
+stdout '\n        - _10_a_childa \[Success\]'
+stdout '\n        - _20_b_childb \[Success\]'
+
+# dry-run では子の pre_execute のみ実行される (execute / post_execute をスキップ)
+rm childa.done
+rm childb.done
+exec stfw run --dry-run demo
+exists childa.pre
+! exists childa.done
+! exists childb.done
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  timezone: "Asia/Tokyo"
+-- scenario/demo/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_par_parallel/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_par_parallel/config/config.yml --
+stfw:
+  process:
+    parallel: {}
+-- scenario/demo/_10_99990101/_10_par_parallel/_10_a_childa/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_par_parallel/_10_a_childa/config/config.yml --
+stfw:
+  process:
+    childa:
+      key: value-a
+-- scenario/demo/_10_99990101/_10_par_parallel/_20_b_childb/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_par_parallel/_20_b_childb/config/config.yml --
+stfw:
+  process:
+    childb:
+      key: value-b
+-- plugins/process/childa/bin/install/is_installed --
+#!/bin/bash
+echo "true"
+exit 0
+-- plugins/process/childa/bin/run/pre_execute --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/childa.pre"
+exit 0
+-- plugins/process/childa/bin/run/execute --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/childa.start"
+for _ in $(seq 1 100); do
+  if [ -f "${STFW_PROJ_DIR}/childb.start" ]; then
+    mkdir -p "${stfw_process_dir}/evidence"
+    echo "${stfw_process_dirname} ${stfw_process_childa_key}" >"${stfw_process_dir}/evidence/out.txt"
+    touch "${STFW_PROJ_DIR}/childa.done"
+    exit 0
+  fi
+  sleep 0.1
+done
+echo "childb did not start concurrently" >&2
+exit 6
+-- plugins/process/childa/bin/run/post_execute --
+#!/bin/bash
+exit 0
+-- plugins/process/childb/bin/install/is_installed --
+#!/bin/bash
+echo "true"
+exit 0
+-- plugins/process/childb/bin/run/pre_execute --
+#!/bin/bash
+exit 0
+-- plugins/process/childb/bin/run/execute --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/childb.start"
+for _ in $(seq 1 100); do
+  if [ -f "${STFW_PROJ_DIR}/childa.start" ]; then
+    mkdir -p "${stfw_process_dir}/evidence"
+    echo "${stfw_process_dirname} ${stfw_process_childb_key}" >"${stfw_process_dir}/evidence/out.txt"
+    touch "${STFW_PROJ_DIR}/childb.done"
+    exit 0
+  fi
+  sleep 0.1
+done
+echo "childa did not start concurrently" >&2
+exit 6
+-- plugins/process/childb/bin/run/post_execute --
+#!/bin/bash
+exit 0

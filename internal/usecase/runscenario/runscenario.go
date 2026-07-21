@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/scenario-test-framework/stfw/internal/domain/run"
@@ -194,12 +195,15 @@ type runner struct {
 	baseEnv  map[string]string
 	notifier *otelNotifier
 	reporter *reporter
+	emitMu   sync.Mutex // 並走する parallel の子からの emit を直列化する (AS-BUILT §4.14)
 }
 
 // emit は生成時検証 (リプレイと同一の状態遷移検証) を通してジャーナルへ追記する。
 // OTLP トレースと HTML レポートはジャーナルイベントの投影のため、追記成功後に
 // 連動させる (投影の失敗はログのみで実行結果へは影響しない)。
 func (r *runner) emit(ev run.Event) error {
+	r.emitMu.Lock()
+	defer r.emitMu.Unlock()
 	if err := r.agg.Apply(ev); err != nil {
 		return err
 	}
@@ -240,12 +244,9 @@ func (r *runner) runRun(runID run.RunID, views []scenario.ScenarioView, names []
 			}
 			// Error 時は後続の兄弟ノードを実行せず停止する。
 			// Warn は記録して続行する (Error > Warn > Success で集約。§4.6)
+			status = run.WorstStatus(status, st)
 			if st == run.NodeError {
-				status = run.NodeError
 				break
-			}
-			if st == run.NodeWarn {
-				status = run.NodeWarn
 			}
 		}
 	}
@@ -287,12 +288,9 @@ func (r *runner) runScenario(parent run.NodeID, view scenario.ScenarioView, pare
 			if err != nil {
 				return "", err
 			}
+			status = run.WorstStatus(status, st)
 			if st == run.NodeError {
-				status = run.NodeError
 				break
-			}
-			if st == run.NodeWarn {
-				status = run.NodeWarn
 			}
 		}
 	}
@@ -343,12 +341,9 @@ func (r *runner) runBizdate(parent run.NodeID, scenarioDir string, view scenario
 			if err != nil {
 				return "", err
 			}
+			status = run.WorstStatus(status, st)
 			if st == run.NodeError {
-				status = run.NodeError
 				break
-			}
-			if st == run.NodeWarn {
-				status = run.NodeWarn
 			}
 		}
 	}

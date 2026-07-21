@@ -1,0 +1,87 @@
+# STEP: parallel の scripts 子の固有挙動 (AS-BUILT §4.14)
+# - 組込み scripts タイプの子は Go ネイティブで実行するが、粒度は「子 1 件 = 1 ステップ」
+#   のため子内スクリプトのステップイベントは記録しない (status に現れない)
+# - 子内は昇順逐次で、Error 後の後続スクリプトは実行しない (blocked はログのみ)
+# - process 階層フック (setup / teardown) は親 parallel で 1 回のみ実行し、子では実行しない
+
+chmod 755 plugins/process/_common/setup/100_hook
+chmod 755 plugins/process/_common/teardown/100_hook
+
+# 子に Warn (exit 3) → Error (exit 6) が混在するため run は exit 6
+execcode 6 stfw run demo
+
+# 子内スクリプトは実行されている (Error 発生までは全て実行)
+exists a100.ran
+exists b100.ran
+exists b200.ran
+
+# Error 後の後続スクリプトは実行されない (ログに blocked として現れる)
+! exists b300.ran
+stderr 'msg="step blocked" process_dir=_20_b_scripts script=300_after'
+
+# process フックは親 parallel で 1 回のみ (子で実行されると行数が増えて不一致になる)
+cmp hooks.log hooks_golden.log
+
+# 子は 1 ステップとして記録され、子内スクリプト名は status に現れない
+exec stfw status
+stdout '\n      _10_par_parallel \[Error\]'
+stdout '\n        - _10_a_scripts \[Success\]'
+stdout '\n        - _20_b_scripts \[Error\]'
+! stdout '- 100_'
+! stdout '- 200_'
+! stdout '- 300_'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  timezone: "Asia/Tokyo"
+-- scenario/demo/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_par_parallel/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_par_parallel/config/config.yml --
+stfw:
+  process:
+    parallel: {}
+-- scenario/demo/_10_99990101/_10_par_parallel/_10_a_scripts/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_par_parallel/_10_a_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/demo/_10_99990101/_10_par_parallel/_10_a_scripts/scripts/100_ok --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/a100.ran"
+exit 0
+-- scenario/demo/_10_99990101/_10_par_parallel/_20_b_scripts/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_par_parallel/_20_b_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/demo/_10_99990101/_10_par_parallel/_20_b_scripts/scripts/100_warn --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/b100.ran"
+exit 3
+-- scenario/demo/_10_99990101/_10_par_parallel/_20_b_scripts/scripts/200_err --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/b200.ran"
+exit 6
+-- scenario/demo/_10_99990101/_10_par_parallel/_20_b_scripts/scripts/300_after --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/b300.ran"
+exit 0
+-- plugins/process/_common/setup/100_hook --
+#!/bin/bash
+echo "setup ${stfw_process_dirname}" >>"${STFW_PROJ_DIR}/hooks.log"
+exit 0
+-- plugins/process/_common/teardown/100_hook --
+#!/bin/bash
+echo "teardown ${stfw_process_dirname} ${stfw_run_status} ${stfw_process_retcode}" >>"${STFW_PROJ_DIR}/hooks.log"
+exit 0
+-- hooks_golden.log --
+setup _10_par_parallel
+teardown _10_par_parallel Error 6

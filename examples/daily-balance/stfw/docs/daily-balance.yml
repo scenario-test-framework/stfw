@@ -27,22 +27,30 @@ bizdates:
                 - users
         - seq: "15"
           group: arrange
-          type: importMasterData
+          type: parallel
           description: |
-            シナリオ共通の口座名義マスタ (users) を投入する (seed)。
-            カスタムプラグイン importMasterData の実装例。共通データ
-            config/plugins/process/importMasterData/data/appdb/users.csv を読み、組込み importPostgres へ委譲する。
-          config:
-            tables:
-                - users
-        - seq: "20"
-          group: arrange
-          type: importPostgres
-          description: |
-            初期残高 CSV (acc-001=1000 / acc-002=2000) を accounts へ投入する (seed)。
-          config:
-            tables:
-                - accounts
+            互いに独立なマスタ投入 (users) と初期残高投入 (accounts) を並走させる (seed)。
+            組込み parallel の実装例: 子プロセスはステップとして記録され、
+            ステータスは全子の悪い方 (Error > Warn > Success) に集約される。
+          processes:
+            - seq: "10"
+              group: master
+              type: importMasterData
+              description: |
+                シナリオ共通の口座名義マスタ (users) を投入する (seed)。
+                カスタムプラグイン importMasterData の実装例。共通データ
+                config/plugins/process/importMasterData/data/appdb/users.csv を読み、組込み importPostgres へ委譲する。
+              config:
+                tables:
+                    - users
+            - seq: "20"
+              group: balance
+              type: importPostgres
+              description: |
+                初期残高 CSV (acc-001=1000 / acc-002=2000) を accounts へ投入する (seed)。
+              config:
+                tables:
+                    - accounts
     - seq: "020"
       bizdate: "20240101"
       description: |

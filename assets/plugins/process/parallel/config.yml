@@ -1,0 +1,11 @@
+stfw:
+  process:
+    # parallel 自体の設定。同時実行数の上限 max_parallel (0 = 上限なし) は
+    # 設定チェーン (stfw.yml の stfw.process.parallel.max_parallel が既定) で解決する。
+    # このプラグイン config.yml で定義すると stfw.yml の既定を上書きしてしまうため、
+    # ここでは定義しない。プロセス単位の制限は各プロセスの config/config.yml に書く:
+    #   stfw:
+    #     process:
+    #       parallel:
+    #         max_parallel: 2
+    parallel: {}

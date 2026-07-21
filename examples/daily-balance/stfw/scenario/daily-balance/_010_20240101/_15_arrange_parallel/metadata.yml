@@ -1,0 +1,6 @@
+description: |
+  互いに独立なマスタ投入 (users) と初期残高投入 (accounts) を並走させる (seed)。
+  組込み parallel の実装例: 子プロセスはステップとして記録され、
+  ステータスは全子の悪い方 (Error > Warn > Success) に集約される。
+
+requirement_specifications:

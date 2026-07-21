@@ -1,0 +1,4 @@
+#!/bin/bash
+# parallel プラグインは Go ネイティブ実行のため前提コマンドはない。
+echo "true"
+exit 0

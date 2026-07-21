@@ -1,0 +1,45 @@
+# STEP: parallel の validate (AS-BUILT §4.14)
+# 入れ子・子 0 件・子の命名違反・子の config 欠落をエラー検出する。
+
+execcode 6 stfw validate
+stdout '\[error\] scenario/demo/_10_99990101/_10_par_parallel/_10_nest_parallel: parallel process can not be nested'
+stdout '\[error\] scenario/demo/_10_99990101/_20_empty_parallel: parallel process must have at least one child process'
+stdout '\[error\] scenario/demo/_10_99990101/_30_bad_parallel/_10_broken: _10_broken is not _\{seq\}_\{group\}_\{type\} format'
+stdout '\[error\] scenario/demo/_10_99990101/_40_noconf_parallel/_10_a_scripts: config/config.yml is not exist'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  timezone: "Asia/Tokyo"
+-- scenario/demo/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_par_parallel/config/config.yml --
+stfw:
+  process:
+    parallel: {}
+-- scenario/demo/_10_99990101/_10_par_parallel/_10_nest_parallel/config/config.yml --
+stfw:
+  process:
+    parallel: {}
+-- scenario/demo/_10_99990101/_20_empty_parallel/config/config.yml --
+stfw:
+  process:
+    parallel: {}
+-- scenario/demo/_10_99990101/_30_bad_parallel/config/config.yml --
+stfw:
+  process:
+    parallel: {}
+-- scenario/demo/_10_99990101/_30_bad_parallel/_10_broken/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/demo/_10_99990101/_40_noconf_parallel/config/config.yml --
+stfw:
+  process:
+    parallel: {}
+-- scenario/demo/_10_99990101/_40_noconf_parallel/_10_a_scripts/scripts/100_step --
+#!/bin/bash
+exit 0

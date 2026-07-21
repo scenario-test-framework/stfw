@@ -29,7 +29,8 @@ type BizdateSpec struct {
 
 // ProcessSpec は spec 内のプロセス 1 件分。Config は config/config.yml の
 // `stfw.process.{type}` サブツリーをそのまま持つ (キー順は Marshal 時に yaml.v3 が
-// 昇順で決定論的に出力する)。
+// 昇順で決定論的に出力する)。Processes は parallel タイプのみ持てる子プロセス
+// (AS-BUILT §4.14。入れ子は禁止)。
 type ProcessSpec struct {
 	Seq                       string         `yaml:"seq"`
 	Group                     string         `yaml:"group"`
@@ -37,6 +38,7 @@ type ProcessSpec struct {
 	Description               string         `yaml:"description"`
 	RequirementSpecifications []string       `yaml:"requirement_specifications,omitempty"`
 	Config                    map[string]any `yaml:"config,omitempty"`
+	Processes                 []ProcessSpec  `yaml:"processes,omitempty"`
 }
 
 // MarshalSpec は ScenarioSpec を決定論的な YAML へ直列化する。
@@ -82,25 +84,41 @@ func BuildSpecFromTree(projDir string, view scenario.ScenarioView) (ScenarioSpec
 		}
 
 		for _, p := range b.Processes {
-			pDir := filepath.Join(bDir, p.DirName)
-			pMeta, err := ReadNodeMetadata(pDir)
+			pSpec, err := buildProcessSpec(filepath.Join(bDir, p.DirName), p)
 			if err != nil {
 				return ScenarioSpec{}, err
 			}
-			cfg, err := ReadProcessConfigSubtree(pDir, p.ProcessType)
-			if err != nil {
-				return ScenarioSpec{}, err
-			}
-			bSpec.Processes = append(bSpec.Processes, ProcessSpec{
-				Seq:                       p.Seq,
-				Group:                     p.Group,
-				Type:                      p.ProcessType,
-				Description:               pMeta.Description,
-				RequirementSpecifications: pMeta.RequirementSpecifications,
-				Config:                    cfg,
-			})
+			bSpec.Processes = append(bSpec.Processes, pSpec)
 		}
 		spec.Bizdates = append(spec.Bizdates, bSpec)
 	}
 	return spec, nil
+}
+
+// buildProcessSpec はプロセス 1 件 (parallel の場合は子を含む) の spec を組み立てる。
+func buildProcessSpec(pDir string, p scenario.ProcessView) (ProcessSpec, error) {
+	pMeta, err := ReadNodeMetadata(pDir)
+	if err != nil {
+		return ProcessSpec{}, err
+	}
+	cfg, err := ReadProcessConfigSubtree(pDir, p.ProcessType)
+	if err != nil {
+		return ProcessSpec{}, err
+	}
+	pSpec := ProcessSpec{
+		Seq:                       p.Seq,
+		Group:                     p.Group,
+		Type:                      p.ProcessType,
+		Description:               pMeta.Description,
+		RequirementSpecifications: pMeta.RequirementSpecifications,
+		Config:                    cfg,
+	}
+	for _, c := range p.Children {
+		cSpec, err := buildProcessSpec(filepath.Join(pDir, c.DirName), c)
+		if err != nil {
+			return ProcessSpec{}, err
+		}
+		pSpec.Processes = append(pSpec.Processes, cSpec)
+	}
+	return pSpec, nil
 }

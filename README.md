@@ -195,6 +195,7 @@ from inventory groups and passwords from secrets; hard-coding them in configurat
 | Phase | Plugin | Description |
 |---|---|---|
 | any | `scripts` | run arbitrary scripts sequentially in ascending order (Go-native) |
+| any | `parallel` | run child processes defined under the process directory concurrently; the parent status is the worst of all children (Go-native) |
 | Arrange | `importMysql` / `importPostgres` / `importRedis` | load data into a datastore from CSV |
 | Arrange | `clearMysql` / `clearPostgres` / `clearRedis` | reset a datastore |
 | Arrange | `scpPut` | place local files on a remote host atomically (scp + atomic rename) |

@@ -1,0 +1,9 @@
+# parallel 自体の設定。max_parallel (0 = 上限なし) はプロジェクト既定 (stfw.yml) を使う。
+# このプロセスだけ同時実行数を制限する場合はここで上書きする:
+#   stfw:
+#     process:
+#       parallel:
+#         max_parallel: 2
+stfw:
+  process:
+    parallel: {}

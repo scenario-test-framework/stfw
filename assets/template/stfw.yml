@@ -17,6 +17,13 @@ stfw:
   housekeep:
     retention_days: 30
 
+  # 組込み parallel プロセスの同時実行数の上限 (プロジェクト既定)。0 = 上限なし。
+  # 特定のプロセスだけ制限する場合は、そのプロセスの config/config.yml の
+  # stfw.process.parallel.max_parallel で上書きします。
+  process:
+    parallel:
+      max_parallel: 0
+
   # OpenTelemetry (実行状況の OTLP トレースエクスポート)
   # 送信先は OTel 標準環境変数 OTEL_EXPORTER_OTLP_ENDPOINT でも指定できます (環境変数が優先)。
   # endpoint と環境変数のどちらも未設定の場合は送信されません。

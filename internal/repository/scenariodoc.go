@@ -38,37 +38,11 @@ func BuildDocFromTree(projDir string, view scenario.ScenarioView) (scenario.DocD
 		docBizdate := scenario.DocBizdate{DirName: b.DirName, Title: title}
 
 		for _, p := range b.Processes {
-			pDir := filepath.Join(bDir, p.DirName)
-			pMeta, err := ReadNodeMetadata(pDir)
+			docProcess, err := buildDocProcess(bDir, b.DirName, "", p, trace)
 			if err != nil {
 				return scenario.DocData{}, err
 			}
-			cfg, err := ReadProcessConfigSubtree(pDir, p.ProcessType)
-			if err != nil {
-				return scenario.DocData{}, err
-			}
-			var cfgYAML string
-			if len(cfg) > 0 {
-				raw, err := yaml.Marshal(cfg)
-				if err != nil {
-					return scenario.DocData{}, err
-				}
-				cfgYAML = strings.TrimRight(string(raw), "\n")
-			}
-
-			docBizdate.Processes = append(docBizdate.Processes, scenario.DocProcess{
-				SeqLabel:                  "_" + p.Seq,
-				DirName:                   p.DirName,
-				Group:                     p.Group,
-				Type:                      p.ProcessType,
-				Description:               firstLine(pMeta.Description),
-				RequirementSpecifications: pMeta.RequirementSpecifications,
-				ConfigYAML:                cfgYAML,
-			})
-
-			for _, req := range pMeta.RequirementSpecifications {
-				trace[req] = append(trace[req], path.Join(b.DirName, p.DirName))
-			}
+			docBizdate.Processes = append(docBizdate.Processes, docProcess)
 		}
 		doc.Bizdates = append(doc.Bizdates, docBizdate)
 	}
@@ -86,6 +60,55 @@ func BuildDocFromTree(projDir string, view scenario.ScenarioView) (scenario.DocD
 	}
 
 	return doc, nil
+}
+
+// buildDocProcess はプロセス 1 件 (parallel の場合は子を含む) の doc データを組み立てる。
+// parentRel は bizdate ディレクトリからの親プロセス相対パス (トップレベルは空)。
+// 子プロセスの表示名は "{親 dir}/{子 dir}" の連結にする。
+func buildDocProcess(bDir, bizdateDirName, parentRel string, p scenario.ProcessView, trace map[string][]string) (scenario.DocProcess, error) {
+	rel := p.DirName
+	if parentRel != "" {
+		rel = path.Join(parentRel, p.DirName)
+	}
+	pDir := filepath.Join(bDir, filepath.FromSlash(rel))
+	pMeta, err := ReadNodeMetadata(pDir)
+	if err != nil {
+		return scenario.DocProcess{}, err
+	}
+	cfg, err := ReadProcessConfigSubtree(pDir, p.ProcessType)
+	if err != nil {
+		return scenario.DocProcess{}, err
+	}
+	var cfgYAML string
+	if len(cfg) > 0 {
+		raw, err := yaml.Marshal(cfg)
+		if err != nil {
+			return scenario.DocProcess{}, err
+		}
+		cfgYAML = strings.TrimRight(string(raw), "\n")
+	}
+
+	docProcess := scenario.DocProcess{
+		SeqLabel:                  "_" + p.Seq,
+		DirName:                   rel,
+		Group:                     p.Group,
+		Type:                      p.ProcessType,
+		Description:               firstLine(pMeta.Description),
+		RequirementSpecifications: pMeta.RequirementSpecifications,
+		ConfigYAML:                cfgYAML,
+	}
+	for _, req := range pMeta.RequirementSpecifications {
+		trace[req] = append(trace[req], path.Join(bizdateDirName, rel))
+	}
+
+	for _, c := range p.Children {
+		docChild, err := buildDocProcess(bDir, bizdateDirName, rel, c, trace)
+		if err != nil {
+			return scenario.DocProcess{}, err
+		}
+		docProcess.Children = append(docProcess.Children, docChild)
+	}
+	return docProcess, nil
 }
 
 // firstLine は s の先頭行 (前後の空白を除去) を返す。doc のテーブルセルは改行を

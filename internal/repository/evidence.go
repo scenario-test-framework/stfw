@@ -39,8 +39,8 @@ type ForbiddenConnConfig struct {
 	Key         string // 違反したフラット化済みキー
 }
 
-// CheckForbiddenConnConfig はシナリオ配下の各プロセスの実効設定を検査し、
-// 接続情報 (host / hosts / password / passwd) を直書きした違反を返す。
+// CheckForbiddenConnConfig はシナリオ配下の各プロセス (parallel の子を含む) の
+// 実効設定を検査し、接続情報 (host / hosts / password / passwd) を直書きした違反を返す。
 // 設定は環境非依存の静的性質のため、validate・run 実行前ゲートの双方で
 // エラーとして扱う。プラグインを解決できないプロセスはスキップする。
 func CheckForbiddenConnConfig(projDir string, views []scenario.ScenarioView) ([]ForbiddenConnConfig, error) {
@@ -48,33 +48,53 @@ func CheckForbiddenConnConfig(projDir string, views []scenario.ScenarioView) ([]
 	for _, sv := range views {
 		for _, bv := range sv.Bizdates {
 			for _, pv := range bv.Processes {
-				// ディレクトリ名 parse error のプロセスは ProcessType="" になる。
-				// 構造検証側で別途 error になるため、ここでは検査対象外にする
-				// (空タイプで設定を読むと無関係な誤検出を生むため)。
-				if pv.ProcessType == "" {
-					continue
-				}
-				loc, err := ResolveProcessPlugin(projDir, pv.ProcessType)
-				if err != nil {
-					continue
-				}
-				processDir := filepath.Join(projDir, scenario.RootDirName, sv.Name, bv.DirName, pv.DirName)
-				flat, err := ProcessConfigEnv(projDir, loc, pv.ProcessType, processDir)
+				f, err := checkProcessConnConfig(projDir, []string{scenario.RootDirName, sv.Name, bv.DirName}, pv)
 				if err != nil {
 					return nil, err
 				}
-				display := strings.Join([]string{scenario.RootDirName, sv.Name, bv.DirName, pv.DirName}, "/")
-				for key := range flat {
-					seg := key
-					if i := strings.LastIndex(key, "_"); i >= 0 {
-						seg = key[i+1:]
-					}
-					if forbiddenConnKeySegments[seg] {
-						found = append(found, ForbiddenConnConfig{ProcessPath: display, Key: key})
-					}
-				}
+				found = append(found, f...)
 			}
 		}
+	}
+	return found, nil
+}
+
+// checkProcessConnConfig はプロセス 1 件 (parallel の場合は子を含む) の実効設定を検査する。
+// parents はプロジェクトルート相対の親パス要素列。
+func checkProcessConnConfig(projDir string, parents []string, pv scenario.ProcessView) ([]ForbiddenConnConfig, error) {
+	var found []ForbiddenConnConfig
+
+	// ディレクトリ名 parse error のプロセスは ProcessType="" になる。
+	// 構造検証側で別途 error になるため、ここでは検査対象外にする
+	// (空タイプで設定を読むと無関係な誤検出を生むため)。
+	if pv.ProcessType == "" {
+		return nil, nil
+	}
+	segments := append(append([]string(nil), parents...), pv.DirName)
+	if loc, err := ResolveProcessPlugin(projDir, pv.ProcessType); err == nil {
+		processDir := filepath.Join(append([]string{projDir}, segments...)...)
+		flat, err := ProcessConfigEnv(projDir, loc, pv.ProcessType, processDir)
+		if err != nil {
+			return nil, err
+		}
+		display := strings.Join(segments, "/")
+		for key := range flat {
+			seg := key
+			if i := strings.LastIndex(key, "_"); i >= 0 {
+				seg = key[i+1:]
+			}
+			if forbiddenConnKeySegments[seg] {
+				found = append(found, ForbiddenConnConfig{ProcessPath: display, Key: key})
+			}
+		}
+	}
+
+	for _, cv := range pv.Children {
+		f, err := checkProcessConnConfig(projDir, segments, cv)
+		if err != nil {
+			return nil, err
+		}
+		found = append(found, f...)
 	}
 	return found, nil
 }

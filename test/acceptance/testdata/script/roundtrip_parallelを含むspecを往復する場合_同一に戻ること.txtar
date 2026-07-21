@@ -1,0 +1,110 @@
+# STEP: parallel の子プロセスを含む spec の往復 (AS-BUILT §4.14 / §12)
+# scaffold (spec -> tree) が子ディレクトリを生成し、reverse (tree -> spec) が
+# 子を含めて再現する (2 回目以降の spec が完全一致)。
+# --sync は spec から消えた子ディレクトリを削除する。
+
+exec stfw init --skip-plugin-init
+
+exec stfw scenario scaffold par.spec.yml
+exists scenario/par/_10_20240101/_10_col_parallel/config/config.yml
+exists scenario/par/_10_20240101/_10_col_parallel/_10_db_exportPostgres/config/config.yml
+exists scenario/par/_10_20240101/_10_col_parallel/_20_db_exportMysql/config/config.yml
+
+exec stfw scenario reverse par -o r1
+grep 'type: parallel' r1/par.yml
+grep 'type: exportPostgres' r1/par.yml
+grep 'type: exportMysql' r1/par.yml
+exec stfw scenario scaffold --sync r1/par.yml
+exec stfw scenario reverse par -o r2
+cmp r1/par.yml r2/par.yml
+
+# doc にも子プロセスが載る
+grep '_10_col_parallel/_10_db_exportPostgres' r1/par.md
+
+# --sync: spec から子を 1 つ消すと該当子ディレクトリのみ削除される
+exec stfw scenario scaffold --sync par2.spec.yml
+stdout 'removed: scenario/par/_10_20240101/_10_col_parallel/_20_db_exportMysql'
+! exists scenario/par/_10_20240101/_10_col_parallel/_20_db_exportMysql
+exists scenario/par/_10_20240101/_10_col_parallel/_10_db_exportPostgres
+
+# parallel 以外への子指定はエラー
+! exec stfw scenario scaffold bad.spec.yml
+stderr 'processes is only allowed for type'
+
+-- par.spec.yml --
+scenario: par
+description: |
+  parallel 往復確認用。
+bizdates:
+  - seq: "10"
+    bizdate: "20240101"
+    description: Day1
+    processes:
+      - seq: "10"
+        group: col
+        type: parallel
+        description: 並走収集
+        config:
+          max_parallel: 2
+        processes:
+          - seq: "10"
+            group: db
+            type: exportPostgres
+            description: PG 収集
+            config:
+              database: appdb
+              host_group: db
+              tables:
+                - accounts
+          - seq: "20"
+            group: db
+            type: exportMysql
+            description: MySQL 収集
+            config:
+              database: appdb
+              host_group: db
+              tables:
+                - accounts
+-- par2.spec.yml --
+scenario: par
+description: |
+  parallel 往復確認用。
+bizdates:
+  - seq: "10"
+    bizdate: "20240101"
+    description: Day1
+    processes:
+      - seq: "10"
+        group: col
+        type: parallel
+        description: 並走収集
+        config:
+          max_parallel: 2
+        processes:
+          - seq: "10"
+            group: db
+            type: exportPostgres
+            description: PG 収集
+            config:
+              database: appdb
+              host_group: db
+              tables:
+                - accounts
+-- bad.spec.yml --
+scenario: bad
+description: |
+  子指定エラー確認用。
+bizdates:
+  - seq: "10"
+    bizdate: "20240101"
+    description: Day1
+    processes:
+      - seq: "10"
+        group: pre
+        type: scripts
+        description: 子は持てない
+        processes:
+          - seq: "10"
+            group: db
+            type: exportPostgres
+            description: NG

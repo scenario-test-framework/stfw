@@ -1,0 +1,103 @@
+# STEP: parallel の max_parallel (AS-BUILT §4.14)
+# プロセスの config/config.yml の max_parallel: 1 で直列化され、seq 昇順に
+# start → end が交互に並ぶ (並走していれば start が連続してゴールデンと一致しない)。
+
+chmod 755 plugins/process/logproc/bin/install/is_installed
+chmod 755 plugins/process/logproc/bin/run/pre_execute
+chmod 755 plugins/process/logproc/bin/run/execute
+chmod 755 plugins/process/logproc/bin/run/post_execute
+
+# 子 B は exit 3 (Warn) を返すため run は exit 3 (worse-wins が journal にも現れる)
+execcode 3 stfw run demo
+cmp order.log order_golden.log
+
+# ジャーナルの生スキーマを固定する:
+# 子 = step_end (exit_code 0/3)、Blocked 不在、親 node_end = Warn (worse-wins)
+normjournal . journal_actual.jsonl
+cmp journal_actual.jsonl journal_golden.jsonl
+
+# 不正な max_parallel は設定不正としてプロセス Error (run は exit 6)
+execcode 6 stfw run broken
+stderr 'max_parallel must be a non-negative integer'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  timezone: "Asia/Tokyo"
+-- scenario/demo/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_par_parallel/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_par_parallel/config/config.yml --
+stfw:
+  process:
+    parallel:
+      max_parallel: 1
+-- scenario/demo/_10_99990101/_10_par_parallel/_10_a_logproc/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_par_parallel/_10_a_logproc/config/config.yml --
+stfw:
+  process:
+    logproc: {}
+-- scenario/demo/_10_99990101/_10_par_parallel/_20_b_logproc/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_par_parallel/_20_b_logproc/config/config.yml --
+stfw:
+  process:
+    logproc: {}
+-- scenario/broken/metadata.yml --
+description:
+-- scenario/broken/_10_99990101/metadata.yml --
+description:
+-- scenario/broken/_10_99990101/_10_par_parallel/metadata.yml --
+description:
+-- scenario/broken/_10_99990101/_10_par_parallel/config/config.yml --
+stfw:
+  process:
+    parallel:
+      max_parallel: -1
+-- scenario/broken/_10_99990101/_10_par_parallel/_10_a_logproc/metadata.yml --
+description:
+-- scenario/broken/_10_99990101/_10_par_parallel/_10_a_logproc/config/config.yml --
+stfw:
+  process:
+    logproc: {}
+-- plugins/process/logproc/bin/install/is_installed --
+#!/bin/bash
+echo "true"
+exit 0
+-- plugins/process/logproc/bin/run/pre_execute --
+#!/bin/bash
+exit 0
+-- plugins/process/logproc/bin/run/execute --
+#!/bin/bash
+echo "start ${stfw_process_dirname}" >>"${STFW_PROJ_DIR}/order.log"
+sleep 0.3
+echo "end ${stfw_process_dirname}" >>"${STFW_PROJ_DIR}/order.log"
+if [ "${stfw_process_dirname}" = "_20_b_logproc" ]; then
+  exit 3
+fi
+exit 0
+-- plugins/process/logproc/bin/run/post_execute --
+#!/bin/bash
+exit 0
+-- order_golden.log --
+start _10_a_logproc
+end _10_a_logproc
+start _20_b_logproc
+end _20_b_logproc
+-- journal_golden.jsonl --
+{"attrs":{"params":"demo","run_id":"RUN_ID","run_mode":"--run"},"event":"node_start","node_id":"RUN_ID+run","node_type":"run","parent_id":"RUN_ID"}
+{"attrs":{"name":"demo"},"event":"node_start","node_id":"RUN_ID+run+demo","node_type":"scenario","parent_id":"RUN_ID+run"}
+{"attrs":{"bizdate":"99990101","dirname":"_10_99990101","seq":"10"},"event":"node_start","node_id":"RUN_ID+run+demo+_10_99990101","node_type":"bizdate","parent_id":"RUN_ID+run+demo"}
+{"attrs":{"dirname":"_10_par_parallel","group":"par","process_type":"parallel","seq":"10"},"event":"node_start","node_id":"RUN_ID+run+demo+_10_99990101+_10_par_parallel","node_type":"process","parent_id":"RUN_ID+run+demo+_10_99990101"}
+{"event":"steps_enumerated","node_id":"RUN_ID+run+demo+_10_99990101+_10_par_parallel","steps":["_10_a_logproc","_20_b_logproc"]}
+{"event":"step_end","exit_code":0,"node_id":"RUN_ID+run+demo+_10_99990101+_10_par_parallel","status":"Success","step":"_10_a_logproc"}
+{"event":"step_end","exit_code":3,"node_id":"RUN_ID+run+demo+_10_99990101+_10_par_parallel","status":"Warn","step":"_20_b_logproc"}
+{"event":"node_end","node_id":"RUN_ID+run+demo+_10_99990101+_10_par_parallel","status":"Warn"}
+{"event":"node_end","node_id":"RUN_ID+run+demo+_10_99990101","status":"Warn"}
+{"event":"node_end","node_id":"RUN_ID+run+demo","status":"Warn"}
+{"event":"node_end","node_id":"RUN_ID+run","status":"Warn"}

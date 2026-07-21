@@ -1,0 +1,3 @@
+#!/bin/bash
+# parallel プラグインは Go ネイティブ実行のため追加の依存はない。
+exit 0

@@ -36,11 +36,17 @@ func RenderScenarioDoc(doc scenario.DocData) (string, error) {
 		b.WriteString("| # | process | グループ | プラグイン | 説明 |\n|---|---|---|---|---|\n")
 		for _, p := range bz.Processes {
 			fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n", p.SeqLabel, p.DirName, p.Group, p.Type, p.Description)
+			for _, c := range p.Children {
+				fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n", c.SeqLabel, c.DirName, c.Group, c.Type, c.Description)
+			}
 		}
 		b.WriteString("\n")
 
 		for _, p := range bz.Processes {
 			writeProcessSection(&b, p)
+			for _, c := range p.Children {
+				writeProcessSection(&b, c)
+			}
 		}
 	}
 

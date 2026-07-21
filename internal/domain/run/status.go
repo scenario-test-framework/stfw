@@ -26,6 +26,18 @@ func (s NodeStatus) Transition(to NodeStatus) error {
 	return nil
 }
 
+// WorstStatus は 2 つの階層ステータスの悪い方を返す
+// (Error > Warn > Success の優先度で上位へ集約する。AS-BUILT §4.6)。
+func WorstStatus(a, b NodeStatus) NodeStatus {
+	if a == NodeError || b == NodeError {
+		return NodeError
+	}
+	if a == NodeWarn || b == NodeWarn {
+		return NodeWarn
+	}
+	return NodeSuccess
+}
+
 // StepStatus はステップ実行ステータス (scripts プロセスのスクリプト単位)。
 // 遷移は Pending → Success | Warn | Error | Blocked のみ (AS-BUILT §5.4)。
 // Warn は v1.2.0 で追加した一級ステータス (REQ-023): exit 3 のステップを

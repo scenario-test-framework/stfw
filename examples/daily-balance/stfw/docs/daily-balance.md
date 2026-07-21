@@ -18,8 +18,9 @@ Arrange (clear/import/updateBizdate) → Act (invokeRest) → Collect (exportPos
 | # | process | グループ | プラグイン | 説明 |
 |---|---|---|---|---|
 | _10 | _10_arrange_clearPostgres | arrange | clearPostgres | users / accounts / transactions を全行削除して初期状態にする (reset)。 |
-| _15 | _15_arrange_importMasterData | arrange | importMasterData | シナリオ共通の口座名義マスタ (users) を投入する (seed)。 |
-| _20 | _20_arrange_importPostgres | arrange | importPostgres | 初期残高 CSV (acc-001=1000 / acc-002=2000) を accounts へ投入する (seed)。 |
+| _15 | _15_arrange_parallel | arrange | parallel | 互いに独立なマスタ投入 (users) と初期残高投入 (accounts) を並走させる (seed)。 |
+| _10 | _15_arrange_parallel/_10_master_importMasterData | master | importMasterData | シナリオ共通の口座名義マスタ (users) を投入する (seed)。 |
+| _20 | _15_arrange_parallel/_20_balance_importPostgres | balance | importPostgres | 初期残高 CSV (acc-001=1000 / acc-002=2000) を accounts へ投入する (seed)。 |
 
 ### _10_arrange_clearPostgres
 
@@ -34,9 +35,14 @@ Arrange (clear/import/updateBizdate) → Act (invokeRest) → Collect (exportPos
         - users
     ```
 
-### _15_arrange_importMasterData
+### _15_arrange_parallel
 
 - グループ: arrange
+- 要求仕様: -
+
+### _15_arrange_parallel/_10_master_importMasterData
+
+- グループ: master
 - 要求仕様: -
 - 設定:
 
@@ -45,9 +51,9 @@ Arrange (clear/import/updateBizdate) → Act (invokeRest) → Collect (exportPos
         - users
     ```
 
-### _20_arrange_importPostgres
+### _15_arrange_parallel/_20_balance_importPostgres
 
-- グループ: arrange
+- グループ: balance
 - 要求仕様: -
 - 設定:
 
