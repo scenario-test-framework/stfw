@@ -12,16 +12,17 @@ chmod 755 plugins/process/childb/bin/run/execute
 chmod 755 plugins/process/childb/bin/run/post_execute
 
 exec stfw run demo
+latestrun . RUN
 
 # 両方の子が完走している (並走の証跡マーカー)
 exists childa.done
 exists childb.done
 
-# 子の evidence は子ディレクトリ配下に分離される (stfw_process_dir の上書き)
-exists scenario/demo/_10_99990101/_10_par_parallel/_10_a_childa/evidence/out.txt
-grep '_10_a_childa' scenario/demo/_10_99990101/_10_par_parallel/_10_a_childa/evidence/out.txt
-exists scenario/demo/_10_99990101/_10_par_parallel/_20_b_childb/evidence/out.txt
-grep '_20_b_childb' scenario/demo/_10_99990101/_10_par_parallel/_20_b_childb/evidence/out.txt
+# 子の evidence は run ワークスペース内の子ディレクトリ配下に分離される (stfw_process_dir の上書き)
+exists .stfw/runs/$RUN/workspace/demo/_10_99990101/_10_par_parallel/_10_a_childa/evidence/out.txt
+grep '_10_a_childa' .stfw/runs/$RUN/workspace/demo/_10_99990101/_10_par_parallel/_10_a_childa/evidence/out.txt
+exists .stfw/runs/$RUN/workspace/demo/_10_99990101/_10_par_parallel/_20_b_childb/evidence/out.txt
+grep '_20_b_childb' .stfw/runs/$RUN/workspace/demo/_10_99990101/_10_par_parallel/_20_b_childb/evidence/out.txt
 
 # 子はステップとして記録され、表示順は seq 昇順で安定する
 exec stfw status

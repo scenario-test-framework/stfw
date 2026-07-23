@@ -31,8 +31,12 @@ convention and run them automatically from a single binary.
   (view them directly in Jaeger / Grafana Tempo / Datadog, etc.).
 - **Built-in plugins**: compose Arrange → Act → Collect → Assert scenario tests from ready-made parts
   (RDBMS / Redis / ssh / scp / k6 / file comparison).
-- **Housekeeping**: `stfw run` automatically deletes results older than the retention window
-  (`stfw.housekeep.retention_days`) at the start of a run.
+- **Run isolation & concurrency**: each run copies the scenario into its own workspace
+  (`.stfw/runs/{run_id}/workspace/`) and executes there. The `scenario/` sources are never
+  written to, so multiple runs — including the same scenario — can run concurrently.
+  `--resume` carries over a previous run's outputs to restart from the middle.
+- **Housekeeping**: `stfw run` automatically deletes results (including evidence) older than the
+  retention window (`stfw.housekeep.retention_days`) at the start of a run.
 
 > ℹ️ Internal documentation (`docs/`) and in-code comments are written in Japanese.
 

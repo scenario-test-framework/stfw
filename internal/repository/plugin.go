@@ -22,7 +22,7 @@ const embeddedPluginRoot = "plugins"
 
 // PluginCacheDir はプラグインが provisioning した資産 (install でダウンロード
 // したバイナリ等) を置く永続キャッシュディレクトリを返す。
-// MaterializePlugin が毎回ワイプする .stfw/plugins/ とは別に、実行をまたいで
+// MaterializePlugin が毎回ワイプする展開先とは別に、実行をまたいで
 // 保持する必要がある資産のための場所 (例: collectLog の logfilter バイナリ)。
 func PluginCacheDir(projDir, processType string) string {
 	return filepath.Join(projDir, project.DataDirName, "cache", "plugins", processType)
@@ -98,13 +98,16 @@ func ListProcessPlugins(projDir string) ([]string, error) {
 }
 
 // MaterializePlugin はプラグインの実体をディスク上に確保し、そのパスを返す。
-// プロジェクトプラグインはそのままのパス、同梱プラグインは
-// .stfw/plugins/ 配下へ展開したパスを返す (スクリプト実行に必要)。
-func MaterializePlugin(projDir string, loc PluginLocation) (string, error) {
+// プロジェクトプラグインはそのままのパス、同梱プラグインは destRoot 配下
+// (destRoot/plugins/process/{type}) へ展開したパスを返す (スクリプト実行に必要)。
+// 展開先は毎回ワイプする。run 実行時は run ディレクトリ (RunDir) を destRoot に
+// 渡して run 単位に分離し、並走 run 間の展開衝突を防ぐ (AS-BUILT §5.7)。
+// stfw plugin install は従来どおり {proj}/.stfw を destRoot に渡す。
+func MaterializePlugin(destRoot string, loc PluginLocation) (string, error) {
 	if !loc.Embedded {
 		return loc.Dir, nil
 	}
-	dest := filepath.Join(projDir, project.DataDirName, loc.EmbedPath)
+	dest := filepath.Join(destRoot, loc.EmbedPath)
 	if err := os.RemoveAll(dest); err != nil {
 		return "", err
 	}

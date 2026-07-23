@@ -13,14 +13,15 @@ exec stfw secret set db01 appuser secretpw
 
 # 実行: clear(_10) → import(_20) → export(_30)
 exec stfw run db
+latestrun . RUN
 
 # パスワードがマスクされている (RegisterAll + プラグイン出力の Masker 経由化)
 stderr '\[secret\]'
 ! stderr 'secretpw'
 
-# export: RFC4180 CSV へ変換されてエビデンス規約どおり出力される
-cmp scenario/db/_10_99990101/_30_grp_exportMysql/evidence/testdb/t1.csv t1.csv.golden
-exists scenario/db/_10_99990101/_30_grp_exportMysql/evidence/testdb/t2.csv
+# export: RFC4180 CSV へ変換されてエビデンス規約どおり run ワークスペース内に出力される
+cmp .stfw/runs/$RUN/workspace/db/_10_99990101/_30_grp_exportMysql/evidence/testdb/t1.csv t1.csv.golden
+exists .stfw/runs/$RUN/workspace/db/_10_99990101/_30_grp_exportMysql/evidence/testdb/t2.csv
 
 # clear / import が期待した SQL を発行している
 # clear は全テーブルの DELETE を START TRANSACTION〜COMMIT で括った単一 --execute で発行する

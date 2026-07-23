@@ -1,0 +1,57 @@
+# STEP: 実行ワークスペース (AS-BUILT §5.7)
+# run はシナリオを .stfw/runs/{run_id}/workspace/ へ複製してから実行する。
+# 検証内容:
+#   - stdout に workspace パスが出力される
+#   - 実行時生成物 (evidence) は run ワークスペース内へ出力され、scenario/ 正本には書き込まれない
+#   - 正本側の予約出力ディレクトリ (evidence: 旧バージョンの残骸) はワークスペースへ複製されない
+#   - 連続する 2 回の run で生成物が run ごとに分離される
+
+# 正本側に旧バージョンの実行残骸 (evidence) を置いておく
+exec stfw run demo
+stdout 'run_id: _'
+stdout 'workspace: '
+latestrun . RUN1
+
+# 生成物は run ワークスペース内へ出力される
+exists .stfw/runs/$RUN1/workspace/demo/_10_99990101/_10_pre_scripts/evidence/marker.txt
+grep 'run marker' .stfw/runs/$RUN1/workspace/demo/_10_99990101/_10_pre_scripts/evidence/marker.txt
+
+# scenario/ 正本には書き込まれない (残骸の stale.txt のみが残る)
+! exists scenario/demo/_10_99990101/_10_pre_scripts/evidence/marker.txt
+exists scenario/demo/_10_99990101/_10_pre_scripts/evidence/stale.txt
+
+# 正本側の残骸 (evidence/stale.txt) はワークスペースへ複製されない
+! exists .stfw/runs/$RUN1/workspace/demo/_10_99990101/_10_pre_scripts/evidence/stale.txt
+
+# git 管理の入力 (data/) は複製される
+exists .stfw/runs/$RUN1/workspace/demo/_10_99990101/_10_pre_scripts/data/input.txt
+
+# 2 回目の run は別ワークスペースに分離される (1 回目の生成物と混ざらない)
+exec stfw run demo
+latestrun . RUN2
+exists .stfw/runs/$RUN2/workspace/demo/_10_99990101/_10_pre_scripts/evidence/marker.txt
+exists .stfw/runs/$RUN1/workspace/demo/_10_99990101/_10_pre_scripts/evidence/marker.txt
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+-- scenario/demo/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_pre_scripts/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_pre_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/demo/_10_99990101/_10_pre_scripts/data/input.txt --
+input data
+-- scenario/demo/_10_99990101/_10_pre_scripts/evidence/stale.txt --
+stale evidence from old version
+-- scenario/demo/_10_99990101/_10_pre_scripts/scripts/100_write_marker --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence"
+echo "run marker ${run_id}" >"${stfw_process_dir}/evidence/marker.txt"
+exit 0

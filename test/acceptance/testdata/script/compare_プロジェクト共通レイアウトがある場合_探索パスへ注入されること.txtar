@@ -23,20 +23,23 @@ exec stfw plugin install compare
 
 # --- 共通ディレクトリあり: CLASSPATH 末尾へ注入される ---
 exec stfw run cmpshared
-exec cat scenario/cmpshared/_10_99990101/_20_asrt_compare/result/classpath.txt
+latestrun . RUN
+exec cat .stfw/runs/$RUN/workspace/cmpshared/_10_99990101/_20_asrt_compare/result/classpath.txt
 stdout 'config/plugins/process/compare$'
 
 # --- 既存 CLASSPATH あり: `:` 区切りで末尾に連結される ---
 env COMPAREFILES_CLASSPATH=/preset/dir
 exec stfw run cmpshared
-exec cat scenario/cmpshared/_10_99990101/_20_asrt_compare/result/classpath.txt
+latestrun . RUN
+exec cat .stfw/runs/$RUN/workspace/cmpshared/_10_99990101/_20_asrt_compare/result/classpath.txt
 stdout '^/preset/dir:.*config/plugins/process/compare$'
 env COMPAREFILES_CLASSPATH=
 
 # --- 共通ディレクトリなし: 注入されない (env は空のまま) ---
 rm config/plugins/process/compare
 exec stfw run cmpshared
-exec cat scenario/cmpshared/_10_99990101/_20_asrt_compare/result/classpath.txt
+latestrun . RUN
+exec cat .stfw/runs/$RUN/workspace/cmpshared/_10_99990101/_20_asrt_compare/result/classpath.txt
 stdout '^\(empty\)$'
 
 -- stfw.yml --

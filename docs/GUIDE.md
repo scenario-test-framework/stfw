@@ -65,7 +65,7 @@ scenario/daily-balance/
 │   ├── _30_act_invokeRest/           # Act: 取引 POST
 │   │   └── script.js
 │   ├── _40_collect_exportPostgres/   # Collect: 残高・取引履歴を収集
-│   │   └── evidence/appdb/accounts.csv   (自動生成)
+│   │   └── evidence/appdb/accounts.csv   (実行時に run ワークスペース内へ自動生成)
 │   └── _50_assert_compare/           # Assert: 期待残高と突合
 │       └── expect/_40_collect_exportPostgres/appdb/accounts.csv
 └── _030_20240102/                    # Day2 (reset/seed なし = 前日を繰越)
@@ -196,6 +196,22 @@ secret は `stfw secret keygen` で鍵を作り、`stfw secret set postgres appu
 | `expect/` | 管理する | 期待値。直下に**収集プロセスのディレクトリ名**を置き、その下は当該プロセスの `evidence/` と同型 |
 | `actual/` | 生成物 | 収集プロセスの `evidence/` 配下への file-level symlink（自動生成） |
 | `result/` | 生成物 | compare-files の比較結果（`CompareSummary.csv` 等） |
+
+生成物（`evidence/` / `actual/` / `result/`）は `scenario/` 配下ではなく、run ごとの
+実行ワークスペース `.stfw/runs/{run_id}/workspace/{シナリオ名}/` 内の同じ相対位置に
+出力されます（run 開始時に stdout の `workspace:` 行でパスが表示されます）。
+`scenario/` 配下は git 管理の入力（正本）だけが置かれ、実行では変更されません。
+ワークスペースは実行結果ハウスキープ（`stfw.housekeep.retention_days`）の対象で、
+**保存期間を過ぎるとエビデンスも run と一緒に削除されます**。保存が必要なエビデンスは
+期間内に外部へ回収してください（AS-BUILT §5.7）。
+
+失敗した run を途中からやり直すときは **`--resume`** を併用します。前 run のワークスペース
+（収集済みエビデンス・実行時生成物）を引き継いだ上で、`scenario/` 正本への修正が優先されます:
+
+```console
+$ stfw run --resume --from _020_20240101/_50_assert_compare daily-balance   # 最新 run から再開
+$ stfw run --resume=_20260723120000_100 --only _020_20240101 daily-balance  # run_id を明示指定
+```
 
 つまり `expect/{収集プロセス名}/{database}/{table}.csv` に期待値を置けば、compare が
 同じ bizdate 内の収集エビデンスと突合します。差分の扱いは設定キー `on_mismatch` で選べます

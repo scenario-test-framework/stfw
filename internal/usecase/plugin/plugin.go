@@ -45,7 +45,7 @@ func Install(log *slog.Logger, out, errOut io.Writer, projDir, processType strin
 		return err
 	}
 
-	dir, err := repository.MaterializePlugin(projDir, loc)
+	dir, err := repository.MaterializePlugin(filepath.Join(projDir, project.DataDirName), loc)
 	if err != nil {
 		return fmt.Errorf("plugin materialize: %w", err)
 	}

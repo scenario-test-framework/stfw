@@ -13,13 +13,14 @@ exec stfw secret set pg01 appuser secretpw
 
 # 実行: clear(_10) → import(_20) → export(_30)
 exec stfw run pg
+latestrun . RUN
 
 # パスワードがマスクされている
 stderr '\[secret\]'
 ! stderr 'secretpw'
 
-# export: RFC4180 CSV がエビデンス規約どおり出力される (NULL は \N)
-cmp scenario/pg/_10_99990101/_30_grp_exportPostgres/evidence/pgdb/t1.csv t1.csv.golden
+# export: RFC4180 CSV がエビデンス規約どおり run ワークスペース内に出力される (NULL は \N)
+cmp .stfw/runs/$RUN/workspace/pg/_10_99990101/_30_grp_exportPostgres/evidence/pgdb/t1.csv t1.csv.golden
 
 # clear / import が期待した SQL / \copy を発行している
 # clear は全テーブルの DELETE を単一 --command で発行する (psql -c の複数文 = 単一トランザクション)

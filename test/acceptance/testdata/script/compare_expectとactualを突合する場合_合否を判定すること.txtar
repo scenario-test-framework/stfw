@@ -24,18 +24,25 @@ exec stfw plugin install compare
 # --- 一致ケース: evidence と expect が一致 → compare Success ---
 exec stfw run cmp
 stdout 'run_id: _'
+latestrun . RUN
 
-# actual/ が evidence への file-level symlink (コピーではない) として組み立てられている
-exists scenario/cmp/_10_99990101/_20_asrt_compare/actual/_10_col_scripts/host1/data.txt
-exec readlink scenario/cmp/_10_99990101/_20_asrt_compare/actual/_10_col_scripts/host1/data.txt
+# 同梱プラグインは run 単位の展開先へ展開される (AS-BUILT §5.7)
+exists .stfw/runs/$RUN/plugins/process/compare/bin/run/execute
+
+# actual/ が run ワークスペース内に evidence への file-level symlink (コピーではない) として組み立てられている
+exists .stfw/runs/$RUN/workspace/cmp/_10_99990101/_20_asrt_compare/actual/_10_col_scripts/host1/data.txt
+exec readlink .stfw/runs/$RUN/workspace/cmp/_10_99990101/_20_asrt_compare/actual/_10_col_scripts/host1/data.txt
 stdout '_10_col_scripts/evidence/host1/data.txt'
 # symlink 先 (evidence 実体) の内容が読める
-exec cat scenario/cmp/_10_99990101/_20_asrt_compare/actual/_10_col_scripts/host1/data.txt
+exec cat .stfw/runs/$RUN/workspace/cmp/_10_99990101/_20_asrt_compare/actual/_10_col_scripts/host1/data.txt
 stdout 'hello'
 # 比較結果が result/ へ出力される
-exists scenario/cmp/_10_99990101/_20_asrt_compare/result/CompareSummary.csv
-exec cat scenario/cmp/_10_99990101/_20_asrt_compare/result/CompareSummary.csv
+exists .stfw/runs/$RUN/workspace/cmp/_10_99990101/_20_asrt_compare/result/CompareSummary.csv
+exec cat .stfw/runs/$RUN/workspace/cmp/_10_99990101/_20_asrt_compare/result/CompareSummary.csv
 stdout 'OK,'
+# scenario/ 正本には書き込まれない
+! exists scenario/cmp/_10_99990101/_20_asrt_compare/actual
+! exists scenario/cmp/_10_99990101/_20_asrt_compare/result
 
 # --- compare-files 自体のエラー (exit 6) を握りつぶさず exit 6 (差分とは別メッセージ) ---
 env STFW_TEST_CF_FAIL=1
@@ -48,36 +55,42 @@ execcode 6 stfw run cmpng
 stderr 'mismatch detected'
 
 # --- エラーケース: expect が参照する収集 process の evidence が無い → exit 6。
-#     準備の先頭で result/ を掃除するため、早期失敗でも前回 run の古い比較結果は残らない ---
+#     正本側の古い比較結果 (旧バージョンの残骸) はワークスペースへ複製されず、
+#     早期失敗しても前回 run の古い比較結果が今回の結果として残らない (AS-BUILT §5.7) ---
 exists scenario/cmperr/_10_99990101/_10_asrt_compare/result/CompareSummary.csv
 execcode 6 stfw run cmperr
 stderr 'evidence not found'
-! exists scenario/cmperr/_10_99990101/_10_asrt_compare/result/CompareSummary.csv
+latestrun . RUN
+! exists .stfw/runs/$RUN/workspace/cmperr/_10_99990101/_10_asrt_compare/result/CompareSummary.csv
 
-# --- expect ディレクトリ不在で早期失敗しても古い result は残らない ---
+# --- expect ディレクトリ不在で早期失敗しても古い result は複製されない ---
 exists scenario/cmpnoexp/_10_99990101/_10_asrt_compare/result/CompareSummary.csv
 execcode 6 stfw run cmpnoexp
 stderr 'expect directory not found'
-! exists scenario/cmpnoexp/_10_99990101/_10_asrt_compare/result/CompareSummary.csv
+latestrun . RUN
+! exists .stfw/runs/$RUN/workspace/cmpnoexp/_10_99990101/_10_asrt_compare/result/CompareSummary.csv
 
-# --- expect が空 (収集 process ディレクトリ無し) で早期失敗しても古い result は残らない ---
+# --- expect が空 (収集 process ディレクトリ無し) で早期失敗しても古い result は複製されない ---
 exists scenario/cmpempexp/_10_99990101/_10_asrt_compare/result/CompareSummary.csv
 execcode 6 stfw run cmpempexp
 stderr 'no process directories'
-! exists scenario/cmpempexp/_10_99990101/_10_asrt_compare/result/CompareSummary.csv
+latestrun . RUN
+! exists .stfw/runs/$RUN/workspace/cmpempexp/_10_99990101/_10_asrt_compare/result/CompareSummary.csv
 
 # --- 空 evidence: evidence にファイルが無くても actual/{name} は作られ、
 #     expect のファイルは LeftOnly として mismatch になる ---
 execcode 6 stfw run cmpempty
 stderr 'mismatch detected'
-exists scenario/cmpempty/_10_99990101/_20_asrt_compare/actual/_10_col_scripts
+latestrun . RUN
+exists .stfw/runs/$RUN/workspace/cmpempty/_10_99990101/_20_asrt_compare/actual/_10_col_scripts
 
 # --- RightOnly: expect に無い余剰 evidence ファイルも actual へ symlink され、
 #     余剰は RightOnly として mismatch になる (プラグインが全 evidence を symlink する完全性) ---
 execcode 6 stfw run cmpro
 stderr 'mismatch detected'
-exists scenario/cmpro/_10_99990101/_20_asrt_compare/actual/_10_col_scripts/host1/extra.txt
-exec cat scenario/cmpro/_10_99990101/_20_asrt_compare/result/CompareSummary.csv
+latestrun . RUN
+exists .stfw/runs/$RUN/workspace/cmpro/_10_99990101/_20_asrt_compare/actual/_10_col_scripts/host1/extra.txt
+exec cat .stfw/runs/$RUN/workspace/cmpro/_10_99990101/_20_asrt_compare/result/CompareSummary.csv
 stdout 'RightOnly,'
 
 -- stfw.yml --

@@ -3,6 +3,7 @@ package repository
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -93,6 +94,48 @@ func TestCreateProcessScaffoldConfigPlugin(t *testing.T) {
 		}
 		if len(created) == 0 {
 			t.Error("作成ファイル一覧が空であるべきでない")
+		}
+	})
+}
+
+// TestMaterializePluginDestRoot は同梱プラグインの展開先が destRoot 単位で
+// 分離されること (run 単位分離の基盤。AS-BUILT §5.7) を固定する。
+func TestMaterializePluginDestRoot(t *testing.T) {
+	t.Run("MaterializePlugin_destRootが異なる場合_並行展開でも独立して展開されること", func(t *testing.T) {
+		// Arrange
+		loc, err := ResolveProcessPlugin(t.TempDir(), "compare")
+		if err != nil {
+			t.Fatal(err)
+		}
+		rootA := t.TempDir()
+		rootB := t.TempDir()
+
+		// Act: 並走 run を模して 2 つの destRoot へ同時に展開する
+		var wg sync.WaitGroup
+		dirs := make([]string, 2)
+		errs := make([]error, 2)
+		for i, root := range []string{rootA, rootB} {
+			wg.Add(1)
+			go func(i int, root string) {
+				defer wg.Done()
+				dirs[i], errs[i] = MaterializePlugin(root, loc)
+			}(i, root)
+		}
+		wg.Wait()
+
+		// Assert
+		for i := range errs {
+			if errs[i] != nil {
+				t.Fatal(errs[i])
+			}
+		}
+		if dirs[0] == dirs[1] {
+			t.Fatalf("destRoot ごとに独立した展開先になるべき: %s", dirs[0])
+		}
+		for _, dir := range dirs {
+			if _, err := os.Stat(filepath.Join(dir, "bin", "run", "execute")); err != nil {
+				t.Errorf("展開先 %s に実行スクリプトが揃うべき: %v", dir, err)
+			}
 		}
 	})
 }

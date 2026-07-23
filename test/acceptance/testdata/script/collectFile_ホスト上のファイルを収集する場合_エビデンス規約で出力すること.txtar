@@ -13,17 +13,21 @@ exec stfw secret set web01 appuser secretpw
 
 # 収集実行 (collectFile は組み込み。run が embed から解決・展開する)
 exec stfw run demo
+latestrun . RUN
 
-# エビデンスディレクトリ規約どおりに収集されている
-exists scenario/demo/_10_99990101/_10_grp_collectFile/evidence/web01/var/log/app/access.log
-exec cat scenario/demo/_10_99990101/_10_grp_collectFile/evidence/web01/var/log/app/access.log
+# エビデンスディレクトリ規約どおり run ワークスペース内に収集されている (AS-BUILT §5.7)
+exists .stfw/runs/$RUN/workspace/demo/_10_99990101/_10_grp_collectFile/evidence/web01/var/log/app/access.log
+exec cat .stfw/runs/$RUN/workspace/demo/_10_99990101/_10_grp_collectFile/evidence/web01/var/log/app/access.log
 stdout 'hello from remote access.log'
 
 # 空白を含むパスも壊れず収集される (word-splitting 修正の固定)
-exists 'scenario/demo/_10_99990101/_10_grp_collectFile/evidence/web01/var/log/app/with space.log'
+exists .stfw/runs/$RUN/workspace/demo/_10_99990101/_10_grp_collectFile/evidence/web01/var/log/app/'with space.log'
 
 # パターンに合致しないファイルは収集されない
-! exists scenario/demo/_10_99990101/_10_grp_collectFile/evidence/web01/var/log/app/other.txt
+! exists .stfw/runs/$RUN/workspace/demo/_10_99990101/_10_grp_collectFile/evidence/web01/var/log/app/other.txt
+
+# scenario/ 正本には書き込まれない
+! exists scenario/demo/_10_99990101/_10_grp_collectFile/evidence
 
 # ssh 失敗 (接続・認証エラー = 255) は握りつぶさず collect を失敗させる
 env STFW_TEST_SSH_FAIL=1

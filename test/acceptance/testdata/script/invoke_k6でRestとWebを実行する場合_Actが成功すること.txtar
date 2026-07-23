@@ -33,13 +33,14 @@ exec stfw secret set api01 appuser secretpw
 # --- 正常系 (invokeRest): k6 exit 0 → Success ---
 exec stfw run inv
 stdout 'run_id: _'
+latestrun . RUN
 # host が -e で __ENV へ注入される
 stdout 'stfw_target_host=api01'
-# end-of-test サマリと HTML レポートがエビデンスへ出力される。
+# end-of-test サマリと HTML レポートが run ワークスペース内のエビデンスへ出力される。
 # fake k6 は dashboard を出さない → プラグインがサマリからフォールバック生成する。
-exists scenario/inv/_10_99990101/_10_act_invokeRest/evidence/summary.json
-exists scenario/inv/_10_99990101/_10_act_invokeRest/evidence/report.html
-grep 'k6 summary' scenario/inv/_10_99990101/_10_act_invokeRest/evidence/report.html
+exists .stfw/runs/$RUN/workspace/inv/_10_99990101/_10_act_invokeRest/evidence/summary.json
+exists .stfw/runs/$RUN/workspace/inv/_10_99990101/_10_act_invokeRest/evidence/report.html
+grep 'k6 summary' .stfw/runs/$RUN/workspace/inv/_10_99990101/_10_act_invokeRest/evidence/report.html
 # パスワードは環境変数で渡され、マスクされる (argv には載らない)
 stderr '\[secret\]'
 ! stderr 'secretpw'
@@ -47,8 +48,9 @@ stderr '\[secret\]'
 # --- k6 が dashboard レポートを出した場合は、プラグインの自前生成をスキップする ---
 env STFW_TEST_K6_DASHBOARD=1
 exec stfw run inv
-grep 'k6 dashboard report' scenario/inv/_10_99990101/_10_act_invokeRest/evidence/report.html
-! grep 'k6 summary' scenario/inv/_10_99990101/_10_act_invokeRest/evidence/report.html
+latestrun . RUN
+grep 'k6 dashboard report' .stfw/runs/$RUN/workspace/inv/_10_99990101/_10_act_invokeRest/evidence/report.html
+! grep 'k6 summary' .stfw/runs/$RUN/workspace/inv/_10_99990101/_10_act_invokeRest/evidence/report.html
 env STFW_TEST_K6_DASHBOARD=
 
 # --- 閾値失敗 (k6 exit 99) を握りつぶさず exit 6 ---
@@ -68,8 +70,9 @@ stderr 'user requires host_group'
 # --- invokeWeb: ブラウザは既定ヘッドレス ---
 exec stfw run invweb
 stdout 'K6_BROWSER_HEADLESS=true'
-exists scenario/invweb/_10_99990101/_10_act_invokeWeb/evidence/summary.json
-exists scenario/invweb/_10_99990101/_10_act_invokeWeb/evidence/report.html
+latestrun . RUN
+exists .stfw/runs/$RUN/workspace/invweb/_10_99990101/_10_act_invokeWeb/evidence/summary.json
+exists .stfw/runs/$RUN/workspace/invweb/_10_99990101/_10_act_invokeWeb/evidence/report.html
 
 -- stfw.yml --
 stfw:

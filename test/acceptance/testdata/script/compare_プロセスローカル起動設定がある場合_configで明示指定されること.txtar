@@ -24,25 +24,29 @@ exec stfw plugin install compare
 
 # --- プロセスローカルの compare_files.json あり: -config で明示指定される ---
 exec stfw run cmplocalcfg
-exec cat scenario/cmplocalcfg/_10_99990101/_20_asrt_compare/result/configopt.txt
+latestrun . RUN
+exec cat .stfw/runs/$RUN/workspace/cmplocalcfg/_10_99990101/_20_asrt_compare/result/configopt.txt
 stdout '^\./config/compare_files\.json$'
 
-# --- json と yaml が両方ある場合: json が優先される ---
+# --- json と yaml が両方ある場合: json が優先される (正本の編集は次 run の複製へ反映される) ---
 cp scenario/cmplocalcfg/_10_99990101/_20_asrt_compare/config/compare_files.json scenario/cmplocalcfg/_10_99990101/_20_asrt_compare/config/compare_files.yaml
 exec stfw run cmplocalcfg
-exec cat scenario/cmplocalcfg/_10_99990101/_20_asrt_compare/result/configopt.txt
+latestrun . RUN
+exec cat .stfw/runs/$RUN/workspace/cmplocalcfg/_10_99990101/_20_asrt_compare/result/configopt.txt
 stdout '^\./config/compare_files\.json$'
 
 # --- json を消すと yaml にフォールバックする ---
 rm scenario/cmplocalcfg/_10_99990101/_20_asrt_compare/config/compare_files.json
 exec stfw run cmplocalcfg
-exec cat scenario/cmplocalcfg/_10_99990101/_20_asrt_compare/result/configopt.txt
+latestrun . RUN
+exec cat .stfw/runs/$RUN/workspace/cmplocalcfg/_10_99990101/_20_asrt_compare/result/configopt.txt
 stdout '^\./config/compare_files\.yaml$'
 
 # --- プロセスローカルの起動設定なし: -config は付かない ---
 rm scenario/cmplocalcfg/_10_99990101/_20_asrt_compare/config/compare_files.yaml
 exec stfw run cmplocalcfg
-exec cat scenario/cmplocalcfg/_10_99990101/_20_asrt_compare/result/configopt.txt
+latestrun . RUN
+exec cat .stfw/runs/$RUN/workspace/cmplocalcfg/_10_99990101/_20_asrt_compare/result/configopt.txt
 stdout '^\(none\)$'
 
 -- stfw.yml --

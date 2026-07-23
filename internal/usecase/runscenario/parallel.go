@@ -148,7 +148,7 @@ func (r *runner) resolveChildPlugins(children []scenario.ProcessView) map[string
 		}
 		p := childPlugin{loc: loc}
 		if !loc.Embedded || c.ProcessType != scriptsPluginType {
-			p.pluginDir, p.err = repository.MaterializePlugin(r.projDir, loc)
+			p.pluginDir, p.err = repository.MaterializePlugin(r.runDir, loc)
 		}
 		plugins[c.ProcessType] = p
 	}

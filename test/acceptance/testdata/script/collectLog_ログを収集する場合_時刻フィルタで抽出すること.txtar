@@ -28,16 +28,17 @@ exec stfw secret set web01 appuser secretpw
 
 # 収集実行
 exec stfw run demo
+latestrun . RUN
 
-# host の arch (linux_amd64) 版 logfilter で収集され、エビデンス規約どおり配置される
-exists scenario/demo/_10_99990101/_10_grp_collectLog/evidence/web01/var/log/app/app.log
-exec cat scenario/demo/_10_99990101/_10_grp_collectLog/evidence/web01/var/log/app/app.log
+# host の arch (linux_amd64) 版 logfilter で収集され、エビデンス規約どおり run ワークスペース内に配置される
+exists .stfw/runs/$RUN/workspace/demo/_10_99990101/_10_grp_collectLog/evidence/web01/var/log/app/app.log
+exec cat .stfw/runs/$RUN/workspace/demo/_10_99990101/_10_grp_collectLog/evidence/web01/var/log/app/app.log
 stdout 'filtered by logfilter'
 stdout 'app started'
 
 # 複数ファイルでもループが途中終了しない (ループ内 ssh が stdin を消費しない = FD 3 固定)
-exists scenario/demo/_10_99990101/_10_grp_collectLog/evidence/web01/var/log/app/app2.log
-exec cat scenario/demo/_10_99990101/_10_grp_collectLog/evidence/web01/var/log/app/app2.log
+exists .stfw/runs/$RUN/workspace/demo/_10_99990101/_10_grp_collectLog/evidence/web01/var/log/app/app2.log
+exec cat .stfw/runs/$RUN/workspace/demo/_10_99990101/_10_grp_collectLog/evidence/web01/var/log/app/app2.log
 stdout 'second log'
 
 -- stfw.yml --

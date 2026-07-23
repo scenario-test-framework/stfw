@@ -29,6 +29,7 @@ type Options struct {
 	DryRun bool
 	From   string // 部分実行: 指定ノード以降を実行 (AS-BUILT §3.4)
 	Only   string // 部分実行: 指定サブツリーのみ実行 (AS-BUILT §3.4)
+	Resume string // resume: 前 run のワークスペース引き継ぎ ("" = 無効 / "latest" = 最新 run / run_id。AS-BUILT §5.8)
 }
 
 // Run はシナリオを内蔵ランナーで実行する。
@@ -122,6 +123,22 @@ func Run(log *slog.Logger, out, errOut io.Writer, projDir string, cfg *repositor
 	// 検証ゲート通過後に行う (誤ったコマンドで削除だけが走ることを防ぐ)。
 	housekeep(log, projDir, cfg, now)
 
+	// resume (AS-BUILT §5.8): 引き継ぎ元 run をハウスキープ後・新 run_id 採番前に
+	// 解決・検証する (採番後に「最新 run」を解決すると自分自身になるため。
+	// 対象シナリオの不在も採番前に fail-fast し、phantom run を作らない)。
+	resumeFrom := ""
+	if opts.Resume != "" {
+		resumeFrom, err = resolveResumeFrom(projDir, opts.Resume)
+		if err != nil {
+			return err
+		}
+		for _, view := range views {
+			if err := repository.CheckRunWorkspaceScenario(projDir, resumeFrom, view.Name); err != nil {
+				return err
+			}
+		}
+	}
+
 	// run_id 採番 + ジャーナル作成。同一秒・同一プロセスの再実行 (テスト等) で
 	// run_id が衝突した場合は採番時刻をずらして再採番する。
 	runID := run.NewRunID(now(), os.Getpid())
@@ -138,26 +155,63 @@ func Run(log *slog.Logger, out, errOut io.Writer, projDir string, cfg *repositor
 	}
 	defer func() { _ = journal.Close() }()
 
+	fmt.Fprintf(out, "run_id: %s\n", runID)
+
+	// 実行ワークスペースへの複製 (AS-BUILT §5.7): 実行時生成物を run_id で
+	// 名前空間化し、同一シナリオを含む複数 run の並走を可能にする。
+	// resume 時は正本の複製後に引き継ぎ元 run のワークスペースをマージする
+	// (正本優先。AS-BUILT §5.8)。複製・マージの失敗は実行 (run の node_start) を
+	// 開始せずエラー終了し、空ジャーナルの run ディレクトリを残さない (削除は best-effort)。
+	// 出力済みの run_id は削除により無効になるため、その旨を明示的にログする
+	// (run_id の出力は複製前 = 大きなシナリオの複製中に無出力にしないための意図的な順序)
+	cleanupRun := func() {
+		_ = journal.Close()
+		if rmErr := os.RemoveAll(repository.RunDir(projDir, runID.String())); rmErr != nil {
+			log.Warn("failed to clean up run dir", "run_id", runID.String(), "error", rmErr.Error())
+			return
+		}
+		log.Info("run aborted before start; run dir removed", "run_id", runID.String())
+	}
+	workspaceDir := repository.WorkspaceDir(projDir, runID.String())
+	for _, view := range views {
+		if _, err := repository.CopyScenarioToWorkspace(projDir, runID.String(), view.Name); err != nil {
+			cleanupRun()
+			return err
+		}
+		if resumeFrom != "" {
+			if err := repository.MergeRunWorkspace(projDir, resumeFrom, runID.String(), view.Name); err != nil {
+				cleanupRun()
+				return err
+			}
+		}
+	}
+	fmt.Fprintf(out, "workspace: %s\n", workspaceDir)
+	if resumeFrom != "" {
+		fmt.Fprintf(out, "resume_from: %s\n", resumeFrom)
+	}
+
 	// OTLP トレースは run 終了時に flush の完了を待つ (エラー時も待つ)
 	notifier := newOTelNotifier(log, cfg, version)
 	defer notifier.close()
 
 	r := &runner{
-		log:      log,
-		out:      out,
-		errOut:   errOut,
-		projDir:  projDir,
-		dryRun:   opts.DryRun,
-		filter:   filter,
-		now:      now,
-		journal:  journal,
-		agg:      run.NewRun(runID),
-		baseEnv:  baseEnv(cfg, projDir, version, runID, opts.DryRun),
-		notifier: notifier,
-		reporter: newReporter(log, projDir, runID),
+		log:          log,
+		out:          out,
+		errOut:       errOut,
+		projDir:      projDir,
+		runDir:       repository.RunDir(projDir, runID.String()),
+		workspaceDir: workspaceDir,
+		resumeFrom:   resumeFrom,
+		dryRun:       opts.DryRun,
+		filter:       filter,
+		now:          now,
+		journal:      journal,
+		agg:          run.NewRun(runID),
+		baseEnv:      baseEnv(cfg, projDir, version, runID, opts.DryRun),
+		notifier:     notifier,
+		reporter:     newReporter(log, projDir, runID),
 	}
 
-	fmt.Fprintf(out, "run_id: %s\n", runID)
 	status, err := r.runRun(runID, views, names)
 	if err != nil {
 		return err
@@ -183,19 +237,22 @@ func (e *StatusError) Error() string {
 
 // runner は 1 回の実行のオーケストレーション状態を保持する。
 type runner struct {
-	log      *slog.Logger
-	out      io.Writer
-	errOut   io.Writer
-	projDir  string
-	dryRun   bool
-	filter   scenario.RunFilter
-	now      func() time.Time
-	journal  *repository.Journal
-	agg      *run.Run
-	baseEnv  map[string]string
-	notifier *otelNotifier
-	reporter *reporter
-	emitMu   sync.Mutex // 並走する parallel の子からの emit を直列化する (AS-BUILT §4.14)
+	log          *slog.Logger
+	out          io.Writer
+	errOut       io.Writer
+	projDir      string
+	runDir       string // .stfw/runs/{run_id} (run 単位のプラグイン展開先の親。AS-BUILT §5.7)
+	workspaceDir string // 実行ワークスペースルート (シナリオ複製の配置先。AS-BUILT §5.7)
+	resumeFrom   string // resume の引き継ぎ元 run_id ("" = resume なし。AS-BUILT §5.8)
+	dryRun       bool
+	filter       scenario.RunFilter
+	now          func() time.Time
+	journal      *repository.Journal
+	agg          *run.Run
+	baseEnv      map[string]string
+	notifier     *otelNotifier
+	reporter     *reporter
+	emitMu       sync.Mutex // 並走する parallel の子からの emit を直列化する (AS-BUILT §4.14)
 }
 
 // emit は生成時検証 (リプレイと同一の状態遷移検証) を通してジャーナルへ追記する。
@@ -227,6 +284,10 @@ func (r *runner) runRun(runID run.RunID, views []scenario.ScenarioView, names []
 	// 部分実行時はフィルタ指定を attrs へ記録する (この run が全体実行でないことの証跡)
 	if key, value := r.filter.Attr(); key != "" {
 		attrs[key] = value
+	}
+	// resume 時は引き継ぎ元 run_id を記録する (生成物の由来の証跡。AS-BUILT §5.8)
+	if r.resumeFrom != "" {
+		attrs["resume_from"] = r.resumeFrom
 	}
 	if err := r.emit(run.NewNodeStartEvent(r.now(), nodeID, run.NodeTypeRun, attrs)); err != nil {
 		return "", err
@@ -274,7 +335,9 @@ func (r *runner) runScenario(parent run.NodeID, view scenario.ScenarioView, pare
 		return "", err
 	}
 
-	scenarioDir := filepath.Join(r.projDir, scenario.RootDirName, view.Name)
+	// 実行はワークスペース内の複製ツリー上で行う (scenario/ 正本には書き込まない。
+	// AS-BUILT §5.7)
+	scenarioDir := filepath.Join(r.workspaceDir, view.Name)
 	env := cloneEnv(parentEnv)
 	env["stfw_scenario_dir"] = scenarioDir
 	env["stfw_scenario_name"] = view.Name
@@ -381,6 +444,65 @@ func (r *runner) runHooks(level run.NodeType, phase string, env map[string]strin
 		}
 	}
 	return true
+}
+
+// resolveResumeFrom は resume の引き継ぎ元 run_id を解決する (AS-BUILT §5.8)。
+// 実行中・初期化中の run は引き継ぎ元にしない (書き込み途中のワークスペースを
+// 非原子的に取り込むことを防ぐ)。"latest" は最新の完了済み run。
+// run_id 指定時は形式・実在・完了済みであることを検証する。
+func resolveResumeFrom(projDir, resume string) (string, error) {
+	if resume == "latest" {
+		ids, err := repository.ListRunIDs(projDir)
+		if err != nil {
+			return "", fmt.Errorf("resume: %w", err)
+		}
+		// 最新から遡って最初の完了済み run を採用する (未完了・ジャーナル不正はスキップ)
+		for i := len(ids) - 1; i >= 0; i-- {
+			finished, err := isRunFinished(projDir, ids[i])
+			if err != nil || !finished {
+				continue
+			}
+			return ids[i], nil
+		}
+		return "", fmt.Errorf("resume: no finished runs")
+	}
+	if _, err := run.ParseRunID(resume); err != nil {
+		return "", fmt.Errorf("resume: %w", err)
+	}
+	if info, err := os.Stat(repository.RunDir(projDir, resume)); err != nil || !info.IsDir() {
+		return "", fmt.Errorf("resume: run %s is not exist", resume)
+	}
+	finished, err := isRunFinished(projDir, resume)
+	if err != nil {
+		return "", fmt.Errorf("resume: %w", err)
+	}
+	if !finished {
+		return "", fmt.Errorf("resume: run %s is not finished", resume)
+	}
+	return resume, nil
+}
+
+// isRunFinished は run のジャーナルをリプレイし、run 階層が終端ステータス
+// (node_end 記録済み) に達しているかを返す。空ジャーナルは未完了扱い。
+func isRunFinished(projDir, runID string) (bool, error) {
+	id, err := run.ParseRunID(runID)
+	if err != nil {
+		return false, err
+	}
+	events, err := repository.ReadJournal(projDir, runID)
+	if err != nil {
+		return false, err
+	}
+	agg, err := run.Replay(id, events)
+	if err != nil {
+		return false, err
+	}
+	for _, view := range agg.NodeViews() {
+		if view.Depth == 0 {
+			return view.Status != run.NodeStarted, nil
+		}
+	}
+	return false, nil
 }
 
 // targetOrder は実行対象シナリオの順序を決める。

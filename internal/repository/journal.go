@@ -24,6 +24,12 @@ func runDir(projDir, runID string) string {
 	return filepath.Join(projDir, project.DataDirName, runsDirName, runID)
 }
 
+// RunDir は run_id の実行データディレクトリ (.stfw/runs/{run_id}) を返す。
+// 実行ワークスペース・run 単位のプラグイン展開先の親ディレクトリ (AS-BUILT §5.7)。
+func RunDir(projDir, runID string) string {
+	return runDir(projDir, runID)
+}
+
 // JournalPath は journal.jsonl のパスを返す。
 func JournalPath(projDir, runID string) string {
 	return filepath.Join(runDir(projDir, runID), journalFileName)

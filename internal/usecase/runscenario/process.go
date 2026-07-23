@@ -186,7 +186,8 @@ func (r *runner) execSteps(nodeID run.NodeID, processDir string, steps []string,
 // post_execute → teardown。dry-run 時は execute / post_execute をスキップする。
 // 作業ディレクトリはプロセスディレクトリ (v0.2 の execute_service と同じ)。
 func (r *runner) runPluginProcess(processDir string, loc repository.PluginLocation, env map[string]string) (run.NodeStatus, error) {
-	pluginDir, err := repository.MaterializePlugin(r.projDir, loc)
+	// 同梱プラグインは run 単位の展開先へ展開する (並走 run 間の衝突防止。AS-BUILT §5.7)
+	pluginDir, err := repository.MaterializePlugin(r.runDir, loc)
 	if err != nil {
 		r.log.Error(err.Error())
 		return run.NodeError, nil

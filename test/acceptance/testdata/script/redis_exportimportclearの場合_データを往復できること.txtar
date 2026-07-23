@@ -13,13 +13,14 @@ exec stfw secret set redis01 appuser secretpw
 
 # 実行: clear(_10) → import(_20) → export(_30)
 exec stfw run redis
+latestrun . RUN
 
 # パスワードがマスクされている
 stderr '\[secret\]'
 ! stderr 'secretpw'
 
-# export: 型ごとに正規化された CSV がエビデンス規約どおり出力される
-cmp scenario/redis/_10_99990101/_30_grp_exportRedis/evidence/redis01/demo.csv demo.csv.golden
+# export: 型ごとに正規化された CSV がエビデンス規約どおり run ワークスペース内に出力される
+cmp .stfw/runs/$RUN/workspace/redis/_10_99990101/_30_grp_exportRedis/evidence/redis01/demo.csv demo.csv.golden
 
 # clear が SCAN 一致キーを DEL、import が decode コマンドを発行している
 exec cat ${WORK}/redis.log
@@ -40,13 +41,14 @@ execcode 6 stfw run rimp
 stderr 'source csv not found'
 
 # per-key の redis-cli 失敗 (TTL 取得不可) を握りつぶさず exit 6。
-# 事前に前回 run の古い成果物 (bad.csv) を置いておき、失敗した再実行では
-# それが残らない (=成功時のみ再配置) ことも検証する。
+# 正本側に前回 run の古い成果物 (bad.csv) を置いておき、失敗した再実行の
+# ワークスペースにそれが複製されない (=古い成果物が今回の結果として残らない) ことも検証する (AS-BUILT §5.7)。
 exists scenario/rttlerr/_10_99990101/_10_grp_exportRedis/evidence/redis01/bad.csv
 execcode 6 stfw run rttlerr
 stderr 'TTL failed'
-# 不完全な CSV は成果物として公開しない (古い成果物も削除される)
-! exists scenario/rttlerr/_10_99990101/_10_grp_exportRedis/evidence/redis01/bad.csv
+latestrun . RUN
+# 不完全な CSV は成果物として公開しない (古い成果物はワークスペースへ複製されない)
+! exists .stfw/runs/$RUN/workspace/rttlerr/_10_99990101/_10_grp_exportRedis/evidence/redis01/bad.csv
 
 # inventory list の失敗も握りつぶさず exit 6
 cp badstfw.yml stfw.yml
