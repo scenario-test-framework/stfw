@@ -38,6 +38,9 @@ convention and run them automatically from a single binary.
 - **Housekeeping**: `stfw run` automatically deletes results (including evidence) older than the
   retention window (`stfw.housekeep.retention_days`) at the start of a run.
 
+> 📋 **For test managers / PMs** — see the [manager's guide](docs/FOR-MANAGERS.md) (Japanese) for
+> the value proposition and how to start small.
+
 > ℹ️ Internal documentation (`docs/`) and in-code comments are written in Japanese.
 
 ## Install
