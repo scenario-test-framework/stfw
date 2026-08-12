@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -35,7 +36,11 @@ type TraceExporter struct {
 func NewOTLPTraceExporter(log *slog.Logger, endpointURL, version string) (*TraceExporter, error) {
 	var opts []otlptracehttp.Option
 	if endpointURL != "" {
-		// パス無し URL は /v1/traces が補完される (OTEL_EXPORTER_OTLP_ENDPOINT と同等)
+		// パス無し URL は OTEL_EXPORTER_OTLP_ENDPOINT と同様に /v1/traces へ送信する。
+		// otel v1.45.0 以降の WithEndpointURL は既定パスを補完しないため、ここで補完する。
+		if u, err := url.Parse(endpointURL); err == nil && (u.Path == "" || u.Path == "/") {
+			endpointURL, _ = url.JoinPath(endpointURL, "/v1/traces")
+		}
 		opts = append(opts, otlptracehttp.WithEndpointURL(endpointURL))
 	}
 	exp, err := otlptracehttp.New(context.Background(), opts...)
