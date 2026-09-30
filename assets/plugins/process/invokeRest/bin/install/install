@@ -9,6 +9,10 @@
 #
 # k6 のリリース資産名は k6-{version}-{os}-{arch}.{tar.gz|zip} (linux=tar.gz / macos=zip、
 # os=linux|macos、arch=amd64|arm64)。取得・展開・配置に失敗した場合は非 0 (exit 6) を返す。
+#
+# 呼び出し元: stfw plugin install / stfw init に加え、Dockerfile の full ステージが
+# stfw_plugin_cache_dir=/opt/stfw/bundled + 版 env だけを渡してビルド時に実行する
+# (イメージ同梱)。配置先レイアウトや env 契約を変えるとイメージビルドも壊れる。
 set -uo pipefail
 
 # OS 判定 (k6 の資産命名は macos。cache パスは内部命名 ${os}_${arch})

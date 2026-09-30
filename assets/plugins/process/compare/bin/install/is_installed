@@ -1,6 +1,7 @@
 #!/bin/bash
-# 実行ホストの os_arch 版 compare_files がキャッシュ済みならインストール済みとみなす。
-# 欠けていれば false を返し、stfw plugin install compare で補修できるようにする。
+# 実行ホストの os_arch 版 compare_files がキャッシュ済み、または版一致のイメージ同梱版
+# (stfw:full) があればインストール済みとみなす。欠けていれば false を返し、
+# stfw plugin install compare で補修できるようにする (版の上書きはプロジェクト共通設定で行う)。
 os=""
 case "$(uname -s)" in
   Linux) os=linux ;;
@@ -15,7 +16,23 @@ case "$(uname -m)" in
 esac
 os_arch="${os}_${arch}"
 
-if [ ! -x "${stfw_plugin_cache_dir}/compare-files/${os_arch}/compare_files" ]; then
+bin="${stfw_plugin_cache_dir}/compare-files/${os_arch}/compare_files"
+# 永続キャッシュが無ければイメージ同梱版 (stfw:full) を使う。設定版と同梱版 (VERSION) が
+# 一致するときに限る (解決順は bin/run/execute と同じ)。
+bundled="${stfw_plugin_bundled_dir:-}/compare-files"
+version="${stfw_process_compare_compare_files_version:-v2.2.0}"
+if [ ! -x "${bin}" ] && [ -n "${stfw_plugin_bundled_dir:-}" ] \
+  && [ "$(cat "${bundled}/VERSION" 2>/dev/null)" = "${version}" ]; then
+  bin="${bundled}/${os_arch}/compare_files"
+fi
+if [ ! -x "${bin}" ]; then
+  # 同梱版はあるが版だけが食い違う場合は、原因と対処を stderr に出す
+  # (stdout は判定にしか使われず利用者に見えない)。
+  bundled_version="$(cat "${bundled}/VERSION" 2>/dev/null)"
+  if [ -n "${stfw_plugin_bundled_dir:-}" ] && [ -n "${bundled_version}" ] && [ "${bundled_version}" != "${version}" ]; then
+    echo "compare: bundled compare-files is ${bundled_version} but compare_files_version is ${version}" \
+      "(set compare_files_version in config/plugins/process/compare/config.yml and run \`stfw plugin install compare\`)" >&2
+  fi
   echo "compare_files for ${os_arch} is not provisioned (run \`stfw plugin install compare\`)."
   exit 1
 fi

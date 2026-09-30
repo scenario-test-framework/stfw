@@ -1,0 +1,159 @@
+# STEP: collectLog プラグインのイメージ同梱フォールバック (stfw:full)
+# stfw:full は logfilter を /opt/stfw/bundled/logfilter/{os_arch}/logfilter に同梱し
+# (収集先ホスト用のため logfilter_arches の全 arch)、stfw_plugin_bundled_dir で公開する。
+# ここでは同梱ディレクトリをフィクスチャで再現する。curl(DL) は常に失敗させ、
+# 同梱経路ではダウンロードしないことを担保する。ssh / scp / sshpass はモックする。
+#
+# 検証内容:
+#   - 永続キャッシュが無くても、設定版と一致する同梱版で install なしに収集できる
+#     (収集先ホストへ転送されるのは同梱版の logfilter)
+#   - 同梱が設定版と一致すれば plugin install は「インストール済み」(exit 3) で DL しない
+#   - arch ごとに「永続キャッシュ → 同梱」の順で解決する (キャッシュ済み arch はキャッシュ優先)
+#   - 設定版が異なる / 同梱に無い arch を要求する場合は未プロビジョニング扱い
+
+env PATH=${WORK}/fakebin:${PATH}
+env STFW_TEST_REMOTE=${WORK}/remote
+chmod 755 fakebin/curl
+chmod 755 fakebin/ssh
+chmod 755 fakebin/scp
+chmod 755 fakebin/sshpass
+chmod 755 fakebin/mkbin
+
+# 同梱ディレクトリ (VERSION + 既定の logfilter_arches 全 arch)
+exec mkbin bundled/logfilter v2.0.0 bundled linux_amd64 linux_arm64 darwin_arm64
+env stfw_plugin_bundled_dir=${WORK}/bundled
+
+exec stfw secret keygen
+exec stfw secret set web01 appuser secretpw
+
+# --- 同梱あり・キャッシュなし: install なしで収集でき、転送されるのは同梱版 ---
+exec stfw run demo
+latestrun . RUN
+exists .stfw/runs/$RUN/workspace/demo/_10_99990101/_10_grp_collectLog/evidence/web01/var/log/app/app.log
+exec sh -c 'cat remote/web01/tmp/stfw_logfilter_*'
+stdout 'logfilter=bundled'
+! exists .stfw/cache/plugins/collectLog/logfilter
+
+# --- 同梱が設定版と一致: plugin install はインストール済み (exit 3) で DL しない ---
+execcode 3 stfw plugin install collectLog
+! stderr 'download'
+
+# --- arch ごとの解決: キャッシュ済み arch (linux_amd64) はキャッシュ優先、他 arch は同梱で補う ---
+exec mkbin .stfw/cache/plugins/collectLog/logfilter v2.0.0 cache linux_amd64
+execcode 3 stfw plugin install collectLog
+rm remote/web01/tmp
+exec stfw run demo
+exec sh -c 'cat remote/web01/tmp/stfw_logfilter_*'
+stdout 'logfilter=cache'
+rm .stfw/cache/plugins/collectLog/logfilter
+
+# --- 同梱に無い arch を要求する: 未プロビジョニング扱い (install は DL を試みる) ---
+mkdir config/plugins/process/collectLog
+cp config.arches.yml config/plugins/process/collectLog/config.yml
+execcode 6 stfw plugin install collectLog
+stderr 'download failed'
+
+# --- 設定版と同梱版が異なる: 同梱は使わない ---
+cp config.version.yml config/plugins/process/collectLog/config.yml
+execcode 6 stfw run demo
+stderr 'is not installed'
+stderr 'bundled logfilter is v2\.0\.0 but logfilter_version is v9\.9\.9'
+execcode 6 stfw plugin install collectLog
+stderr 'download failed'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  inventory: staging.yml
+-- config/inventory/staging.yml --
+stfw_inventory:
+  - web:
+    - host: web01
+      arch: linux_amd64
+-- config.arches.yml --
+stfw:
+  process:
+    collectLog:
+      logfilter_arches: linux_amd64 linux_riscv64
+-- config.version.yml --
+stfw:
+  process:
+    collectLog:
+      logfilter_version: v9.9.9
+-- scenario/demo/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_grp_collectLog/metadata.yml --
+description:
+-- scenario/demo/_10_99990101/_10_grp_collectLog/config/config.yml --
+stfw:
+  process:
+    collectLog:
+      targets:
+        - group: web
+          user: appuser
+          paths:
+            - /var/log/app/.*\.log
+-- remote/web01/manifest --
+/var/log/app/app.log
+-- remote/web01/var/log/app/app.log --
+app started
+-- fakebin/mkbin --
+#!/bin/bash
+# mkbin {dir} {version} {label} {os_arch...}: {dir}/VERSION と {dir}/{os_arch}/logfilter を作る。
+# logfilter の中身は「logfilter={label}」(収集先へ転送されたバイナリがどの配置かを識別する)。
+dir="$1"; version="$2"; label="$3"; shift 3
+mkdir -p "${dir}"
+echo "${version}" > "${dir}/VERSION"
+for a in "$@"; do
+  mkdir -p "${dir}/${a}"
+  printf '#!/bin/bash\n# logfilter=%s\n' "${label}" > "${dir}/${a}/logfilter"
+  chmod 755 "${dir}/${a}/logfilter"
+done
+-- fakebin/curl --
+#!/bin/bash
+# 同梱経路ではダウンロードしないことを担保するため、常に失敗させる
+exit 22
+-- fakebin/sshpass --
+#!/bin/bash
+if [ "$1" = "-p" ]; then shift 2; fi
+exec "$@"
+-- fakebin/ssh --
+#!/bin/bash
+# 擬似リモート: find はマニフェストから、logfilter 実行は入力の複製で再現する
+host=""
+for a in "$@"; do case "$a" in *@*) host="${a#*@}";; esac; done
+cmd="${@: -1}"
+root="${STFW_TEST_REMOTE}/${host}"
+set -- ${cmd}
+case "$1" in
+  find)
+    pat="$(sed -n "s/.*-regex '\([^']*\)'.*/\1/p" <<<"${cmd}")"
+    grep -E "${pat}" "${root}/manifest"
+    ;;
+  chmod|rm)
+    exit 0
+    ;;
+  *)
+    infile="$(sed -E "s/.*'([^']*)' '([^']*)'[^']*\$/\1/" <<<"${cmd}")"
+    outfile="$(sed -E "s/.*'([^']*)' '([^']*)'[^']*\$/\2/" <<<"${cmd}")"
+    mkdir -p "${root}$(dirname "${outfile}")"
+    cp "${root}${infile}" "${root}${outfile}"
+    ;;
+esac
+exit 0
+-- fakebin/scp --
+#!/bin/bash
+dest="${@: -1}"
+src="${@: -2:1}"
+if [[ "${src}" == *@*:* ]]; then
+  host="${src%%:*}"; host="${host#*@}"; path="${src#*:}"
+  cp "${STFW_TEST_REMOTE}/${host}${path}" "${dest}"
+elif [[ "${dest}" == *@*:* ]]; then
+  host="${dest%%:*}"; host="${host#*@}"; path="${dest#*:}"
+  mkdir -p "$(dirname "${STFW_TEST_REMOTE}/${host}${path}")"
+  cp "${src}" "${STFW_TEST_REMOTE}/${host}${path}"
+fi
+exit 0

@@ -261,6 +261,8 @@ stfw report                      # 6. HTML レポート
 手順 2 は固定コマンドではなく、**生成した scenario tree で使っている type を列挙して**
 外部バイナリが必要なものを個別に案内する (invokeRest / invokeWeb = k6、
 compare = compare-files、collectLog = logfilter。カスタムプラグインも install を持つなら含める)。
+`stfw:full` イメージで実行する場合、既定の版の k6 / compare-files / logfilter は同梱済みのため
+install は不要 (実行しても「インストール済み」exit 3 で終わる) と添える。
 
 失敗時のやり直しには部分実行がある: `stfw run {scenario} --from {bizdate_dir}/{process_dir}`
 (そこから最後まで) / `--only` (そこだけ)。スキップしたノードの副作用は再現されない点を添える。

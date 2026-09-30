@@ -112,7 +112,8 @@ docker run --rm -v "$PWD":/work ghcr.io/scenario-test-framework/stfw:latest --ve
 ```
 
 To use the built-in plugins (RDBMS / Redis / ssh family / invokeWeb), use the all-runtime-bundled
-**`stfw:full`** image (ships mysql / psql / redis-cli / sshpass / Chromium):
+**`stfw:full`** image (ships mysql / psql / redis-cli / sshpass / Chromium, plus the plugin tools
+k6 / compare-files / logfilter, so with the default tool versions no `stfw plugin install` or network access is needed):
 
 ```console
 docker pull ghcr.io/scenario-test-framework/stfw:full

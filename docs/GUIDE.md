@@ -260,7 +260,8 @@ stfw run {scenario} --only _20_20240102/_30_batch_scripts   # 指定ノードだ
 
 `stfw run` はプラグインの外部バイナリを自動 install しません。k6（invokeRest/invokeWeb）や
 compare-files（compare）を使うシナリオは、事前に `stfw plugin install {type}` が必要です
-（`stfw init` は全プラグインの install をまとめて行います）。
+（`stfw init` は全プラグインの install をまとめて行います）。`stfw:full` イメージは k6 / compare-files /
+logfilter を同梱しているため、既定の版を使う限り install は不要です（版を上書きした場合は install が必要）。
 
 ## 8. シナリオを文書化・雛形生成する
 

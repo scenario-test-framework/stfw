@@ -5,6 +5,10 @@
 #
 # 要求した arch のいずれかで取得・展開・配置に失敗した場合は非 0 (exit 6) を返す
 # (成功した arch はキャッシュに残す)。
+#
+# 呼び出し元: stfw plugin install / stfw init に加え、Dockerfile の full ステージが
+# stfw_plugin_cache_dir=/opt/stfw/bundled + 版 env だけを渡してビルド時に実行する
+# (イメージ同梱)。配置先レイアウトや env 契約を変えるとイメージビルドも壊れる。
 set -uo pipefail
 
 for cmd in curl tar; do

@@ -100,7 +100,8 @@ docker run --rm -v "$PWD":/work ghcr.io/scenario-test-framework/stfw:latest --ve
 ```
 
 組込みプラグイン (RDBMS / Redis / ssh 系 / invokeWeb) を使う場合は、全ランタイム同梱版の
-**`stfw:full`** を使います (mysql / psql / redis-cli / sshpass / Chromium を同梱):
+**`stfw:full`** を使います (mysql / psql / redis-cli / sshpass / Chromium に加え、プラグインの外部ツール
+k6 / compare-files / logfilter も同梱しているため、既定の版を使う限り `stfw plugin install` やネットワークアクセスは不要です):
 
 ```console
 docker pull ghcr.io/scenario-test-framework/stfw:full

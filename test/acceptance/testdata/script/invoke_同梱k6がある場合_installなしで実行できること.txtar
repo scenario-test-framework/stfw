@@ -1,0 +1,153 @@
+# STEP: invokeRest / invokeWeb プラグインのイメージ同梱フォールバック (stfw:full)
+# stfw:full は k6 を /opt/stfw/bundled/k6/{os_arch}/k6 に同梱し、stfw_plugin_bundled_dir で
+# 公開する (invokeRest / invokeWeb で共有)。ここでは同梱ディレクトリをフィクスチャで再現する。
+# curl(DL) は常に失敗させ、同梱経路ではダウンロードしないことを担保する。
+#
+# 検証内容:
+#   - 永続キャッシュが無くても、設定版と一致する同梱版で install なしに run できる (Rest / Web)
+#   - 同梱が設定版と一致すれば plugin install は「インストール済み」(exit 3) で DL しない
+#   - 設定版と同梱版が異なれば同梱を使わず未プロビジョニング扱い (run exit 6)
+#   - 永続キャッシュと同梱の両方があれば永続キャッシュを優先する (初回 install 優先)
+
+env PATH=${WORK}/fakebin:${PATH}
+chmod 755 fakebin/curl
+chmod 755 fakebin/fakek6
+chmod 755 fakebin/mkbin
+
+# 同梱ディレクトリ (VERSION + 実行ホストの os_arch 版 k6。os 命名は k6 の linux / macos)
+exec mkbin bundled/k6 v2.1.0 bundled
+env stfw_plugin_bundled_dir=${WORK}/bundled
+
+# --- 同梱あり・キャッシュなし: install なしで run が成功し、キャッシュは作られない ---
+exec stfw run inv
+stderr 'k6=bundled'
+! exists .stfw/cache/plugins/invokeRest/k6
+exec stfw run invweb
+stderr 'k6=bundled'
+stdout 'K6_BROWSER_HEADLESS=true'
+! exists .stfw/cache/plugins/invokeWeb/k6
+
+# --- 同梱が設定版と一致: plugin install はインストール済み (exit 3) で DL しない ---
+execcode 3 stfw plugin install invokeRest
+! stderr 'download'
+execcode 3 stfw plugin install invokeWeb
+! stderr 'download'
+
+# --- 設定版と同梱版が異なる: 同梱は使わない ---
+execcode 6 stfw run invver
+stderr 'is not installed'
+stderr 'bundled k6 is v2\.1\.0 but k6_version is v9\.9\.9'
+! stderr 'k6=bundled'
+execcode 6 stfw run invwebver
+stderr 'is not installed'
+stderr 'bundled k6 is v2\.1\.0 but k6_version is v9\.9\.9'
+! stderr 'k6=bundled'
+
+# --- 永続キャッシュと同梱の両方がある: 永続キャッシュを優先する ---
+exec mkbin .stfw/cache/plugins/invokeRest/k6 v2.1.0 cache
+exec stfw run inv
+stderr 'k6=cache'
+! stderr 'k6=bundled'
+exec mkbin .stfw/cache/plugins/invokeWeb/k6 v2.1.0 cache
+exec stfw run invweb
+stderr 'k6=cache'
+! stderr 'k6=bundled'
+
+# --- stfw_plugin_bundled_dir 未設定: 従来どおり永続キャッシュのみ参照 ---
+env stfw_plugin_bundled_dir=
+rm .stfw/cache/plugins/invokeRest/k6
+rm .stfw/cache/plugins/invokeWeb/k6
+execcode 6 stfw run inv
+stderr 'is not installed'
+! stderr 'bundled k6 is'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+-- scenario/inv/metadata.yml --
+description:
+-- scenario/inv/_10_99990101/metadata.yml --
+description:
+-- scenario/inv/_10_99990101/_10_act_invokeRest/metadata.yml --
+description:
+-- scenario/inv/_10_99990101/_10_act_invokeRest/config/config.yml --
+stfw:
+  process:
+    invokeRest:
+      script: script.js
+-- scenario/inv/_10_99990101/_10_act_invokeRest/script.js --
+export default function () {}
+-- scenario/invweb/metadata.yml --
+description:
+-- scenario/invweb/_10_99990101/metadata.yml --
+description:
+-- scenario/invweb/_10_99990101/_10_act_invokeWeb/metadata.yml --
+description:
+-- scenario/invweb/_10_99990101/_10_act_invokeWeb/config/config.yml --
+stfw:
+  process:
+    invokeWeb:
+      script: script.js
+-- scenario/invweb/_10_99990101/_10_act_invokeWeb/script.js --
+export const options = { scenarios: {} }
+-- scenario/invver/metadata.yml --
+description:
+-- scenario/invver/_10_99990101/metadata.yml --
+description:
+-- scenario/invver/_10_99990101/_10_act_invokeRest/metadata.yml --
+description:
+-- scenario/invver/_10_99990101/_10_act_invokeRest/config/config.yml --
+stfw:
+  process:
+    invokeRest:
+      k6_version: v9.9.9
+      script: script.js
+-- scenario/invver/_10_99990101/_10_act_invokeRest/script.js --
+export default function () {}
+-- scenario/invwebver/metadata.yml --
+description:
+-- scenario/invwebver/_10_99990101/metadata.yml --
+description:
+-- scenario/invwebver/_10_99990101/_10_act_invokeWeb/metadata.yml --
+description:
+-- scenario/invwebver/_10_99990101/_10_act_invokeWeb/config/config.yml --
+stfw:
+  process:
+    invokeWeb:
+      k6_version: v9.9.9
+      script: script.js
+-- scenario/invwebver/_10_99990101/_10_act_invokeWeb/script.js --
+export const options = { scenarios: {} }
+-- fakebin/mkbin --
+#!/bin/bash
+# mkbin {dir} {version} {label}: {dir}/VERSION と {dir}/{os_arch}/k6 を作る。
+# k6 は fakek6 を呼ぶラッパーで、起動時に stderr へ「k6={label}」を出す
+# (どの配置のバイナリが使われたかを識別する)。os_arch はプラグインと同じ uname 対応 (k6 は macos 命名)。
+dir="$1"; version="$2"; label="$3"
+case "$(uname -s)" in Linux) os=linux ;; Darwin) os=macos ;; *) exit 1 ;; esac
+case "$(uname -m)" in x86_64 | amd64) arch=amd64 ;; aarch64 | arm64) arch=arm64 ;; *) exit 1 ;; esac
+mkdir -p "${dir}/${os}_${arch}"
+echo "${version}" > "${dir}/VERSION"
+printf '#!/bin/bash\necho "k6=%s" >&2\nexec fakek6 "$@"\n' "${label}" > "${dir}/${os}_${arch}/k6"
+chmod 755 "${dir}/${os}_${arch}/k6"
+-- fakebin/curl --
+#!/bin/bash
+# 同梱経路ではダウンロードしないことを担保するため、常に失敗させる
+exit 22
+-- fakebin/fakek6 --
+#!/bin/bash
+# fake k6: run [flags] script。--summary-export にダミー JSON を書く。
+summary=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --summary-export) summary="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+echo "fake k6: K6_BROWSER_HEADLESS=${K6_BROWSER_HEADLESS:-unset}"
+if [ -n "${summary}" ]; then
+  mkdir -p "$(dirname "${summary}")"
+  echo '{"metrics":{}}' > "${summary}"
+fi
+exit 0

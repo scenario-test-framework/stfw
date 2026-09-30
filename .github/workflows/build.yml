@@ -45,3 +45,20 @@ jobs:
           context: .
           target: full
           push: false
+          load: true
+          tags: stfw:full-ci
+      # 同梱した外部ツール (compare-files / k6 / logfilter) がプラグインから解決できること
+      # (install スクリプトの配置先と同梱レイアウトの結合を守る)。ネットワーク遮断下で
+      # init し、DL を要するプラグインの install がインストール済み (exit 3) になることを確認する。
+      - name: smoke test bundled plugin tools
+        run: |
+          mkdir -p "${RUNNER_TEMP}/proj" && chmod 777 "${RUNNER_TEMP}/proj"
+          docker run --rm --network none -v "${RUNNER_TEMP}/proj:/work" stfw:full-ci init
+          for t in compare invokeRest invokeWeb collectLog; do
+            rc=0
+            docker run --rm --network none -v "${RUNNER_TEMP}/proj:/work" stfw:full-ci plugin install "${t}" || rc=$?
+            if [ "${rc}" -ne 3 ]; then
+              echo "::error::stfw plugin install ${t} exited ${rc} (want 3 = bundled)"
+              exit 1
+            fi
+          done

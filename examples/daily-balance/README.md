@@ -47,7 +47,7 @@ stfw の**組込みプラグインエコシステム**を実プロジェクト�
 
 1. 依存サービス（postgres + トイ API = SUT、Jaeger = トレース送信先）を起動
 2. secret を準備（age 鍵生成 + DB パスワード登録）
-3. プラグインの外部バイナリ（k6 / compare-files）を install
+3. プラグインの外部バイナリ（k6 / compare-files）を install（`stfw:full` は同梱済みのため「インストール済み」で終わる）
 4. `stfw run daily-balance` を実行
 5. HTML レポート配信（nginx）を起動 → http://localhost:8088
 6. 実行トレースを Jaeger UI で閲覧 → http://localhost:16686（service=stfw）

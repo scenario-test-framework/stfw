@@ -1,5 +1,6 @@
 # compare プラグインのメタデータ。
-# compare-files バイナリはキャッシュから絶対パスで起動するため PATH 要求はない
+# compare-files バイナリはキャッシュ (または stfw:full の同梱 stfw_plugin_bundled_dir) から
+# 絶対パスで起動するため PATH 要求はない
 # (プロビジョニングは install、存在ゲートは is_installed が担う)。
 # install 時の curl / tar は install 側で確認する。
 requires: []
