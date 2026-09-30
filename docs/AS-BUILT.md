@@ -981,7 +981,7 @@ stfw_inventory:
 
 | 項目 | 仕様 |
 |---|---|
-| ベース | ビルド: `golang:1.26` → 実行: `debian:bookworm-slim` |
+| ベース | ビルド: `golang:1.27` → 実行: `debian:bookworm-slim` |
 | 追加パッケージ | bash, curl, openssh-client, ca-certificates（プラグイン契約が任意言語スクリプト実行のため distroless にしない） |
 | ユーザー | `stfw`（uid 1000）。`/work/.stfw/reports` を事前作成し所有権を付与 |
 | 実行 | `WORKDIR /work`, `ENTRYPOINT ["stfw"]` |
