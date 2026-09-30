@@ -18,6 +18,15 @@ evidence_root="${stfw_process_dir}/evidence"
 ssh_opts=(-o StrictHostKeyChecking=yes -o ConnectTimeout=10)
 rc=0
 
+# logfilter は arch ごとに永続キャッシュ → イメージ同梱版 (stfw:full) の順で解決する。
+# 同梱版は設定版と同梱版 (VERSION) が一致するときに限る (解決順は bin/install/is_installed と同じ)。
+bundled="${stfw_plugin_bundled_dir:-}/logfilter"
+use_bundled=0
+if [ -n "${stfw_plugin_bundled_dir:-}" ] \
+  && [ "$(cat "${bundled}/VERSION" 2>/dev/null)" = "${stfw_process_collectLog_logfilter_version:-v2.0.0}" ]; then
+  use_bundled=1
+fi
+
 # フィルタ基準時刻: stfw_bizdate_start_ts (RFC3339) を logfilter の
 # -tf 形式 'YYYY-MM-DD HH:MM:SS.000' へ変換 (純 bash・タイムゾーンは実行ホスト基準)。
 from=""
@@ -57,6 +66,9 @@ while :; do
       continue
     fi
     lfbin="${stfw_plugin_cache_dir}/logfilter/${arch}/logfilter"
+    if [ ! -x "${lfbin}" ] && [ "${use_bundled}" -eq 1 ]; then
+      lfbin="${bundled}/${arch}/logfilter"
+    fi
     if [ ! -x "${lfbin}" ]; then
       echo "collectLog: logfilter for ${arch} is not provisioned (run \`stfw plugin install collectLog\`)" >&2
       rc=6

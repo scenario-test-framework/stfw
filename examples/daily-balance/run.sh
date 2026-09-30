@@ -26,7 +26,7 @@ fi
 # (再実行でも冪等になるよう --force で上書き)
 stfw secret set postgres appuser apppass --force
 
-echo "==> プラグインの外部バイナリ (k6 / compare-files) を install"
+echo "==> プラグインの外部バイナリ (k6 / compare-files) を install (stfw:full は同梱済みのためインストール済みで終わる)"
 ensure_plugin invokeRest
 ensure_plugin compare
 

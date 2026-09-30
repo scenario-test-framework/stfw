@@ -32,6 +32,13 @@ case "$(uname -m)" in
   *) echo "invokeWeb: unsupported arch: $(uname -m)" >&2; exit 6 ;;
 esac
 k6_bin="${stfw_plugin_cache_dir}/k6/${k6_os}_${arch}/k6"
+# 永続キャッシュが無ければイメージ同梱版 (stfw:full) を使う。設定版と同梱版 (VERSION) が
+# 一致するときに限る (解決順は bin/install/is_installed と同じ)。
+bundled="${stfw_plugin_bundled_dir:-}/k6"
+if [ ! -x "${k6_bin}" ] && [ -n "${stfw_plugin_bundled_dir:-}" ] \
+  && [ "$(cat "${bundled}/VERSION" 2>/dev/null)" = "${stfw_process_invokeWeb_k6_version:-v2.1.0}" ]; then
+  k6_bin="${bundled}/${k6_os}_${arch}/k6"
+fi
 if [ ! -x "${k6_bin}" ]; then
   echo "invokeWeb: k6 not provisioned: ${k6_bin} (run \`stfw plugin install invokeWeb\`)" >&2
   exit 6

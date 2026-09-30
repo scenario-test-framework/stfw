@@ -6,7 +6,9 @@
 
 - プロビジョニング: `stfw plugin install compare` (通常は `stfw init` が自動実行) が
   実行ホストの os_arch 版 `compare_files` をダウンロードし
-  `.stfw/cache/plugins/compare/` へキャッシュする (install 時に `curl` / `tar` が必要)
+  `.stfw/cache/plugins/compare/` へキャッシュする (install 時に `curl` / `tar` が必要)。
+  `stfw:full` イメージは既定の版の compare_files を同梱しており、キャッシュが無ければ同梱版を
+  使うため install 不要 (`compare_files_version` を上書きした場合は install が必要)
 - 接続情報は不要 (ローカルのファイル比較)
 
 ## 設定 (config/config.yml)

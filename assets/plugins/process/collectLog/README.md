@@ -6,7 +6,9 @@
 
 - 必要コマンド: `ssh` / `scp` / `sshpass` (実行前に PATH ゲートされる)。install 時は `curl` / `tar`
 - プロビジョニング: `stfw plugin install collectLog` (通常は `stfw init` が自動実行) が
-  logfilter バイナリを arch 別にダウンロードし `.stfw/cache/plugins/collectLog/` へキャッシュする
+  logfilter バイナリを arch 別にダウンロードし `.stfw/cache/plugins/collectLog/` へキャッシュする。
+  `stfw:full` イメージは既定の版・arches の logfilter を同梱しており、キャッシュに無い arch は
+  同梱版で補うため install 不要 (`logfilter_version` を上書きした場合や同梱に無い arch は install が必要)
 - 接続情報は inventory / secret から解決する (config への直書きは禁止):
   - ホスト: inventory グループ (`targets[].group`)
   - **arch**: inventory の構造化ホストエントリ `arch` (logfilter の送り分けに必須)

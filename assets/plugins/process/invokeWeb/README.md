@@ -5,7 +5,9 @@
 ## 前提
 
 - プロビジョニング: `stfw plugin install invokeWeb` (通常は `stfw init` が自動実行) が
-  実行ホストの os_arch 版 `k6` をダウンロードし `.stfw/cache/plugins/invokeWeb/` へキャッシュする
+  実行ホストの os_arch 版 `k6` をダウンロードし `.stfw/cache/plugins/invokeWeb/` へキャッシュする。
+  `stfw:full` イメージは既定の版の k6 を同梱しており、キャッシュが無ければ同梱版を使うため
+  install 不要 (`k6_version` を上書きした場合は install が必要)
 - **実行には Chromium が必要**。コンテナ利用時は全ランタイム同梱の
   `ghcr.io/scenario-test-framework/stfw:full` イメージを使う
   (`K6_BROWSER_EXECUTABLE_PATH` / `K6_BROWSER_ARGS=no-sandbox` 設定済み)。

@@ -1,0 +1,157 @@
+# STEP: compare プラグインのイメージ同梱フォールバック (stfw:full)
+# stfw:full は compare-files を /opt/stfw/bundled/compare-files/{os_arch}/compare_files に同梱し、
+# stfw_plugin_bundled_dir で公開する。ここでは同梱ディレクトリをフィクスチャで再現する。
+# curl(DL) は常に失敗させ、同梱経路ではダウンロードしないことを担保する。
+#
+# 検証内容:
+#   - 永続キャッシュが無くても、設定版と一致する同梱版で install なしに run できる
+#   - 同梱が設定版と一致すれば plugin install は「インストール済み」(exit 3) で DL しない
+#   - 設定版と同梱版が異なれば同梱を使わず未プロビジョニング扱い (run exit 6 / install は DL へ)
+#   - 永続キャッシュと同梱の両方があれば永続キャッシュを優先する (初回 install 優先)
+
+env PATH=${WORK}/fakebin:${PATH}
+chmod 755 fakebin/curl
+chmod 755 fakebin/fakecomparefiles
+chmod 755 fakebin/mkbin
+
+# 同梱ディレクトリ (VERSION + 実行ホストの os_arch 版 compare_files)
+exec mkbin bundled/compare-files compare_files v2.2.0 bundled
+env stfw_plugin_bundled_dir=${WORK}/bundled
+
+# --- 同梱あり・キャッシュなし: install なしで run が成功し、キャッシュは作られない ---
+exec stfw run cmp
+stderr 'compare_files=bundled'
+! exists .stfw/cache/plugins/compare/compare-files
+
+# --- 同梱が設定版と一致: plugin install はインストール済み (exit 3) で DL しない ---
+execcode 3 stfw plugin install compare
+! stderr 'download'
+! exists .stfw/cache/plugins/compare/compare-files
+
+# --- 設定版と同梱版が異なる: 同梱は使わず、不一致の理由を出す ---
+# プロセスローカルの版上書きは provisioning の単位ではない (install は exit 3 のまま)。
+# 利用者が原因と対処 (プロジェクト共通設定で上書きして install) を分かるよう stderr に出す。
+execcode 6 stfw run cmpver
+stderr 'is not installed'
+stderr 'bundled compare-files is v2\.2\.0 but compare_files_version is v2\.2\.3'
+stderr 'config/plugins/process/compare/config\.yml'
+! stderr 'compare_files=bundled'
+# プロジェクト共通設定で版を上書きした場合、install は同梱を使わず DL を試みる
+mkdir config/plugins/process/compare
+cp config.v999.yml config/plugins/process/compare/config.yml
+execcode 6 stfw plugin install compare
+stderr 'download failed'
+rm config/plugins/process/compare/config.yml
+
+# --- 永続キャッシュと同梱の両方がある: 永続キャッシュを優先する ---
+exec mkbin .stfw/cache/plugins/compare/compare-files compare_files v2.2.0 cache
+exec stfw run cmp
+stderr 'compare_files=cache'
+! stderr 'compare_files=bundled'
+
+# --- stfw_plugin_bundled_dir 未設定: 従来どおり永続キャッシュのみ参照 ---
+env stfw_plugin_bundled_dir=
+rm .stfw/cache/plugins/compare/compare-files
+execcode 6 stfw run cmp
+stderr 'is not installed'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+-- config.v999.yml --
+stfw:
+  process:
+    compare:
+      compare_files_version: v9.9.9
+-- scenario/cmp/metadata.yml --
+description:
+-- scenario/cmp/_10_99990101/metadata.yml --
+description:
+-- scenario/cmp/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/cmp/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/cmp/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1"
+printf 'hello\n' > "${stfw_process_dir}/evidence/host1/data.txt"
+exit 0
+-- scenario/cmp/_10_99990101/_20_asrt_compare/metadata.yml --
+description:
+-- scenario/cmp/_10_99990101/_20_asrt_compare/config/config.yml --
+stfw:
+  process:
+    compare:
+      compare_files_version: v2.2.0
+-- scenario/cmp/_10_99990101/_20_asrt_compare/expect/_10_col_scripts/host1/data.txt --
+hello
+-- scenario/cmpver/metadata.yml --
+description:
+-- scenario/cmpver/_10_99990101/metadata.yml --
+description:
+-- scenario/cmpver/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/cmpver/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/cmpver/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1"
+printf 'hello\n' > "${stfw_process_dir}/evidence/host1/data.txt"
+exit 0
+-- scenario/cmpver/_10_99990101/_20_asrt_compare/metadata.yml --
+description:
+-- scenario/cmpver/_10_99990101/_20_asrt_compare/config/config.yml --
+stfw:
+  process:
+    compare:
+      compare_files_version: v2.2.3
+-- scenario/cmpver/_10_99990101/_20_asrt_compare/expect/_10_col_scripts/host1/data.txt --
+hello
+-- fakebin/mkbin --
+#!/bin/bash
+# mkbin {dir} {bin} {version} {label}: {dir}/VERSION と {dir}/{os_arch}/{bin} を作る。
+# {bin} は fakecomparefiles を呼ぶラッパーで、起動時に stderr へ「{bin}={label}」を出す
+# (どの配置のバイナリが使われたかを識別する)。os_arch はプラグインと同じ uname 対応。
+dir="$1"; bin="$2"; version="$3"; label="$4"
+case "$(uname -s)" in Linux) os=linux ;; Darwin) os=darwin ;; *) exit 1 ;; esac
+case "$(uname -m)" in x86_64 | amd64) arch=amd64 ;; aarch64 | arm64) arch=arm64 ;; *) exit 1 ;; esac
+mkdir -p "${dir}/${os}_${arch}"
+echo "${version}" > "${dir}/VERSION"
+printf '#!/bin/bash\necho "%s=%s" >&2\nexec fakecomparefiles "$@"\n' "${bin}" "${label}" > "${dir}/${os}_${arch}/${bin}"
+chmod 755 "${dir}/${os}_${arch}/${bin}"
+-- fakebin/curl --
+#!/bin/bash
+# 同梱経路ではダウンロードしないことを担保するため、常に失敗させる
+exit 22
+-- fakebin/fakecomparefiles --
+#!/bin/bash
+# fake compare_files: 左(expect)配下の各ファイルを右(actual)と突合する。0=全一致 / 3=差分。
+out="result"
+args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -od | --outputDir) out="$2"; shift 2 ;;
+    -config | --configFile) shift 2 ;;
+    -*) shift ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+left="${args[0]}"
+right="${args[1]}"
+mkdir -p "${out}"
+echo "Status,Left,Right" > "${out}/CompareSummary.csv"
+rc=0
+while IFS= read -r f; do
+  r="${right}/${f#"${left}/"}"
+  if [ -e "${r}" ] && diff -q "${f}" "${r}" > /dev/null 2>&1; then
+    echo "OK,${f},${r}" >> "${out}/CompareSummary.csv"
+  else
+    echo "NG,${f},${r}" >> "${out}/CompareSummary.csv"; rc=3
+  fi
+done < <(find "${left}" -type f)
+exit ${rc}

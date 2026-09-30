@@ -140,5 +140,8 @@ golangci-lint run                # CI と同じ v2 設定（.golangci.yml）
     untracked の生成物がコミットに紛れ込む。
 - **README は bilingual**: `README.md`=英語 / `README.ja.md`=日本語（バッジ直下に相互リンク）。
   内部ドキュメント（`docs/`）とコメントは日本語。
-- プラグインバイナリ（k6 / compare-files）はイメージに同梱せず、`stfw plugin install {type}` で
-  取得する（`stfw run` は自動インストールしない）。
+- プラグインの外部バイナリ（k6 / compare-files / logfilter）は `stfw plugin install {type}` で
+  取得する（`stfw run` は自動インストールしない）。**stfw:full のみ**ビルド時に各プラグインの
+  install を実行して `/opt/stfw/bundled` へ同梱し、プラグインは永続キャッシュが無ければ版一致の
+  同梱版を使う（`stfw_plugin_bundled_dir`。AS-BUILT §4.8 / §10.2）。同梱版の正は各プラグインの
+  `config.yml` の版指定なので、版を上げるときは config.yml を変える（Dockerfile に版を書かない）。

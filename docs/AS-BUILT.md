@@ -281,6 +281,7 @@ env 契約ゴールデンテスト（`test/acceptance/testdata/script/run_実行
 | `stfw_process_group` | プロセスのグループ名 |
 | `stfw_process_type` | プロセスタイプ（プラグイン名） |
 | `stfw_plugin_cache_dir` | プラグインが provisioning した資産の永続キャッシュ（`.stfw/cache/plugins/{type}/`）。`.stfw/plugins/` と異なり実行をまたいで保持される（§4.8） |
+| `stfw_plugin_bundled_dir` | **stfw は注入しない**（OS 環境変数としてプラグインへ継承される）。stfw:full イメージが ENV で `/opt/stfw/bundled` を設定し、外部ツールを DL するプラグインのフォールバック先になる（§4.8「イメージ同梱版へのフォールバック」・§10.2） |
 | `stfw_*`（設定フラット化） | stfw.yml + プラグイン設定チェーンのフラット化結果（§8）。例: `stfw_loglevel`, `stfw_timezone`, `stfw_project_version`, `stfw_process_scripts_some_key` |
 
 teardown フックのみに追加注入される変数:
@@ -373,7 +374,7 @@ inventory は後方互換で**文字列ホスト**と**構造化エントリ（`
 **collectLog**（`assets/plugins/process/collectLog`、requires: `ssh` / `scp` / `sshpass`）
 
 - config: `targets[]`（collectFile と同じ）+ `logfilter_version` / `logfilter_arches`（provisioning 対象の `{os}_{arch}` をスペース区切り）。
-- provisioning（`bin/install/install`）: `logfilter`（scenario-test-framework/logfilter, GitHub Releases）を `logfilter_arches` 分ダウンロードし `stfw_plugin_cache_dir/logfilter/{os_arch}/logfilter` へ配置。`is_installed` はキャッシュ内の logfilter 存在で判定。
+- provisioning（`bin/install/install`）: `logfilter`（scenario-test-framework/logfilter, GitHub Releases）を `logfilter_arches` 分ダウンロードし `stfw_plugin_cache_dir/logfilter/{os_arch}/logfilter` へ配置。`is_installed` はキャッシュ内の logfilter 存在で判定（キャッシュに無い arch は版一致のイメージ同梱版で補う。下記「イメージ同梱版へのフォールバック」）。
 - 処理: host の arch 版 logfilter を `scp` で転送 → `ssh` で実行し「業務日付の実行開始日時以降」のログ行に絞り込み → `scp` で `evidence/{host}/{絶対パス}` へ収集 → 転送したバイナリを削除。フィルタ基準時刻は `stfw_bizdate_start_ts`（RFC3339）を logfilter の `-tf 'YYYY-MM-DD HH:MM:SS.000'` へ純 bash で変換（実行ホストの TZ 基準。**収集先ホストとの時刻同期が前提**）。
 
 **プラグイン provisioning 機構（P2 で追加）**
@@ -381,8 +382,14 @@ inventory は後方互換で**文字列ホスト**と**構造化エントリ（`
 - `stfw init` は展開後に解決可能な全プラグインの `bin/install/install` を自動実行する（`--skip-plugin-init` で抑止）。個々の失敗は warn 継続で、`stfw plugin install {type}` により個別再実行できる。
 - provisioning 資産は**永続キャッシュ** `stfw_plugin_cache_dir`（`.stfw/cache/plugins/{type}/`）に置く。同梱プラグインの展開先（run 時は `.stfw/runs/{run_id}/plugins/`、install 時は `.stfw/plugins/`。§5.7）はプロセス実行のたびにワイプされるため、ダウンロードしたバイナリはキャッシュ側に保持する。
 - `install` / `is_installed` にはプラグイン設定（config.yml + プロジェクト上書き。プロセス非依存の `PluginConfigEnv`）も公開され、`logfilter_version` / `logfilter_arches` 等を参照できる。
+- **イメージ同梱版へのフォールバック**: 外部ツールを DL する組込みプラグイン（collectLog = logfilter / compare = compare-files / invokeRest・invokeWeb = k6）は、環境変数 `stfw_plugin_bundled_dir`（stfw は注入しない。stfw:full イメージが ENV で `/opt/stfw/bundled` を設定。§10.2）が指す同梱ディレクトリ `{stfw_plugin_bundled_dir}/{tool}/{os_arch}/{bin}` を参照できる。
+  - 解決順は **永続キャッシュ → 同梱版 → 未プロビジョニング**（キャッシュがあれば同梱より優先。既存の「初回 install 優先」を維持）。`is_installed` と `bin/run/execute` は同じ解決順を持つ。
+  - 同梱版は `{stfw_plugin_bundled_dir}/{tool}/VERSION` が**設定版**（`logfilter_version` / `compare_files_version` / `k6_version`）と一致するときだけ使う。プロジェクト共通設定（`config/plugins/process/{type}/config.yml`）で版を上書きした場合は同梱を使わず、従来どおり install（DL）を要求する。
+  - **版の上書き単位はプロジェクト共通設定**。install / `is_installed`（provisioning 時）はプロセス非依存の `PluginConfigEnv` を見るため、プロセスローカル `config/config.yml` だけで版を変えても provisioning には反映されない（install は既定版で「インストール済み」exit 3 のまま）。stfw:full でキャッシュが無い場合、run 時の `is_installed` は版不一致で false（exit 6）となるため、版不一致時は `is_installed` が原因と対処（`bundled {tool} is {同梱版} but {key} is {設定版} (set {key} in config/plugins/process/{type}/config.yml and run ...)`）を **stderr** に出す（stdout は判定専用で利用者に見えない）。
+  - collectLog は `logfilter_arches` の **arch ごと**に「キャッシュ → 同梱」で解決する（同梱に無い arch を要求した場合、その arch は install が必要）。
+  - 同梱版で `is_installed=true` になるため、`stfw plugin install {type}` は「インストール済み」（exit 3）、`stfw init` は "already provisioned" となり DL しない。`stfw_plugin_bundled_dir` 未設定（ホスト実行・通常版イメージ）では挙動は変わらない。
 
-> 根拠: `assets/plugins/process/{collectFile,collectLog}/`, `internal/repository/{inventory,plugin}.go`（inventory arch / `PluginCacheDir` / `PluginConfigEnv`）, `internal/usecase/plugin/plugin.go`（`InitAll` / `provisionEnv`）, `internal/usecase/inventory/inventory.go`（`Arch`）, `internal/presentation/cli/{init,inventory}.go`, `test/acceptance/testdata/script/{collectFile_ホスト上のファイルを収集する場合_エビデンス規約で出力すること,collectLog_ログを収集する場合_時刻フィルタで抽出すること,init_プラグイン自動provisioningの場合_skipで抑止できること}.txtar`
+> 根拠: `assets/plugins/process/{collectFile,collectLog}/`, `internal/repository/{inventory,plugin}.go`（inventory arch / `PluginCacheDir` / `PluginConfigEnv`）, `internal/usecase/plugin/plugin.go`（`InitAll` / `provisionEnv`）, `internal/usecase/inventory/inventory.go`（`Arch`）, `internal/presentation/cli/{init,inventory}.go`, `test/acceptance/testdata/script/{collectFile_ホスト上のファイルを収集する場合_エビデンス規約で出力すること,collectLog_ログを収集する場合_時刻フィルタで抽出すること,collectLog_同梱logfilterがある場合_installなしで収集できること,init_プラグイン自動provisioningの場合_skipで抑止できること}.txtar`
 
 ### 4.9 組込み RDBMS プラグイン（export / import / clear × MySQL / PostgreSQL）と secret マスキング
 
@@ -467,6 +474,7 @@ Assert フェーズの組込みプラグイン。期待値（`expect/`）と収�
 - compare-files はローカルで `expect`/`actual` を比較するため、`install` は**実行ホストの os_arch 版 1 種のみ**を取得する（収集系プラグインのような arch 送り分けはしない）。os_arch は `uname -s`/`uname -m` から解決する。
 - リリース資産名は `compare-files_{version無しv}_{os}_{arch}.tar.gz`（GitHub Releases）。既定バージョンは `v2.2.0`、ダウンロード元は `stfw_compare_files_download_base` で差し替え可能。バイナリは永続キャッシュ `${stfw_plugin_cache_dir}/compare-files/{os_arch}/compare_files` に配置する。`is_installed` が同キャッシュの存在で実行前ゲートする。
 - プロビジョニングモデルは collectLog（logfilter §4.8）と同一の「初回 install 優先」。キャッシュ済みなら再ダウンロードしない。**`compare_files_version` を変更したときは `${stfw_plugin_cache_dir}/compare-files/` を削除してから再 install する**（キャッシュパスに版を含めず、両プラグインで同じ運用にそろえている）。
+- キャッシュが無い場合は、版一致のイメージ同梱版 `${stfw_plugin_bundled_dir}/compare-files/{os_arch}/compare_files` を使う（stfw:full。解決順・版一致条件は §4.8「イメージ同梱版へのフォールバック」）。
 
 **ディレクトリ規約（エビデンスディレクトリ規約 §4.7）**
 
@@ -507,7 +515,7 @@ Assert フェーズの組込みプラグイン。期待値（`expect/`）と収�
 - compare-files のディレクトリ比較は `filepath.WalkDir` を使い**ディレクトリへの symlink を辿らない**（symlink はファイル扱いになり配下が列挙されない）。そのため `actual/` は evidence ツリーを実ディレクトリで再現し、各**ファイル**を evidence 実体への symlink とする（ファイル比較時の `os.Open` は symlink を辿るため比較は成立する）。
 - **既知の制約**: evidence 配下のファイル名に改行を含むケースは非対応（`find` の行区切り前提）。
 
-> 根拠: `assets/plugins/process/compare/`, `test/acceptance/testdata/script/{compare_expectとactualを突合する場合_合否を判定すること,compare_プロジェクト共通レイアウトがある場合_探索パスへ注入されること,compare_onmismatchがwarnの場合_差分をWarnとして続行すること}.txtar`, compare-files `internal/cli/runner.go`（`configSearchDirs`/`LoadLayoutManager`）・`internal/bulk/dir.go`（`relPathList`/`Counts.ProcessStatus`）・`internal/status/status.go`（`ExitCode`）
+> 根拠: `assets/plugins/process/compare/`, `test/acceptance/testdata/script/{compare_expectとactualを突合する場合_合否を判定すること,compare_同梱バイナリがある場合_installなしで実行できること,compare_プロジェクト共通レイアウトがある場合_探索パスへ注入されること,compare_onmismatchがwarnの場合_差分をWarnとして続行すること}.txtar`, compare-files `internal/cli/runner.go`（`configSearchDirs`/`LoadLayoutManager`）・`internal/bulk/dir.go`（`relPathList`/`Counts.ProcessStatus`）・`internal/status/status.go`（`ExitCode`）
 
 ### 4.12 組込み invoke プラグイン（Act・外部 OSS grafana k6）
 
@@ -516,7 +524,7 @@ Act フェーズの組込みプラグイン。テスト対象への取引入力�
 **プロビジョニング（`assets/plugins/process/{invokeRest,invokeWeb}`）**
 
 - k6 はローカルでテストを実行するため、`install` は**実行ホストの os_arch 版 1 種のみ**を取得する。os_arch は `uname -s`/`uname -m` から解決する。
-- リリース資産名は `k6-{version}-{os}-{arch}.{tar.gz|zip}`（GitHub Releases）。**os 命名は k6 独自で `linux`/`macos`、arch は `amd64`/`arm64`。linux は `tar.gz`・macos は `zip`** のため展開ツールを OS で分岐する（tar / unzip）。既定バージョンは `v2.1.0`、ダウンロード元は `stfw_k6_download_base` で差し替え可能。バイナリは永続キャッシュ `${stfw_plugin_cache_dir}/k6/{os_arch}/k6` に配置する（collectLog と同一の「初回 install 優先」。版変更時はキャッシュ削除）。`is_installed` が同キャッシュの存在で実行前ゲートする。
+- リリース資産名は `k6-{version}-{os}-{arch}.{tar.gz|zip}`（GitHub Releases）。**os 命名は k6 独自で `linux`/`macos`、arch は `amd64`/`arm64`。linux は `tar.gz`・macos は `zip`** のため展開ツールを OS で分岐する（tar / unzip）。既定バージョンは `v2.1.0`、ダウンロード元は `stfw_k6_download_base` で差し替え可能。バイナリは永続キャッシュ `${stfw_plugin_cache_dir}/k6/{os_arch}/k6` に配置する（collectLog と同一の「初回 install 優先」。版変更時はキャッシュ削除）。`is_installed` が同キャッシュの存在で実行前ゲートする。キャッシュが無い場合は、版一致のイメージ同梱版 `${stfw_plugin_bundled_dir}/k6/{os_arch}/k6` を使う（stfw:full。invokeRest / invokeWeb で共有。§4.8「イメージ同梱版へのフォールバック」）。
 - invokeWeb のブラウザモードは実行時に Chromium を必要とする（stfw:full イメージに同梱。§4.12 の install は k6 バイナリのみを配置し Chromium 導入はイメージの責務）。
 
 **設定**（config.yml の `stfw.process.{invokeRest|invokeWeb}`）
@@ -541,7 +549,7 @@ Act フェーズの組込みプラグイン。テスト対象への取引入力�
 - k6: `0=成功` / `99=閾値失敗（検証 NG）` / `100+=各種エラー` / `105=外部中断`（`errext/exitcodes/codes.go`）。
 - 本プラグインは「Act の失敗はステップ失敗」に従い、**非 0 を一律 exit 6**（Error）に正規化する。exit 6 のためランナーでは常に Error となり、後続ステップは Blocked になる（exit 3 = Warn を返す経路はない。§4.6）。
 
-> 根拠: `assets/plugins/process/{invokeRest,invokeWeb}/`, `test/acceptance/testdata/script/invoke_k6でRestとWebを実行する場合_Actが成功すること.txtar`, k6 `errext/exitcodes/codes.go`（終了コード）・`internal/cmd/runtime_options.go`（`-e/--env`・`--summary-export`・`--include-system-env-vars`）
+> 根拠: `assets/plugins/process/{invokeRest,invokeWeb}/`, `test/acceptance/testdata/script/{invoke_k6でRestとWebを実行する場合_Actが成功すること,invoke_同梱k6がある場合_installなしで実行できること}.txtar`, k6 `errext/exitcodes/codes.go`（終了コード）・`internal/cmd/runtime_options.go`（`-e/--env`・`--summary-export`・`--include-system-env-vars`）
 
 ### 4.13 組込みリモートアクセスプラグイン（sshExec / scpPut）
 
@@ -981,7 +989,7 @@ stfw_inventory:
 
 | 項目 | 仕様 |
 |---|---|
-| ベース | ビルド: `golang:1.26` → 実行: `debian:bookworm-slim` |
+| ベース | ビルド: `golang:1.27` → 実行: `debian:bookworm-slim` |
 | 追加パッケージ | bash, curl, openssh-client, ca-certificates（プラグイン契約が任意言語スクリプト実行のため distroless にしない） |
 | ユーザー | `stfw`（uid 1000）。`/work/.stfw/reports` を事前作成し所有権を付与 |
 | 実行 | `WORKDIR /work`, `ENTRYPOINT ["stfw"]` |
@@ -993,7 +1001,7 @@ stfw_inventory:
 |---|---|
 | ベース | runtime ステージからの派生（上記に追加インストール） |
 | 追加パッケージ | sshpass（collect 系 / sshExec / scpPut）、default-mysql-client（MariaDB ベースの `mysql`）、postgresql-client（`psql`）、redis-tools（`redis-cli`）、chromium + fonts-noto-cjk（invokeWeb） |
-| k6 / compare-files / logfilter | イメージに同梱しない（`stfw plugin install` が実行ホストの os_arch 版を永続キャッシュへ取得する既存プロビジョニングを利用） |
+| k6 / compare-files / logfilter | `/opt/stfw/bundled/{tool}/` に同梱し、ENV `stfw_plugin_bundled_dir=/opt/stfw/bundled` で公開する（プラグインは永続キャッシュが無ければ版一致の同梱版を使うため、`stfw plugin install` / ネットワークなしで実行できる。§4.8）。**取得はビルド時に各プラグインの `bin/install/install` を `stfw_plugin_cache_dir=/opt/stfw/bundled` で実行**して行い（資産名・os_arch 判定を Dockerfile に二重実装しない）、版（と logfilter の arches）は**各プラグインの既定設定 `config.yml` を正**とする（`compare_files_version` / `k6_version` / `logfilter_version` / `logfilter_arches`）。版は `{tool}/VERSION` に記録する。compare-files / k6 はイメージの arch 版 1 種、logfilter は収集先ホスト用に `logfilter_arches` の全 arch。k6 は invokeRest / invokeWeb で共有するため両者の `k6_version` が食い違うとビルド失敗。**版を上げるときは config.yml だけを変更すればイメージも追従する** |
 | Chromium 連携 | `K6_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium` と `K6_BROWSER_ARGS=no-sandbox` を ENV で設定（コンテナ内は seccomp で user namespace を作れず Chromium sandbox が起動しないため。K6_BROWSER_ARGS はカンマ区切り・`--` なしの k6 形式 — k6 `browser/env/env.go` / `chromium/browser_type.go` で確認）。**k6 v2.1.0 + 本イメージの chromium で browser テスト（goto + evaluate + check）の E2E 動作を検証済み**。なお素の `chromium --headless --dump-dom` 単体起動は環境により SIGTRAP することがあるが、k6 の起動フラグセット（prepareFlags）経由では発生しない（実利用経路は k6 経由のみ） |
 | 配布 | タグ: `full` + `{semver}-full`（linux/amd64 + linux/arm64） |
 
