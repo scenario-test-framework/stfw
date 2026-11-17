@@ -86,10 +86,15 @@ go test ./...                    # 単体 + testscript 受け入れ
 golangci-lint run                # CI と同じ v2 設定（.golangci.yml）
 ```
 
-- lint は **golangci-lint v2**（CI は `golangci-lint-action@v8` + `version: v2.12.2`）。
+- lint は **golangci-lint v2**（CI は `golangci-lint-action@v9` + `version: v2.12.2`）。
   設定は `.golangci.yml`（v2 フォーマット。`errcheck` の `fmt.Fprint*` 除外など）。
-- go.mod は `go 1.25.0` + `toolchain go1.26.4`（依存 otel/x-crypto/grpc が 1.25 を要求）。
-  golangci-lint はビルド Go が go.mod ターゲット未満だと拒否するので、両者のバージョン整合を保つ。
+- go.mod は `go 1.26.0` + `toolchain go1.26.11`（脆弱性修正版の x/crypto・x/net が 1.26 を要求）。
+  `toolchain` は配布バイナリ（goreleaser）のビルドに使われるため、Go のパッチ版が出たら追従させる
+  （Docker イメージは Dockerfile の `golang:1.27` タグの最新パッチでビルドされる）。
+  golangci-lint はビルド Go が go.mod ターゲット未満だと拒否するので、両者のバージョン整合を保つ
+  （v2.12.2 は go1.26.2 ビルド）。
+- 脆弱性スキャン: PR で `govulncheck`（ci.yml）、master でイメージの Trivy（build.yml、修正版のある
+  HIGH/CRITICAL で失敗）。修正版の無い OS パッケージの脆弱性は合否に含めない。
 
 ### 6. 作業単位ごとのレビュー（サブエージェント → Codex の二段）
 
@@ -113,7 +118,8 @@ golangci-lint run                # CI と同じ v2 設定（.golangci.yml）
 
 ## 横断的な注意点
 
-- **CI**（`.github/workflows/ci.yml`）: `lint`（golangci-lint v2）+ `test`（go test）。
+- **CI**（`.github/workflows/ci.yml`）: `lint`（golangci-lint v2）+ `test`（go test）+ `vulncheck`（govulncheck）。
+  master push の `build.yml` はイメージを Trivy でスキャンする。リリース手順 ① の「master の CI 緑」はこのスキャンを含む。
   GitHub Actions はアクションをバージョン参照し、`permissions` は最小に保つ。
 - **リリース**（`.github/workflows/release.yml`）: タグ `v*` push で goreleaser がバイナリ +
   checksums を Releases へ、Docker イメージ（`stfw` / `stfw:full`）を ghcr.io へ push する。

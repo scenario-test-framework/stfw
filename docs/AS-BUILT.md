@@ -16,7 +16,7 @@ stfw は業務日付をまたぐシナリオテストをディレクトリ規約
 
 | 項目 | 内容 |
 |---|---|
-| 実装言語 | Go 1.26（`go.mod`: `go 1.26.4`） |
+| 実装言語 | Go 1.26（`go.mod`: `go 1.26.0` / `toolchain go1.26.11`） |
 | 配布形態 | 単一バイナリ（実行エンジン内包・常駐サービスなし・外部データストアなし） |
 | 主要依存 | cobra（CLI）, yaml.v3（設定）, filippo.io/age（暗号化）, OpenTelemetry SDK（OTLP）, smallstep/pkcs7（旧形式 secret 復号）, go-internal/testscript（受け入れテスト） |
 | 静的資産 | プロジェクトテンプレート・同梱プラグイン・デフォルト設定・HTML テンプレートを `go:embed` でバイナリに同梱（`assets/assets.go`） |
@@ -794,7 +794,9 @@ run 毎に累積する実行結果（実行ジャーナル + HTML レポート�
 | 2 | stfw.yml の `stfw.otel.endpoint` | `WithEndpointURL` として使用。パス無し URL は `/v1/traces` が補完される |
 | 3 | どちらも未設定 | **TracerProvider を組み立てず一切送信しない** |
 
-プロトコルは OTLP/HTTP（`application/x-protobuf`）。リソース属性は `service.name=stfw`, `service.version={バージョン}`。
+プロトコルは OTLP/HTTP（既定 `application/x-protobuf`）。OTel 標準環境変数 `OTEL_EXPORTER_OTLP_PROTOCOL` /
+`OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` に `http/json` を指定すると JSON で送信する（otel SDK v1.47.0 以降の SDK 側解決。
+`grpc` を指定しても gRPC にはならず HTTP のまま送信する）。リソース属性は `service.name=stfw`, `service.version={バージョン}`。
 
 ### 6.2 スパンマッピング
 
@@ -1018,8 +1020,8 @@ stfw_inventory:
 
 | ワークフロー | トリガー | 内容 |
 |---|---|---|
-| `ci.yml` | pull_request | golangci-lint + `go build ./...` + `go test ./...` |
-| `build.yml` | push（master） | `go vet` + `go test` + GoReleaser snapshot（成果物を 7 日保持の artifact 化）+ Docker build（runtime / full の 2 ターゲット、push なし） |
+| `ci.yml` | pull_request | golangci-lint + `go build ./...` + `go test ./...` + `govulncheck ./...`（呼び出し経路のある依存・Go 本体の脆弱性で失敗。Go 本体は go.mod の `toolchain` で判定） |
+| `build.yml` | push（master） | `go vet` + `go test` + GoReleaser snapshot（成果物を 7 日保持の artifact 化）+ Docker build（runtime / full の 2 ターゲット、push なし）+ 両イメージの Trivy スキャン（修正版のある HIGH/CRITICAL で失敗。修正版の無い OS パッケージは合否に含めない。公式イメージ `aquasec/trivy` を digest 固定で実行し、runner のアーキテクチャのみ検査） |
 | `release.yml` | tag `v*` | `go test` + GoReleaser release（GitHub Releases）+ Docker multi-arch build & push（ghcr.io へ runtime: semver + `latest` / full: `{semver}-full` + `full`。full 側は `flavor: latest=false` で plain latest の自動生成を抑止） |
 
 > 根拠: `.goreleaser.yaml`, `Dockerfile`, `compose.yaml`, `.github/workflows/{ci,build,release}.yml`
