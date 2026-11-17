@@ -18,7 +18,7 @@ k6_bin="${stfw_plugin_cache_dir}/k6/${os_arch}/k6"
 # 永続キャッシュが無ければイメージ同梱版 (stfw:full) を使う。設定版と同梱版 (VERSION) が
 # 一致するときに限る (解決順は bin/run/execute と同じ)。
 bundled="${stfw_plugin_bundled_dir:-}/k6"
-version="${stfw_process_invokeWeb_k6_version:-v2.1.0}"
+version="${stfw_process_invokeWeb_k6_version:-v2.4.0}"
 if [ ! -x "${k6_bin}" ] && [ -n "${stfw_plugin_bundled_dir:-}" ] \
   && [ "$(cat "${bundled}/VERSION" 2>/dev/null)" = "${version}" ]; then
   k6_bin="${bundled}/${os_arch}/k6"

@@ -162,7 +162,7 @@ case "$(uname -m)" in
   aarch64 | arm64) earch=arm64 ;;
   *) echo "fake curl: unsupported arch" >&2; exit 1 ;;
 esac
-expected="k6-v2.1.0-${eos}-${earch}.${eext}"
+expected="k6-v2.4.0-${eos}-${earch}.${eext}"
 case "${url}" in
   *"${expected}") ;;
   *) echo "fake curl: unexpected asset url: ${url} (want *${expected})" >&2; exit 22 ;;

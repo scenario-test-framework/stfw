@@ -524,7 +524,7 @@ Act フェーズの組込みプラグイン。テスト対象への取引入力�
 **プロビジョニング（`assets/plugins/process/{invokeRest,invokeWeb}`）**
 
 - k6 はローカルでテストを実行するため、`install` は**実行ホストの os_arch 版 1 種のみ**を取得する。os_arch は `uname -s`/`uname -m` から解決する。
-- リリース資産名は `k6-{version}-{os}-{arch}.{tar.gz|zip}`（GitHub Releases）。**os 命名は k6 独自で `linux`/`macos`、arch は `amd64`/`arm64`。linux は `tar.gz`・macos は `zip`** のため展開ツールを OS で分岐する（tar / unzip）。既定バージョンは `v2.1.0`、ダウンロード元は `stfw_k6_download_base` で差し替え可能。バイナリは永続キャッシュ `${stfw_plugin_cache_dir}/k6/{os_arch}/k6` に配置する（collectLog と同一の「初回 install 優先」。版変更時はキャッシュ削除）。`is_installed` が同キャッシュの存在で実行前ゲートする。キャッシュが無い場合は、版一致のイメージ同梱版 `${stfw_plugin_bundled_dir}/k6/{os_arch}/k6` を使う（stfw:full。invokeRest / invokeWeb で共有。§4.8「イメージ同梱版へのフォールバック」）。
+- リリース資産名は `k6-{version}-{os}-{arch}.{tar.gz|zip}`（GitHub Releases）。**os 命名は k6 独自で `linux`/`macos`、arch は `amd64`/`arm64`。linux は `tar.gz`・macos は `zip`** のため展開ツールを OS で分岐する（tar / unzip）。既定バージョンは `v2.4.0`、ダウンロード元は `stfw_k6_download_base` で差し替え可能。バイナリは永続キャッシュ `${stfw_plugin_cache_dir}/k6/{os_arch}/k6` に配置する（collectLog と同一の「初回 install 優先」。版変更時はキャッシュ削除）。`is_installed` が同キャッシュの存在で実行前ゲートする。キャッシュが無い場合は、版一致のイメージ同梱版 `${stfw_plugin_bundled_dir}/k6/{os_arch}/k6` を使う（stfw:full。invokeRest / invokeWeb で共有。§4.8「イメージ同梱版へのフォールバック」）。
 - invokeWeb のブラウザモードは実行時に Chromium を必要とする（stfw:full イメージに同梱。§4.12 の install は k6 バイナリのみを配置し Chromium 導入はイメージの責務）。
 
 **設定**（config.yml の `stfw.process.{invokeRest|invokeWeb}`）
@@ -1005,7 +1005,7 @@ stfw_inventory:
 | ベース | runtime ステージからの派生（上記に追加インストール） |
 | 追加パッケージ | sshpass（collect 系 / sshExec / scpPut）、default-mysql-client（MariaDB ベースの `mysql`）、postgresql-client（`psql`）、redis-tools（`redis-cli`）、chromium + fonts-noto-cjk（invokeWeb） |
 | k6 / compare-files / logfilter | `/opt/stfw/bundled/{tool}/` に同梱し、ENV `stfw_plugin_bundled_dir=/opt/stfw/bundled` で公開する（プラグインは永続キャッシュが無ければ版一致の同梱版を使うため、`stfw plugin install` / ネットワークなしで実行できる。§4.8）。**取得はビルド時に各プラグインの `bin/install/install` を `stfw_plugin_cache_dir=/opt/stfw/bundled` で実行**して行い（資産名・os_arch 判定を Dockerfile に二重実装しない）、版（と logfilter の arches）は**各プラグインの既定設定 `config.yml` を正**とする（`compare_files_version` / `k6_version` / `logfilter_version` / `logfilter_arches`）。版は `{tool}/VERSION` に記録する。compare-files / k6 はイメージの arch 版 1 種、logfilter は収集先ホスト用に `logfilter_arches` の全 arch。k6 は invokeRest / invokeWeb で共有するため両者の `k6_version` が食い違うとビルド失敗。**版を上げるときは config.yml だけを変更すればイメージも追従する** |
-| Chromium 連携 | `K6_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium` と `K6_BROWSER_ARGS=no-sandbox` を ENV で設定（コンテナ内は seccomp で user namespace を作れず Chromium sandbox が起動しないため。K6_BROWSER_ARGS はカンマ区切り・`--` なしの k6 形式 — k6 `browser/env/env.go` / `chromium/browser_type.go` で確認）。**k6 v2.1.0 + 本イメージの chromium で browser テスト（goto + evaluate + check）の E2E 動作を検証済み**。なお素の `chromium --headless --dump-dom` 単体起動は環境により SIGTRAP することがあるが、k6 の起動フラグセット（prepareFlags）経由では発生しない（実利用経路は k6 経由のみ） |
+| Chromium 連携 | `K6_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium` と `K6_BROWSER_ARGS=no-sandbox` を ENV で設定（コンテナ内は seccomp で user namespace を作れず Chromium sandbox が起動しないため。K6_BROWSER_ARGS はカンマ区切り・`--` なしの k6 形式 — k6 `browser/env/env.go` / `chromium/browser_type.go` で確認）。**k6 v2.4.0 + 本イメージの chromium で browser テスト（goto + evaluate + check）の E2E 動作を検証済み**。なお素の `chromium --headless --dump-dom` 単体起動は環境により SIGTRAP することがあるが、k6 の起動フラグセット（prepareFlags）経由では発生しない（実利用経路は k6 経由のみ） |
 | 配布 | タグ: `full` + `{semver}-full`（linux/amd64 + linux/arm64） |
 
 ### 10.3 compose.yaml（HTML レポート配信つき）

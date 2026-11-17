@@ -40,7 +40,7 @@ for cmd in ${reqs}; do
   fi
 done
 
-version="${stfw_process_invokeWeb_k6_version:-v2.1.0}"
+version="${stfw_process_invokeWeb_k6_version:-v2.4.0}"
 base="${stfw_k6_download_base:-https://github.com/grafana/k6/releases/download/${version}}"
 dest="${stfw_plugin_cache_dir}/k6/${os_arch}"
 

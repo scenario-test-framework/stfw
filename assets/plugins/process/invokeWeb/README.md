@@ -23,7 +23,7 @@
 | `host_group` | - | inventory グループ名。先頭ホストを `__ENV.stfw_target_host` へ注入 |
 | `user` | - | secret `{host}-{user}` のパスワードを `__ENV.stfw_target_password` へ注入 (`host_group` 必須) |
 | `env[]` | - | k6 へ渡す `"KEY=VALUE"` のリスト (`-e` で注入) |
-| `k6_version` | - | 取得する k6 のリリースタグ (既定 v2.1.0) |
+| `k6_version` | - | 取得する k6 のリリースタグ (既定 v2.4.0) |
 
 ## 動作
 
