@@ -1,7 +1,7 @@
 name: scheduled-scan
 
 # 週 1 回の定期チェック (AS-BUILT §10.4)。master に変更が無い間に出た修正版
-# (Debian のパッケージ・Go 本体と依存・同梱ツールの新しい版) を取り込み漏れとして知らせる。
+# (Wolfi のパッケージ・Go 本体と依存・同梱ツールと Chrome の新しい版) を取り込み漏れとして知らせる。
 # 見つかったらジョブを失敗させ、GitHub の通知で知らせる (リリースは止めない)。
 # schedule は既定ブランチの最新コミットで UTC で動く。毎正時は混雑で遅延・取りこぼしがあるため 17 分にずらす。
 # 公開リポジトリは 60 日間活動が無いと schedule が自動で無効になる。
@@ -21,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
-      # キャッシュを使わず、ベースイメージも取り直して作る (Debian の新しい修正版を取り込むため)
+      # キャッシュを使わずに作る (ビルド時の apk upgrade / apk add で Wolfi の新しい修正版を取り込むため)
       - uses: docker/build-push-action@v7
         with:
           context: .
@@ -55,7 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # 同梱ツールの既定版が最新リリースか (新しい版が出ていれば失敗)
+      # 同梱ツールの既定版と Chrome の版が最新か (新しい版が出ていれば失敗)
       - name: Check bundled tool versions
         env:
           GH_TOKEN: ${{ github.token }}

@@ -112,12 +112,17 @@ docker run --rm -v "$PWD":/work ghcr.io/scenario-test-framework/stfw:latest --ve
 ```
 
 To use the built-in plugins (RDBMS / Redis / ssh family / invokeWeb), use the all-runtime-bundled
-**`stfw:full`** image (ships mysql / psql / redis-cli / sshpass / Chromium, plus the plugin tools
+**`stfw:full`** image (ships mysql / psql / redis-cli / sshpass / headless Chrome, plus the plugin tools
 k6 / compare-files / logfilter, so with the default tool versions no `stfw plugin install` or network access is needed):
 
 ```console
 docker pull ghcr.io/scenario-test-framework/stfw:full
 ```
+
+Since v1.7.0 both images are based on [Wolfi](https://github.com/wolfi-dev) instead of Debian, to avoid
+carrying vulnerabilities that have no fix. If you extend the image, install packages with `apk add`
+(Wolfi package names); `apt-get` is not available. The full image's `mysql` is the MariaDB client,
+`redis-cli` is the Valkey client (Redis-compatible), and the browser is Google's Chrome for Testing headless shell.
 
 ## Quick Start
 

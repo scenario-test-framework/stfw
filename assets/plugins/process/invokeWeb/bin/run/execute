@@ -8,7 +8,7 @@
 #   env        : (任意) k6 へ渡す "KEY=VALUE" のリスト (-e で注入)
 #
 # 処理: キャッシュした k6 バイナリで `k6 run` を実行する。ブラウザは既定でヘッドレス
-#   (K6_BROWSER_HEADLESS=true)。実行には Chromium が必要 (stfw:full イメージに同梱)。
+#   (K6_BROWSER_HEADLESS=true)。実行には Chrome / Chromium が必要 (stfw:full イメージに Chrome を同梱)。
 #   接続情報は inventory/secret から解決し config に直書きしない。パスワードは argv 露出を
 #   避けるため環境変数として export し (k6 は include-system-env-vars 既定 true で __ENV へ
 #   取り込む)、Masker が出力をマスクする。

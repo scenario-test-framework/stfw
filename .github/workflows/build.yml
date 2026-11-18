@@ -64,8 +64,12 @@ jobs:
               exit 1
             fi
           done
+      # 組込みプラグインが呼ぶコマンド (mysql / psql / redis-cli / sshpass / GNU 版の基本コマンド) と、
+      # 同梱の Chrome が k6 ブラウザモードで動くこと (ベースの更新や Chrome の版上げで部品が欠けたら失敗)
+      - name: smoke test full image commands and Chrome
+        run: bash .github/scripts/smoke-full-image.sh stfw:full-ci
       # 脆弱性スキャン: 修正版のある脆弱性があれば深刻度に関係なく失敗させる。対応版待ちのものだけ
-      # 除外リスト (.trivyignore.yaml。場所・期限・理由つき) で外す。修正版の無いもの (Debian 側で未提供など) は
+      # 除外リスト (.trivyignore.yaml。場所・期限・理由つき) で外す。修正版の無いもの (配布元で未提供など) は
       # 直せないため合否に含めない。判定は scan-images.sh に集約し、
       # 週 1 回の定期チェック (scheduled-scan.yml) と共有する。
       # trivy-action は 2026-03 にタグ乗っ取りの前例があるため使わず、公式イメージを digest 固定で実行する

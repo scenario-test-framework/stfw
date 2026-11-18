@@ -35,7 +35,7 @@ scenario/{シナリオ}/_{seq}_{bizdate}/_{seq}_{group}_{type}/
 | | `clearMysql` / `clearPostgres` / `clearRedis` | データストアを初期化（全行 DELETE / キー削除） |
 | | `scpPut` | ローカルのファイル群をリモートホストへ配置 |
 | Act | `invokeRest` | API へ取引入力・レスポンス検証（grafana k6） |
-| | `invokeWeb` | ブラウザ操作（k6 browser、headless Chromium） |
+| | `invokeWeb` | ブラウザ操作（k6 browser、headless Chrome / Chromium） |
 | | `sshExec` | リモートホストでスクリプト・バッチを実行 |
 | Collect | `collectLog` | リモートのログを業務日付で絞り込み収集 |
 | | `collectFile` | リモートのファイルを収集 |
