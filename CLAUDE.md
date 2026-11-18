@@ -168,4 +168,4 @@ golangci-lint run                # CI と同じ v2 設定（.golangci.yml）
   ラッパー、`redis-cli` は Valkey。**Chrome は apk ではなく Google 公式の Chrome for Testing の画面なし版**で、
   Trivy に見えないため版を Dockerfile の `ARG CHROME_VERSION` で固定し、定期チェックが Stable と比べる。
   Chrome の版を上げるときは `CHROME_VERSION` と両 arch の `CHROME_SHA256_*`（zip を取得して `shasum -a 256`）を同時に変える。
-  full の部品が欠けていないかは build.yml のスモークテスト（`.github/scripts/smoke-full-image.sh`）が確かめる。
+  イメージの部品が欠けていないかは build.yml（amd64・arm64）と定期チェックのスモークテスト（`.github/scripts/smoke-image.sh`）が確かめる。定期チェックは公開済みの `:full` の Chrome が古いと失敗する（リリースが要る合図）。

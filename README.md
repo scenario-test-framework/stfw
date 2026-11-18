@@ -121,8 +121,10 @@ docker pull ghcr.io/scenario-test-framework/stfw:full
 
 Since v1.7.0 both images are based on [Wolfi](https://github.com/wolfi-dev) instead of Debian, to avoid
 carrying vulnerabilities that have no fix. If you extend the image, install packages with `apk add`
-(Wolfi package names); `apt-get` is not available. The full image's `mysql` is the MariaDB client,
-`redis-cli` is the Valkey client (Redis-compatible), and the browser is Google's Chrome for Testing headless shell.
+(Wolfi package names); `apt-get` is not available. The full image's `mysql` / `mysqldump` are the MariaDB client,
+`redis-cli` is the Valkey client (Redis-compatible), and the browser is Google's Chrome for Testing headless shell
+(`/opt/chrome/chrome-headless-shell`; there is no `chromium` command). Other commands that the Debian image happened
+to include (e.g. `mysqladmin`, `perl`) are no longer present.
 
 ## Quick Start
 

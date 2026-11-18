@@ -43,8 +43,10 @@ RUN set -eu; \
 FROM base AS runtime
 # GNU 版の基本コマンド (coreutils など) も入れる: wolfi-base の既定は BusyBox の簡易版で、
 # 利用者のスクリプトが GNU 版のオプション (Debian ベースの頃と同じ) を前提にしていても動くようにする
+# - openssh-keygen / openssh-keyscan: stfw ssh trust が使う (Wolfi では openssh-client と別パッケージ)
+# - tzdata: TZ 指定 (例 TZ=Asia/Tokyo) を効かせる。無いと stfw も date も黙って UTC になる
 RUN apk upgrade --no-cache \
- && apk add --no-cache bash curl openssh-client ca-certificates \
+ && apk add --no-cache bash curl openssh-client openssh-keygen openssh-keyscan ca-certificates tzdata \
       coreutils findutils grep sed gawk gnutar gzip diffutils \
  && addgroup -g 1000 stfw \
  && adduser -D -u 1000 -G stfw -s /bin/bash stfw \
@@ -58,18 +60,20 @@ ENTRYPOINT ["stfw"]
 
 # stfw:full — 全組込みプラグインのランタイム同梱版。
 #   sshpass                       : collectFile / collectLog / sshExec / scpPut (ssh/scp 認証)
-#   mariadb-13.1-client           : export/import/clearMysql (mysql。MariaDB 版クライアント)
+#   mariadb-13.1-client (+dump)   : export/import/clearMysql (mysql。MariaDB 版クライアント。mysqldump も用意)
 #     + mariadb-connector-c       :   MySQL 8 以降の認証方式 (caching_sha2_password) の部品
 #   postgresql-18-client          : export/import/clearPostgres (psql)
 #   valkey-9.1-cli                : export/import/clearRedis (redis-cli。Valkey は Redis 互換の後継)
-#   Chrome + 依存ライブラリ + font-noto-cjk : invokeWeb (k6 ブラウザモード。Chrome は上の chrome ステージ)
+#   Chrome + 依存ライブラリ + fontconfig + font-noto-cjk : invokeWeb (k6 ブラウザモード。Chrome は上の chrome ステージ)
 #   compare-files / k6 / logfilter : compare / invokeRest・invokeWeb / collectLog の外部ツール
 #                                    (/opt/stfw/bundled。stfw plugin install なしで実行できる)
 # 通常版のビルドは --target runtime を明示する (無指定の docker build は最終ステージ = full)。
 FROM runtime AS full
 USER root
-# - Wolfi には mysql / redis-cli の名前が無いため、プラグインが呼ぶ名前を用意する。
-#   mysql は名前の非推奨警告を出さないよう、symlink ではなく mariadb を呼ぶラッパーにする
+# - Wolfi には mysql / mysqldump / redis-cli の名前が無いため、Debian 版と同じ名前を用意する。
+#   mysql / mysqldump は名前の非推奨警告を出さないよう、symlink ではなく mariadb / mariadb-dump を呼ぶラッパーにする
+#   (組込みプラグインが使うのは mysql だけ。mysqldump は利用者のスクリプトとの互換のため)
+# - fontconfig: Chrome がフォント設定 (/etc/fonts) を読めるようにする (無いと起動時に設定ファイルのエラーが出る)
 # - MariaDB 11.4 以降のクライアントは既定でサーバー証明書を検証し、自己署名の MySQL 8 に繋がらない。
 #   Debian ベースの頃 (MariaDB 10.11 クライアント) と同じ「検証しない」を既定に戻す。
 #   認証の部品は mariadb-connector-c の置き場所を指す
@@ -77,17 +81,18 @@ USER root
 #   スモークテストで分かる。amd64 版は arm64 版より依存が 1 つ多い: libatk-bridge)
 RUN apk add --no-cache \
       sshpass \
-      mariadb-13.1-client mariadb-connector-c \
+      mariadb-13.1-client mariadb-13.1-dump mariadb-connector-c \
       postgresql-18-client \
       valkey-9.1-cli \
-      font-noto-cjk \
+      fontconfig font-noto-cjk \
       so:libX11.so.6 so:libXcomposite.so.1 so:libXdamage.so.1 so:libXext.so.6 so:libXfixes.so.3 \
       so:libXrandr.so.2 so:libasound.so.2 so:libatk-1.0.so.0 so:libatk-bridge-2.0.so.0 so:libatspi.so.0 so:libdbus-1.so.3 \
       so:libexpat.so.1 so:libgbm.so.1 so:libgio-2.0.so.0 so:libglib-2.0.so.0 so:libgobject-2.0.so.0 \
       so:libnspr4.so so:libnss3.so so:libnssutil3.so so:libudev.so.1 so:libxcb.so.1 so:libxkbcommon.so.0 \
  && ln -s /usr/bin/valkey-cli /usr/local/bin/redis-cli \
  && printf '#!/bin/sh\nexec /usr/bin/mariadb "$@"\n' > /usr/local/bin/mysql \
- && chmod 755 /usr/local/bin/mysql \
+ && printf '#!/bin/sh\nexec /usr/bin/mariadb-dump "$@"\n' > /usr/local/bin/mysqldump \
+ && chmod 755 /usr/local/bin/mysql /usr/local/bin/mysqldump \
  && printf '[client]\nssl-verify-server-cert=0\nplugin-dir=/usr/lib/mariadb/plugin\n' > /etc/my.cnf
 COPY --from=chrome /opt/chrome /opt/chrome
 # 組込みプラグインの外部ツールの同梱。各プラグインの bin/install/install をビルド時に

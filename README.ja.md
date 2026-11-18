@@ -109,8 +109,9 @@ docker pull ghcr.io/scenario-test-framework/stfw:full
 
 v1.7.0 から、両イメージのベースは Debian ではなく [Wolfi](https://github.com/wolfi-dev) です (修正版の無い脆弱性を抱えないため)。
 イメージを拡張する場合は `apk add` (Wolfi のパッケージ名) でパッケージを追加してください。`apt-get` は使えません。
-full 版の `mysql` は MariaDB のクライアント、`redis-cli` は Valkey (Redis 互換) のクライアント、ブラウザは Google 公式の
-Chrome for Testing の画面なし版です。
+full 版の `mysql` / `mysqldump` は MariaDB のクライアント、`redis-cli` は Valkey (Redis 互換) のクライアント、ブラウザは Google 公式の
+Chrome for Testing の画面なし版です (`/opt/chrome/chrome-headless-shell`。`chromium` コマンドはありません)。
+Debian 版にたまたま入っていたその他のコマンド (`mysqladmin`、`perl` など) は入っていません。
 
 ## Quick Start
 

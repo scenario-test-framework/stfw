@@ -41,8 +41,17 @@ jobs:
           no-cache: true
           load: true
           tags: stfw-scan:full
+      # 作り直したイメージで部品が欠けていないか (Wolfi はパッケージが常に最新へ更新されるため)。
+      # build.yml と同じ確認。失敗してもスキャンは続ける
+      - name: Smoke test image contents
+        run: |
+          rc=0
+          bash .github/scripts/smoke-image.sh runtime stfw-scan:runtime || rc=1
+          bash .github/scripts/smoke-image.sh full stfw-scan:full || rc=1
+          exit "$rc"
       # 合否は master の CI (build.yml) と同じ基準
       - name: Scan images with Trivy
+        if: always() && steps.build-full.outcome == 'success'
         run: bash .github/scripts/scan-images.sh stfw-scan:runtime stfw-scan:full
       # 除外リストのうち、もう見つからなくなった行 (対応版を取り込んだ後の消し忘れ) を警告する。
       # 警告の注記を出すだけで、定期チェックを失敗させない

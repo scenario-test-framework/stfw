@@ -1,5 +1,5 @@
-// smoke-browser.js は stfw:full の Chrome が k6 ブラウザモードから起動し、日本語を含むページを描画できるかを確かめる
-// (smoke-full-image.sh から呼ぶ。ネットワークなしで動くよう setContent を使う)。
+// smoke-browser.js は stfw:full の Chrome が k6 ブラウザモードから起動し、ページを読み込んで DOM を操作できるかを確かめる
+// (smoke-image.sh から呼ぶ。ネットワークなしで動くよう setContent を使う。日本語フォントの有無は smoke-image.sh が見る)。
 import { browser } from 'k6/browser';
 import { check } from 'k6';
 
