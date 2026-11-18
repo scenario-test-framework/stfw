@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 
 	"github.com/scenario-test-framework/stfw/internal/domain/project"
 	"github.com/scenario-test-framework/stfw/internal/domain/run"
@@ -104,7 +104,8 @@ func ReadJournal(projDir, runID string) ([]run.Event, error) {
 	return events, nil
 }
 
-// ListRunIDs は実行済みの run_id を昇順で返す。ディレクトリが無い場合は空を返す。
+// ListRunIDs は実行済みの run_id を古い順で返す。ディレクトリが無い場合は空を返す。
+// 順序は run.CompareRunID (採番時刻 → pid の数値。AS-BUILT §5.5)。
 func ListRunIDs(projDir string) ([]string, error) {
 	root := filepath.Join(projDir, project.DataDirName, runsDirName)
 	entries, err := os.ReadDir(root)
@@ -114,21 +115,29 @@ func ListRunIDs(projDir string) ([]string, error) {
 		}
 		return nil, err
 	}
-	var ids []string
+	var parsed []run.RunID
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
 		}
-		if _, err := run.ParseRunID(e.Name()); err != nil {
+		id, err := run.ParseRunID(e.Name())
+		if err != nil {
 			continue
 		}
-		ids = append(ids, e.Name())
+		parsed = append(parsed, id)
 	}
-	sort.Strings(ids)
+	if len(parsed) == 0 {
+		return nil, nil
+	}
+	slices.SortFunc(parsed, run.CompareRunID)
+	ids := make([]string, 0, len(parsed))
+	for _, id := range parsed {
+		ids = append(ids, id.String())
+	}
 	return ids, nil
 }
 
-// LatestRunID は最新 (run_id 昇順の末尾 = 採番時刻が最も新しい) の run_id を返す。
+// LatestRunID は最新 (ListRunIDs の末尾 = 採番時刻が最も新しい) の run_id を返す。
 func LatestRunID(projDir string) (string, error) {
 	ids, err := ListRunIDs(projDir)
 	if err != nil {

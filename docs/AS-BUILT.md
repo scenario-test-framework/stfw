@@ -685,6 +685,7 @@ _{seq}_{group}_parallel/
 | ID | 規則 |
 |---|---|
 | run_id | `_{yyyymmddhhmmss}_{pid}`（採番時刻 + プロセス ID）。パターン `^_\d{14}_\d+$`。v0.2 の `run_spec.uniq_id` と互換 |
+| 採番時刻 | 現在時刻（秒単位）。ただし既存の最新 run の採番時刻が現在時刻以上で、その差が 24 時間以内なら「最新 run の採番時刻 + 1 秒」にする（同一秒に続けて実行しても採番時刻で新旧が決まるようにするため。pid は時刻順にならず、コンテナ内では毎回同じ pid になりうる）。このため 1 秒に複数回実行すると採番時刻は実時刻より先行しうる。最新 run が 24 時間を超えて未来（時計の異常）の場合は現在時刻を使う（以後の run_id が未来時刻に引きずられ続けることを防ぐ）。この場合だけは新しい run がその未来の run より古い扱いになる。同一プロジェクトで同時に採番した並走 run は同じ採番時刻になりうる |
 | NodeID | run_id にツリーのパスセグメントを `+` で連結: `{run_id}+run[+{scenario}[+{bizdate_dirname}[+{process_dirname}]]]`。深さは run=1 / scenario=2 / bizdate=3 / process=4 セグメント（run_id を除く）。セグメントに `+` `^` `/` `\` と空文字は使用不可 |
 | parent_id | NodeID の最後の `+` 以降を除いた文字列。run 階層の親は run_id 自身 |
 
@@ -729,9 +730,9 @@ v0.2 の webhook_id 導出規則と同一（余分な `}` を付与していた 
 - step_end: 列挙済みステップの Pending からの正当な遷移
 - node_end: Started からの正当な遷移
 
-`ListRunIDs` は `.stfw/runs/` 直下の run_id 形式のディレクトリを昇順で返し、最新 run は昇順の末尾（= 採番時刻が最も新しいもの）。
+`ListRunIDs` は `.stfw/runs/` 直下の run_id 形式のディレクトリを昇順で返し、最新 run は昇順の末尾（= 採番時刻が最も新しいもの）。順序は採番時刻（`yyyymmddhhmmss` 部分）で決め、同一の採番時刻どうしは pid を**数値として**比較する（文字列比較だと桁数の異なる pid で順序が逆転するため）。この順序を `stfw status` / `stfw report` の最新 run、レポート一覧の並び、`--resume` の最新の完了済み run が共有する。
 
-> 根拠: `internal/domain/run/{event,run,steps,status,runid,nodeid}.go`, `internal/repository/journal.go`, `internal/usecase/status/status.go`, `test/acceptance/testdata/script/{run_全ステップ成功の場合_Successになること,run_途中でexit6になる場合_後続がBlockedになること,run_途中でexit3になる場合_Warnで続行すること,run_Warn後にexit6になる場合_Errorが優先されること,run_dryrunの場合_executeとpostexecuteをスキップすること}.txtar` の `journal_golden.jsonl`
+> 根拠: `internal/domain/run/{event,run,steps,status,runid,nodeid}.go`, `internal/repository/journal.go`, 採番時刻と順序は `internal/domain/run/runid_order_test.go`・`internal/repository/journal_order_test.go`・`internal/usecase/runscenario/runid_order_test.go`, `internal/usecase/status/status.go`, `test/acceptance/testdata/script/{run_全ステップ成功の場合_Successになること,run_途中でexit6になる場合_後続がBlockedになること,run_途中でexit3になる場合_Warnで続行すること,run_Warn後にexit6になる場合_Errorが優先されること,run_dryrunの場合_executeとpostexecuteをスキップすること}.txtar` の `journal_golden.jsonl`
 
 ### 5.6 実行結果ハウスキープ（run 開始時・REQ-019）
 
@@ -830,7 +831,7 @@ OTel のスパンステータスには Warn 相当がない（Ok / Error / Unset
 | 実行中の増分生成 | run の `node_start` / process の `node_end` / run の `node_end` のたびに再生成（reporter がジャーナルイベントに連動）。生成失敗は警告ログのみで実行に影響しない |
 | オンデマンド生成 | `stfw report [run_id] [--out dir]`（ジャーナルからの投影を再実行） |
 | 出力先 | 既定 `.stfw/reports/`（`--out` で任意ディレクトリ） |
-| 出力ファイル | `index.html`（run 一覧・新しい run が先頭 = run_id 降順）+ `runs/{run_id}.html`(run 詳細: サマリ + 階層ツリー表 + ステップ行) |
+| 出力ファイル | `index.html`（run 一覧・新しい run が先頭 = §5.5 の順序の逆順）+ `runs/{run_id}.html`(run 詳細: サマリ + 階層ツリー表 + ステップ行) |
 
 ### 7.2 表示仕様
 
@@ -1034,7 +1035,7 @@ v0.2（Bash + digdag）系にユーザーはおらず移行ガイドは廃止し
 - **dig 生成の廃止** → `stfw validate` の静的検証へ昇格。`stfw server` / digdag 系コマンドの廃止
 - コマンド体系の整理（`scenario -i` → `new scenario` 等）
 - secret の保存形式を openssl S/MIME → age (X25519) へ変更（`stfw secret migrate` で一括変換、§9.2）
-- `STFW_HOME` の廃止、bizdate の実在日付検証の追加、run_id 採番規則は互換維持
+- `STFW_HOME` の廃止、bizdate の実在日付検証の追加、run_id の形式は互換維持（同一秒の連続実行時の採番時刻の繰り上げは v1 で追加。§5.2）
 
 > 根拠: `README.md`
 
