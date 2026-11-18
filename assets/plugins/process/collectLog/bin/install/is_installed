@@ -12,7 +12,7 @@ done
 # arch ごとに永続キャッシュ → イメージ同梱版 (stfw:full) の順で解決する。同梱版は
 # 設定版と同梱版 (VERSION) が一致するときに限る (解決順は bin/run/execute と同じ)。
 bundled="${stfw_plugin_bundled_dir:-}/logfilter"
-version="${stfw_process_collectLog_logfilter_version:-v2.0.0}"
+version="${stfw_process_collectLog_logfilter_version:-v2.0.2}"
 use_bundled=0
 if [ -n "${stfw_plugin_bundled_dir:-}" ] \
   && [ "$(cat "${bundled}/VERSION" 2>/dev/null)" = "${version}" ]; then

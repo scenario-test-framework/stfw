@@ -15,7 +15,7 @@ chmod 755 fakebin/fakek6
 chmod 755 fakebin/mkbin
 
 # 同梱ディレクトリ (VERSION + 実行ホストの os_arch 版 k6。os 命名は k6 の linux / macos)
-exec mkbin bundled/k6 v2.1.0 bundled
+exec mkbin bundled/k6 v2.4.0 bundled
 env stfw_plugin_bundled_dir=${WORK}/bundled
 
 # --- 同梱あり・キャッシュなし: install なしで run が成功し、キャッシュは作られない ---
@@ -36,19 +36,19 @@ execcode 3 stfw plugin install invokeWeb
 # --- 設定版と同梱版が異なる: 同梱は使わない ---
 execcode 6 stfw run invver
 stderr 'is not installed'
-stderr 'bundled k6 is v2\.1\.0 but k6_version is v9\.9\.9'
+stderr 'bundled k6 is v2\.4\.0 but k6_version is v9\.9\.9'
 ! stderr 'k6=bundled'
 execcode 6 stfw run invwebver
 stderr 'is not installed'
-stderr 'bundled k6 is v2\.1\.0 but k6_version is v9\.9\.9'
+stderr 'bundled k6 is v2\.4\.0 but k6_version is v9\.9\.9'
 ! stderr 'k6=bundled'
 
 # --- 永続キャッシュと同梱の両方がある: 永続キャッシュを優先する ---
-exec mkbin .stfw/cache/plugins/invokeRest/k6 v2.1.0 cache
+exec mkbin .stfw/cache/plugins/invokeRest/k6 v2.4.0 cache
 exec stfw run inv
 stderr 'k6=cache'
 ! stderr 'k6=bundled'
-exec mkbin .stfw/cache/plugins/invokeWeb/k6 v2.1.0 cache
+exec mkbin .stfw/cache/plugins/invokeWeb/k6 v2.4.0 cache
 exec stfw run invweb
 stderr 'k6=cache'
 ! stderr 'k6=bundled'

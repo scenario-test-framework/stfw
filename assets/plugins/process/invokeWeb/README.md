@@ -23,7 +23,7 @@
 | `host_group` | - | inventory グループ名。先頭ホストを `__ENV.stfw_target_host` へ注入 |
 | `user` | - | secret `{host}-{user}` のパスワードを `__ENV.stfw_target_password` へ注入 (`host_group` 必須) |
 | `env[]` | - | k6 へ渡す `"KEY=VALUE"` のリスト (`-e` で注入) |
-| `k6_version` | - | 取得する k6 のリリースタグ (既定 v2.1.0) |
+| `k6_version` | - | 取得する k6 のリリースタグ (既定 v2.4.0) |
 
 ## 動作
 
@@ -33,6 +33,11 @@
 
 k6 スクリプトは `k6/browser` モジュールを使い、scenario options に
 `options: { browser: { type: 'chromium' } }` を指定する。
+
+> k6 v2.4.0 から `browser_data_received` は Chrome が報告する転送サイズ (圧縮後) で
+> 数えるようになった。以前の版より値が変わりうるため、この指標に閾値を設定している
+> 場合は版を上げたときに見直す
+> ([k6 v2.4.0 のリリースノート](https://github.com/grafana/k6/releases/tag/v2.4.0))。
 
 ## 出力
 

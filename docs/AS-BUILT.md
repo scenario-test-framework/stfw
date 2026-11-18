@@ -16,7 +16,7 @@ stfw は業務日付をまたぐシナリオテストをディレクトリ規約
 
 | 項目 | 内容 |
 |---|---|
-| 実装言語 | Go 1.26（`go.mod`: `go 1.26.4`） |
+| 実装言語 | Go 1.26（`go.mod`: `go 1.26.0` / `toolchain go1.26.11`） |
 | 配布形態 | 単一バイナリ（実行エンジン内包・常駐サービスなし・外部データストアなし） |
 | 主要依存 | cobra（CLI）, yaml.v3（設定）, filippo.io/age（暗号化）, OpenTelemetry SDK（OTLP）, smallstep/pkcs7（旧形式 secret 復号）, go-internal/testscript（受け入れテスト） |
 | 静的資産 | プロジェクトテンプレート・同梱プラグイン・デフォルト設定・HTML テンプレートを `go:embed` でバイナリに同梱（`assets/assets.go`） |
@@ -384,7 +384,7 @@ inventory は後方互換で**文字列ホスト**と**構造化エントリ（`
 - `install` / `is_installed` にはプラグイン設定（config.yml + プロジェクト上書き。プロセス非依存の `PluginConfigEnv`）も公開され、`logfilter_version` / `logfilter_arches` 等を参照できる。
 - **イメージ同梱版へのフォールバック**: 外部ツールを DL する組込みプラグイン（collectLog = logfilter / compare = compare-files / invokeRest・invokeWeb = k6）は、環境変数 `stfw_plugin_bundled_dir`（stfw は注入しない。stfw:full イメージが ENV で `/opt/stfw/bundled` を設定。§10.2）が指す同梱ディレクトリ `{stfw_plugin_bundled_dir}/{tool}/{os_arch}/{bin}` を参照できる。
   - 解決順は **永続キャッシュ → 同梱版 → 未プロビジョニング**（キャッシュがあれば同梱より優先。既存の「初回 install 優先」を維持）。`is_installed` と `bin/run/execute` は同じ解決順を持つ。
-  - 同梱版は `{stfw_plugin_bundled_dir}/{tool}/VERSION` が**設定版**（`logfilter_version` / `compare_files_version` / `k6_version`）と一致するときだけ使う。プロジェクト共通設定（`config/plugins/process/{type}/config.yml`）で版を上書きした場合は同梱を使わず、従来どおり install（DL）を要求する。
+  - 同梱版は `{stfw_plugin_bundled_dir}/{tool}/VERSION` が**設定版**（`logfilter_version` / `compare_files_version` / `k6_version`）と一致するときだけ使う。プロジェクト共通設定（`config/plugins/process/{type}/config.yml`）で同梱版と**異なる**版を指定した場合は同梱を使わず、従来どおり install（DL）を要求する（同梱版と同じ版の指定なら同梱を使う。判定は値の一致）。
   - **版の上書き単位はプロジェクト共通設定**。install / `is_installed`（provisioning 時）はプロセス非依存の `PluginConfigEnv` を見るため、プロセスローカル `config/config.yml` だけで版を変えても provisioning には反映されない（install は既定版で「インストール済み」exit 3 のまま）。stfw:full でキャッシュが無い場合、run 時の `is_installed` は版不一致で false（exit 6）となるため、版不一致時は `is_installed` が原因と対処（`bundled {tool} is {同梱版} but {key} is {設定版} (set {key} in config/plugins/process/{type}/config.yml and run ...)`）を **stderr** に出す（stdout は判定専用で利用者に見えない）。
   - collectLog は `logfilter_arches` の **arch ごと**に「キャッシュ → 同梱」で解決する（同梱に無い arch を要求した場合、その arch は install が必要）。
   - 同梱版で `is_installed=true` になるため、`stfw plugin install {type}` は「インストール済み」（exit 3）、`stfw init` は "already provisioned" となり DL しない。`stfw_plugin_bundled_dir` 未設定（ホスト実行・通常版イメージ）では挙動は変わらない。
@@ -472,7 +472,7 @@ Assert フェーズの組込みプラグイン。期待値（`expect/`）と収�
 **プロビジョニング（`assets/plugins/process/compare`）**
 
 - compare-files はローカルで `expect`/`actual` を比較するため、`install` は**実行ホストの os_arch 版 1 種のみ**を取得する（収集系プラグインのような arch 送り分けはしない）。os_arch は `uname -s`/`uname -m` から解決する。
-- リリース資産名は `compare-files_{version無しv}_{os}_{arch}.tar.gz`（GitHub Releases）。既定バージョンは `v2.2.0`、ダウンロード元は `stfw_compare_files_download_base` で差し替え可能。バイナリは永続キャッシュ `${stfw_plugin_cache_dir}/compare-files/{os_arch}/compare_files` に配置する。`is_installed` が同キャッシュの存在で実行前ゲートする。
+- リリース資産名は `compare-files_{version無しv}_{os}_{arch}.tar.gz`（GitHub Releases）。既定バージョンは `v2.2.4`、ダウンロード元は `stfw_compare_files_download_base` で差し替え可能。バイナリは永続キャッシュ `${stfw_plugin_cache_dir}/compare-files/{os_arch}/compare_files` に配置する。`is_installed` が同キャッシュの存在で実行前ゲートする。
 - プロビジョニングモデルは collectLog（logfilter §4.8）と同一の「初回 install 優先」。キャッシュ済みなら再ダウンロードしない。**`compare_files_version` を変更したときは `${stfw_plugin_cache_dir}/compare-files/` を削除してから再 install する**（キャッシュパスに版を含めず、両プラグインで同じ運用にそろえている）。
 - キャッシュが無い場合は、版一致のイメージ同梱版 `${stfw_plugin_bundled_dir}/compare-files/{os_arch}/compare_files` を使う（stfw:full。解決順・版一致条件は §4.8「イメージ同梱版へのフォールバック」）。
 
@@ -501,7 +501,7 @@ Assert フェーズの組込みプラグイン。期待値（`expect/`）と収�
 
 | キー | 説明 |
 |---|---|
-| `compare_files_version` | 取得する compare-files のリリースタグ（既定 `v2.2.0`） |
+| `compare_files_version` | 取得する compare-files のリリースタグ（既定 `v2.2.4`） |
 | `on_mismatch` | 比較不一致（compare-files exit 3）の扱い。`error`（既定）= exit 6 に変換してステップ失敗（従来挙動・回帰テスト運用）/ `warn` = exit 3 のまま返して Warn 記録・続行（差分確認運用）。`error` / `warn` 以外の値は設定不正として exit 6 |
 
 **終了コードの対応付け**
@@ -524,7 +524,7 @@ Act フェーズの組込みプラグイン。テスト対象への取引入力�
 **プロビジョニング（`assets/plugins/process/{invokeRest,invokeWeb}`）**
 
 - k6 はローカルでテストを実行するため、`install` は**実行ホストの os_arch 版 1 種のみ**を取得する。os_arch は `uname -s`/`uname -m` から解決する。
-- リリース資産名は `k6-{version}-{os}-{arch}.{tar.gz|zip}`（GitHub Releases）。**os 命名は k6 独自で `linux`/`macos`、arch は `amd64`/`arm64`。linux は `tar.gz`・macos は `zip`** のため展開ツールを OS で分岐する（tar / unzip）。既定バージョンは `v2.1.0`、ダウンロード元は `stfw_k6_download_base` で差し替え可能。バイナリは永続キャッシュ `${stfw_plugin_cache_dir}/k6/{os_arch}/k6` に配置する（collectLog と同一の「初回 install 優先」。版変更時はキャッシュ削除）。`is_installed` が同キャッシュの存在で実行前ゲートする。キャッシュが無い場合は、版一致のイメージ同梱版 `${stfw_plugin_bundled_dir}/k6/{os_arch}/k6` を使う（stfw:full。invokeRest / invokeWeb で共有。§4.8「イメージ同梱版へのフォールバック」）。
+- リリース資産名は `k6-{version}-{os}-{arch}.{tar.gz|zip}`（GitHub Releases）。**os 命名は k6 独自で `linux`/`macos`、arch は `amd64`/`arm64`。linux は `tar.gz`・macos は `zip`** のため展開ツールを OS で分岐する（tar / unzip）。既定バージョンは `v2.4.0`、ダウンロード元は `stfw_k6_download_base` で差し替え可能。バイナリは永続キャッシュ `${stfw_plugin_cache_dir}/k6/{os_arch}/k6` に配置する（collectLog と同一の「初回 install 優先」。版変更時はキャッシュ削除）。`is_installed` が同キャッシュの存在で実行前ゲートする。キャッシュが無い場合は、版一致のイメージ同梱版 `${stfw_plugin_bundled_dir}/k6/{os_arch}/k6` を使う（stfw:full。invokeRest / invokeWeb で共有。§4.8「イメージ同梱版へのフォールバック」）。
 - invokeWeb のブラウザモードは実行時に Chromium を必要とする（stfw:full イメージに同梱。§4.12 の install は k6 バイナリのみを配置し Chromium 導入はイメージの責務）。
 
 **設定**（config.yml の `stfw.process.{invokeRest|invokeWeb}`）
@@ -794,7 +794,9 @@ run 毎に累積する実行結果（実行ジャーナル + HTML レポート�
 | 2 | stfw.yml の `stfw.otel.endpoint` | `WithEndpointURL` として使用。パス無し URL は `/v1/traces` が補完される |
 | 3 | どちらも未設定 | **TracerProvider を組み立てず一切送信しない** |
 
-プロトコルは OTLP/HTTP（`application/x-protobuf`）。リソース属性は `service.name=stfw`, `service.version={バージョン}`。
+プロトコルは OTLP/HTTP（既定 `application/x-protobuf`）。OTel 標準環境変数 `OTEL_EXPORTER_OTLP_PROTOCOL` /
+`OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` に `http/json` を指定すると JSON で送信する（otel SDK v1.47.0 以降の SDK 側解決。
+`grpc` を指定しても gRPC にはならず HTTP のまま送信する）。リソース属性は `service.name=stfw`, `service.version={バージョン}`。
 
 ### 6.2 スパンマッピング
 
@@ -1003,7 +1005,7 @@ stfw_inventory:
 | ベース | runtime ステージからの派生（上記に追加インストール） |
 | 追加パッケージ | sshpass（collect 系 / sshExec / scpPut）、default-mysql-client（MariaDB ベースの `mysql`）、postgresql-client（`psql`）、redis-tools（`redis-cli`）、chromium + fonts-noto-cjk（invokeWeb） |
 | k6 / compare-files / logfilter | `/opt/stfw/bundled/{tool}/` に同梱し、ENV `stfw_plugin_bundled_dir=/opt/stfw/bundled` で公開する（プラグインは永続キャッシュが無ければ版一致の同梱版を使うため、`stfw plugin install` / ネットワークなしで実行できる。§4.8）。**取得はビルド時に各プラグインの `bin/install/install` を `stfw_plugin_cache_dir=/opt/stfw/bundled` で実行**して行い（資産名・os_arch 判定を Dockerfile に二重実装しない）、版（と logfilter の arches）は**各プラグインの既定設定 `config.yml` を正**とする（`compare_files_version` / `k6_version` / `logfilter_version` / `logfilter_arches`）。版は `{tool}/VERSION` に記録する。compare-files / k6 はイメージの arch 版 1 種、logfilter は収集先ホスト用に `logfilter_arches` の全 arch。k6 は invokeRest / invokeWeb で共有するため両者の `k6_version` が食い違うとビルド失敗。**版を上げるときは config.yml だけを変更すればイメージも追従する** |
-| Chromium 連携 | `K6_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium` と `K6_BROWSER_ARGS=no-sandbox` を ENV で設定（コンテナ内は seccomp で user namespace を作れず Chromium sandbox が起動しないため。K6_BROWSER_ARGS はカンマ区切り・`--` なしの k6 形式 — k6 `browser/env/env.go` / `chromium/browser_type.go` で確認）。**k6 v2.1.0 + 本イメージの chromium で browser テスト（goto + evaluate + check）の E2E 動作を検証済み**。なお素の `chromium --headless --dump-dom` 単体起動は環境により SIGTRAP することがあるが、k6 の起動フラグセット（prepareFlags）経由では発生しない（実利用経路は k6 経由のみ） |
+| Chromium 連携 | `K6_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium` と `K6_BROWSER_ARGS=no-sandbox` を ENV で設定（コンテナ内は seccomp で user namespace を作れず Chromium sandbox が起動しないため。K6_BROWSER_ARGS はカンマ区切り・`--` なしの k6 形式 — k6 `browser/env/env.go` / `chromium/browser_type.go` で確認）。**k6 v2.4.0 + 本イメージの chromium で browser テスト（goto + evaluate + check）の E2E 動作を検証済み**。なお素の `chromium --headless --dump-dom` 単体起動は環境により SIGTRAP することがあるが、k6 の起動フラグセット（prepareFlags）経由では発生しない（実利用経路は k6 経由のみ） |
 | 配布 | タグ: `full` + `{semver}-full`（linux/amd64 + linux/arm64） |
 
 ### 10.3 compose.yaml（HTML レポート配信つき）
@@ -1018,8 +1020,8 @@ stfw_inventory:
 
 | ワークフロー | トリガー | 内容 |
 |---|---|---|
-| `ci.yml` | pull_request | golangci-lint + `go build ./...` + `go test ./...` |
-| `build.yml` | push（master） | `go vet` + `go test` + GoReleaser snapshot（成果物を 7 日保持の artifact 化）+ Docker build（runtime / full の 2 ターゲット、push なし） |
+| `ci.yml` | pull_request | golangci-lint + `go build ./...` + `go test ./...` + `govulncheck ./...`（呼び出し経路のある依存・Go 本体の脆弱性で失敗。Go 本体は go.mod の `toolchain` で判定） |
+| `build.yml` | push（master） | `go vet` + `go test` + GoReleaser snapshot（成果物を 7 日保持の artifact 化）+ Docker build（runtime / full の 2 ターゲット、push なし）+ 両イメージの Trivy スキャン（修正版のある HIGH/CRITICAL で失敗。修正版の無い OS パッケージは合否に含めない。公式イメージ `aquasec/trivy` を digest 固定で実行し、runner のアーキテクチャのみ検査） |
 | `release.yml` | tag `v*` | `go test` + GoReleaser release（GitHub Releases）+ Docker multi-arch build & push（ghcr.io へ runtime: semver + `latest` / full: `{semver}-full` + `full`。full 側は `flavor: latest=false` で plain latest の自動生成を抑止） |
 
 > 根拠: `.goreleaser.yaml`, `Dockerfile`, `compose.yaml`, `.github/workflows/{ci,build,release}.yml`
