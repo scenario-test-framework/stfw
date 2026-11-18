@@ -993,7 +993,7 @@ stfw_inventory:
 | 項目 | 仕様 |
 |---|---|
 | ベース | ビルド: `golang:1.27` → 実行: `cgr.dev/chainguard/wolfi-base`（Wolfi。Chainguard のコンテナ専用ディストリビューションで glibc・`apk`。v1.7.0 で `debian:bookworm-slim` から変更）。無料で取れるのは `latest` だけのため **digest で固定**し、Dependabot（docker）が digest を更新する。ビルド時に `apk upgrade` するため、digest が古くてもパッケージは最新になる |
-| 再現性（意図した割り切り） | パッケージの版は固定しない（修正版を常に取り込むため）。そのため同じコミットでもビルドした日でパッケージの版が変わり、過去のリリースを同じ中身で作り直すことはできない。各リリースの中身は公開イメージ自体（`/lib/apk/db/installed` と Trivy の SBOM。Chrome は `/opt/chrome/VERSION`）で確かめる。部品の欠けは各ビルドのスモークテスト（§10.4）で検出する |
+| 再現性（意図した割り切り） | パッケージの版は固定しない（修正版を常に取り込むため）。そのため同じコミットでもビルドした日でパッケージの版が変わり、過去のリリースを同じ中身で作り直すことはできない。各リリースの中身は公開イメージ自体で確かめる（パッケージは `/lib/apk/db/installed`。必要なら `trivy image --format cyclonedx` などで公開イメージから SBOM を作る。SBOM は CI では作らない。Chrome は `/opt/chrome/VERSION`）。部品の欠けは各ビルドのスモークテスト（§10.4）で検出する |
 | ベースの選定理由 | Debian 12 では修正版の無い脆弱性が通常版 456 件・full 版 1843 件残り（大半は Chromium）、取り込みようがなかった。Wolfi は部品が少なく修正版への追従が早い（通常版・full 版とも 0 件。v1.7.0 時点の Trivy 0.76.2 で測定）。Alpine は脆弱性情報が修正済みのものしか載らず未修正分が見えないこと、Google 公式の Chrome が musl では動かないことから採らない。シェルの無い distroless はプラグイン契約（任意言語のスクリプト実行）のため採らない |
 | 追加パッケージ | bash, curl, openssh-client + openssh-keygen + openssh-keyscan（`stfw ssh trust` が `ssh-keygen` / `ssh-keyscan` を使う。Wolfi では別パッケージ）, ca-certificates, tzdata（`TZ` 指定を効かせる。無いと stfw も `date` も黙って UTC になる）（プラグイン契約が任意言語スクリプト実行のため distroless にしない）+ GNU 版の基本コマンド（coreutils, findutils, grep, sed, gawk, gnutar, gzip, diffutils。wolfi-base の既定は BusyBox のため、利用者のスクリプトが Debian の頃と同じ GNU 版のオプションで動くようにする。`/bin/sh` は BusyBox の ash） |
 | 利用者が追加するとき | `apk add`（Wolfi のパッケージ名）。`apt-get` は使えない。Debian 版にたまたま入っていたコマンド（`perl` など）は入らない |
