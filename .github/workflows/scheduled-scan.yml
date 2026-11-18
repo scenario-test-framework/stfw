@@ -44,13 +44,12 @@ jobs:
       # 合否は master の CI (build.yml) と同じ基準
       - name: Scan images with Trivy
         run: bash .github/scripts/scan-images.sh stfw-scan:runtime stfw-scan:full
-      # 同梱 k6 の、修正版がある HIGH 未満の脆弱性を報告だけする (k6 の新しい版が出るまで直せないため合否外)。
-      # 件数を実行結果の画面に注記し、明細を実行の概要に書く (メールなどの通知はしない)。
-      # 報告の失敗で定期チェックを失敗させない
-      - name: Report bundled k6 findings below HIGH (informational)
+      # 除外リストのうち、もう見つからなくなった行 (対応版を取り込んだ後の消し忘れ) を警告する。
+      # 警告の注記を出すだけで、定期チェックを失敗させない
+      - name: Warn about stale entries in .trivyignore.yaml
         if: always() && steps.build-full.outcome == 'success'
         continue-on-error: true
-        run: bash .github/scripts/report-k6.sh stfw-scan:full
+        run: bash .github/scripts/check-trivyignore-stale.sh stfw-scan:runtime stfw-scan:full
 
   bundled-versions:
     runs-on: ubuntu-latest

@@ -95,10 +95,14 @@ golangci-lint run                # CI と同じ v2 設定（.golangci.yml）
   （v2.12.2 は go1.26.2 ビルド）。
 - 脆弱性スキャン: PR で `govulncheck`（ci.yml）、master でイメージの Trivy（build.yml）、週 1 回の
   定期チェック（scheduled-scan.yml）。Trivy の合否は「修正版があるのに取り込んでいない」もので判定し、
-  自分たちで直せるもの（OS パッケージ・stfw 本体・同梱 compare-files / logfilter）は深刻度に関係なく失敗、
-  他社製の同梱 k6 は HIGH/CRITICAL のみ失敗（k6 の新しい版が出るまで直せないため）。修正版の無いものは
-  合否に含めない。判定は `.github/scripts/scan-images.sh` に集約している。定期チェックが失敗したら
-  （新しい修正版・同梱ツールの新しい版が出た）、取り込みの PR を作る。
+  すべての部品で深刻度に関係なく失敗。修正版の無いものは合否に含めない。判定は `.github/scripts/scan-images.sh`
+  に集約している。
+  - **取り込めないもの（他社製の同梱 k6 の部品など、対応版待ち）は除外リスト `.trivyignore.yaml` に行を足す**。
+    各行に `paths`（対象の場所。先頭 2 階層とファイル名は具体名、途中の階層だけ `*` 可）・`expired_at`（明日以降かつ今日から
+    60 日以内。期限日当日はもう効かない）・`statement`（何を待っているか）が必須で、`check-trivyignore.sh` が CI で検査する
+    （見本テスト `test-check-trivyignore.sh` も ci.yml で実行）。除外中のものもスキャン結果に毎回表示される。
+  - 対応版を取り込んだら該当の行を消す（定期チェックが消し忘れを警告）。期限切れで失敗したら、取り込むか理由を更新して延長する。
+  - 定期チェックが失敗したら（新しい修正版・同梱ツールの新しい版が出た）、取り込みの PR を作る。
 
 ### 6. 作業単位ごとのレビュー（サブエージェント → Codex の二段）
 
@@ -122,7 +126,7 @@ golangci-lint run                # CI と同じ v2 設定（.golangci.yml）
 
 ## 横断的な注意点
 
-- **CI**（`.github/workflows/ci.yml`）: `lint`（golangci-lint v2）+ `test`（go test）+ `vulncheck`（govulncheck）。
+- **CI**（`.github/workflows/ci.yml`）: `lint`（golangci-lint v2）+ `test`（go test）+ `vulncheck`（govulncheck）+ `scan-rules`（除外リストの検査の見本テスト）。
   master push の `build.yml` はイメージを Trivy でスキャンする。リリース手順 ① の「master の CI 緑」はこのスキャンを含む。
   `scheduled-scan.yml` は週 1 回（月曜 09:17 JST）と手動実行で、作り直したイメージのスキャン・同梱ツールの
   最新版確認・govulncheck を行う。失敗の通知は cron を最後に変更した（または再度有効にした）ユーザーに届く
