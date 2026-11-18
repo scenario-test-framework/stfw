@@ -57,6 +57,15 @@ jobs:
           images: ${{ env.REGISTRY_IMAGE }}
           tags: |
             type=semver,pattern={{version}}
+      # full のラベル (org.opencontainers.image.version = {version}-full) は従来どおり full 用の版数で付ける
+      - uses: docker/metadata-action@v6
+        id: meta-full
+        with:
+          images: ${{ env.REGISTRY_IMAGE }}
+          tags: |
+            type=semver,pattern={{version}},suffix=-full
+          flavor: |
+            latest=false
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -105,7 +114,7 @@ jobs:
           context: .
           target: full
           platforms: ${{ matrix.platform }}
-          labels: ${{ steps.meta.outputs.labels }}
+          labels: ${{ steps.meta-full.outputs.labels }}
           tags: ${{ env.REGISTRY_IMAGE }}
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true
           build-args: |
@@ -170,14 +179,20 @@ jobs:
           TAGS_FULL: ${{ steps.meta-full.outputs.json }}
         run: |
           set -euo pipefail
-          # $1 = タグの JSON (metadata-action の json 出力), $2 = digest を置いたディレクトリ
+          # $1 = タグの JSON (metadata-action の json 出力), $2 = digest を置いたディレクトリ, $3 以降 = 追加の引数
           publish() {
-            local args=() f
+            local args=() f t tags
             mapfile -t tags < <(jq -r '.tags[]' <<< "$1")
             for t in "${tags[@]}"; do args+=(-t "$t"); done
             for f in "$2"/*; do args+=("${REGISTRY_IMAGE}@sha256:$(basename "$f")"); done
-            docker buildx imagetools create "${args[@]}"
-            docker buildx imagetools inspect "${tags[0]}"
+            docker buildx imagetools create "${@:3}" "${args[@]}"
           }
+          # タグの付け替えは 1 つずつ行われ、まとめて原子的には行えない。途中で失敗して runtime だけ新しくなる
+          # 範囲を狭めるため、先に両方を dry-run で組み立てて (digest の取得と manifest の作成) から付け替える。
+          # 付け替えの途中で失敗したら、このジョブを再実行する (同じ digest を付け直すだけなので何度でもよい)
+          publish "$TAGS_RUNTIME" "${RUNNER_TEMP}/digests/runtime" --dry-run > /dev/null
+          publish "$TAGS_FULL" "${RUNNER_TEMP}/digests/full" --dry-run > /dev/null
           publish "$TAGS_RUNTIME" "${RUNNER_TEMP}/digests/runtime"
           publish "$TAGS_FULL" "${RUNNER_TEMP}/digests/full"
+          docker buildx imagetools inspect "$(jq -r '.tags[0]' <<< "$TAGS_RUNTIME")"
+          docker buildx imagetools inspect "$(jq -r '.tags[0]' <<< "$TAGS_FULL")"

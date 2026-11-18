@@ -136,7 +136,7 @@ golangci-lint run                # CI と同じ v2 設定（.golangci.yml）
 - **リリース**（`.github/workflows/release.yml`）: タグ `v*` push で goreleaser がバイナリ +
   checksums を Releases へ、Docker イメージ（`stfw` / `stfw:full`）を ghcr.io へ push する。
   Docker イメージは arch ごとのランナーでスモークテストに通し、push したものが確かめたものと同じ中身かを
-  `verify-pushed-image.sh` で照合してから、両 arch そろってタグを付ける（失敗したらタグは動かない。AS-BUILT §10.4）。
+  `verify-pushed-image.sh` で照合してから、両 arch そろってタグを付ける（確認で失敗したらタグは動かない。タグの付け替え途中で失敗したら docker-publish ジョブを再実行する。AS-BUILT §10.4）。
   - **リリース手順**: ① master の CI 緑を確認 → ② 版数フォールバック
     `internal/presentation/cli/root.go` の `Version = "X.Y.Z-dev"` を**リリースする版**へバンプし、
     `docs/AS-BUILT.md` の「未注入時 `X.Y.Z-dev`」の記載も追従 → ③ `git tag vX.Y.Z && git push origin vX.Y.Z`。
