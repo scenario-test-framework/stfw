@@ -2,6 +2,7 @@
 #
 # host_group : 接続先 DB ホストを解決する inventory グループ名 (末尾 group で許可)
 # port       : MySQL ポート
+# charset    : 接続の文字コード。既定 binary (変換なし)。UTF-8 以外の列の値を UTF-8 に変換したいときは utf8mb4
 # database   : 対象データベース名
 # user       : 接続ユーザー (パスワードは secret {host}-{user} で解決)
 # tables     : インポート対象テーブル名のリスト
@@ -14,6 +15,7 @@ stfw:
     importMysql:
       host_group: ""
       port: "3306"
+      charset: binary
       database: ""
       user: ""
       tables: []

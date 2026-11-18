@@ -20,10 +20,17 @@ host_group="${stfw_process_exportMysql_host_group:-}"
 port="${stfw_process_exportMysql_port:-3306}"
 database="${stfw_process_exportMysql_database:-}"
 user="${stfw_process_exportMysql_user:-}"
+# 接続の文字コード。既定 binary (変換なし。格納されたバイト列をそのまま受け渡す)。#52
+charset="${stfw_process_exportMysql_charset:-binary}"
 rc=0
 
 if [ -z "${host_group}" ] || [ -z "${database}" ] || [ -z "${user}" ]; then
   echo "exportMysql: host_group / database / user are required" >&2
+  exit 6
+fi
+# charset は mysql の引数と SQL (importMysql の LOAD DATA) に埋め込むため、英数字と _ だけを許す
+if ! [[ "${charset}" =~ ^[A-Za-z0-9_]+$ ]]; then
+  echo "exportMysql: invalid charset: ${charset}" >&2
   exit 6
 fi
 
@@ -63,8 +70,12 @@ while :; do
   # 識別子はバッククオートで囲み、内部のバッククオートを二重化してエスケープする。
   t_esc="$(printf '%s' "${table}" | sed 's/`/``/g')"
   # pipefail 有効。mysql か変換ヘルパのいずれかが失敗すればパイプは非 0。
+  # 接続の文字コードは設定 charset (既定 binary = 変換なし) で、既定では格納されているバイト列をそのまま取り出す。
+  # 未指定だとクライアント既定の 1 バイト文字コードになり、サーバーが変換できない文字 (日本語など) を
+  # ? に置き換えて返す (#52)。utf8mb4 を指定すると、latin1 列に UTF-8 のバイト列を入れている既存の
+  # データベースで二重に変換されて化けるため、既定では変換しない。
   if MYSQL_PWD="${password}" mysql --batch --host="${host}" --port="${port}" \
-      --user="${user}" --database="${database}" \
+      --user="${user}" --database="${database}" --default-character-set="${charset}" \
       --execute="SELECT * FROM \`${t_esc}\`" | stfw plugin mysql-tsv-to-csv > "${tmp}"; then
     mv "${tmp}" "${out}"
   else

@@ -17,6 +17,7 @@ MySQL のテーブルの全行を DELETE する Arrange フェーズ (初期化)
 | `user` | ○ | 接続ユーザー |
 | `tables[]` | ○ | 削除対象テーブル名のリスト (**FK の子 → 親順**に列挙) |
 | `port` | - | MySQL ポート (既定 3306) |
+| `charset` | - | 接続の文字コード (既定 `binary` = 変換なし)。exportMysql の README の「文字コード」を参照 |
 
 > ⚠️ `tables` が 0 件の場合は何もせず成功する (no-op)。設定漏れに注意。
 

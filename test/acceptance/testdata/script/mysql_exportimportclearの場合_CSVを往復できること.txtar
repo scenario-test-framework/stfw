@@ -29,6 +29,8 @@ exec cat ${WORK}/mysql.log
 stdout 'START TRANSACTION; DELETE FROM `t1`; DELETE FROM `t``x`; COMMIT'
 stdout 'LOAD DATA LOCAL INFILE'
 stdout 'INTO TABLE `t1`'
+# CSV のバイト列を変換せずに入れる (既定はデータベースの文字コードで解釈される)
+stdout 'INTO TABLE `t1` CHARACTER SET binary FIELDS'
 # ファイルパス内のバックスラッシュが SQL 文字列として二重化されている (identifier 側は単一のまま)
 stdout 't\\\\x\.csv'
 
@@ -48,6 +50,18 @@ env STFW_TEST_MYSQL_FAIL=0
 # import のソース CSV 不在は exit 6
 execcode 6 stfw run imp
 stderr 'source csv not found'
+
+# 設定 charset で接続と LOAD DATA の文字コードを切り替えられる (UTF-8 以外の列を変換したい場合)
+env STFW_TEST_MYSQL_CHARSET=utf8mb4
+exec stfw run cs
+exec cat ${WORK}/mysql.log
+stdout 'INTO TABLE `t1` CHARACTER SET utf8mb4 FIELDS'
+env STFW_TEST_MYSQL_CHARSET=
+
+# charset は SQL に埋め込むため、英数字と _ 以外を含む値は実行前に拒否して exit 6
+execcode 6 stfw run badcs
+stderr 'invalid charset'
+! stderr 'mysql connect'
 
 # inventory list の失敗 (inventory ファイル不在) も握りつぶさず exit 6
 cp badstfw.yml stfw.yml
@@ -157,6 +171,53 @@ stfw:
       user: appuser
       tables:
         - missing
+-- scenario/cs/metadata.yml --
+description:
+-- scenario/cs/_10_99990101/metadata.yml --
+description:
+-- scenario/cs/_10_99990101/_10_grp_importMysql/metadata.yml --
+description:
+-- scenario/cs/_10_99990101/_10_grp_importMysql/config/config.yml --
+stfw:
+  process:
+    importMysql:
+      host_group: db
+      database: testdb
+      user: appuser
+      charset: utf8mb4
+      tables:
+        - t1
+-- scenario/cs/_10_99990101/_10_grp_importMysql/data/testdb/t1.csv --
+id,name,note
+1,Alice,hello
+-- scenario/cs/_10_99990101/_20_grp_exportMysql/metadata.yml --
+description:
+-- scenario/cs/_10_99990101/_20_grp_exportMysql/config/config.yml --
+stfw:
+  process:
+    exportMysql:
+      host_group: db
+      database: testdb
+      user: appuser
+      charset: utf8mb4
+      tables:
+        - t1
+-- scenario/badcs/metadata.yml --
+description:
+-- scenario/badcs/_10_99990101/metadata.yml --
+description:
+-- scenario/badcs/_10_99990101/_10_grp_exportMysql/metadata.yml --
+description:
+-- scenario/badcs/_10_99990101/_10_grp_exportMysql/config/config.yml --
+stfw:
+  process:
+    exportMysql:
+      host_group: db
+      database: testdb
+      user: appuser
+      charset: "utf8mb4 x"
+      tables:
+        - t1
 -- fakebin/mysql --
 #!/bin/bash
 # fake mysql: --database= と --execute= を解釈し、擬似 DB / ログで再現する。
@@ -172,6 +233,17 @@ if [ "${STFW_TEST_MYSQL_FAIL:-0}" = "1" ]; then
   echo "mysql: simulated failure" >&2
   exit 1
 fi
+# 接続の文字コードを指定しないと、クライアント既定の 1 バイト文字コードで話し、日本語が ? に化ける (#52)。
+# 全呼び出しで設定どおりの文字コード (既定 binary = 変換なし) を指定していることを、
+# 指定が無ければ失敗させて確かめる。期待する値は STFW_TEST_MYSQL_CHARSET で切り替える
+want="${STFW_TEST_MYSQL_CHARSET:-binary}"
+case " $* " in
+  *" --default-character-set=${want} "*) ;;
+  *)
+    echo "mysql: missing --default-character-set=${want}: $*" >&2
+    exit 1
+    ;;
+esac
 # マスキング検証用にあえてパスワードを stderr へ出す (Masker で除去される想定)
 echo "mysql connect pw=${MYSQL_PWD:-}" >&2
 table="$(printf '%s' "$sql" | grep -oE '`[^`]+`' | head -n1 | tr -d '`')"
