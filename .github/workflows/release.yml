@@ -8,6 +8,9 @@ permissions:
   contents: write
   packages: write
 
+env:
+  REGISTRY_IMAGE: ghcr.io/scenario-test-framework/stfw
+
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
@@ -26,39 +29,134 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  docker:
-    runs-on: ubuntu-latest
+  # Docker イメージは arch ごとに専用のランナーでビルドし、公開する前にスモークテストにかける。
+  # Wolfi のパッケージは常に最新へ更新されるため、リリースで作るイメージは master で確かめたものと
+  # 中身がずれることがある。部品が欠けたイメージを公開しないよう、ここで止める (AS-BUILT §10.4)。
+  # 流れ: ① 確認用にビルドしてローカルへ読み込み → ② スモークテスト → ③ 同じビルダーのキャッシュで
+  # ビルドし直して digest で push (タグは付けない) → ④ push したものと ① の中身が一致するか確かめる。
+  # タグは両 arch の確認がすべて通ったあと、merge ジョブで付ける。
+  docker-build:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
-      - uses: docker/setup-qemu-action@v4
-      - uses: docker/setup-buildx-action@v4
+      - name: Prepare
+        run: |
+          platform=${{ matrix.platform }}
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
+      - uses: docker/metadata-action@v6
+        id: meta
+        with:
+          images: ${{ env.REGISTRY_IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/metadata-action@v6
-        id: meta
-        with:
-          images: ghcr.io/scenario-test-framework/stfw
-          tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest
+      - uses: docker/setup-buildx-action@v4
+      # ① 確認用のビルド (ローカルへ読み込む)
       - uses: docker/build-push-action@v7
         with:
           context: .
           target: runtime
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          platforms: ${{ matrix.platform }}
+          load: true
+          tags: stfw-release:runtime
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: full
+          platforms: ${{ matrix.platform }}
+          load: true
+          tags: stfw-release:full
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+      # ② スモークテスト (stfw とプラグインが呼ぶコマンド・TZ・DB クライアント・同梱 Chrome)
+      - name: smoke test image contents
+        run: |
+          bash .github/scripts/smoke-image.sh runtime stfw-release:runtime
+          bash .github/scripts/smoke-image.sh full stfw-release:full
+      # ③ 公開用のビルド。① のキャッシュから作るので中身は同じ。タグを付けずに digest で push する
+      - uses: docker/build-push-action@v7
+        id: push-runtime
+        with:
+          context: .
+          target: runtime
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ env.REGISTRY_IMAGE }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+      - uses: docker/build-push-action@v7
+        id: push-full
+        with:
+          context: .
+          target: full
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ env.REGISTRY_IMAGE }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+      # ④ push したものが ② で確かめたものと同じ中身か (キャッシュが外れて作り直されていないか)
+      - name: verify pushed images match the smoke-tested ones
+        run: |
+          bash .github/scripts/verify-pushed-image.sh stfw-release:runtime "${REGISTRY_IMAGE}@${{ steps.push-runtime.outputs.digest }}" "${{ matrix.platform }}"
+          bash .github/scripts/verify-pushed-image.sh stfw-release:full "${REGISTRY_IMAGE}@${{ steps.push-full.outputs.digest }}" "${{ matrix.platform }}"
+      - name: Export digests
+        run: |
+          mkdir -p "${RUNNER_TEMP}/digests/runtime" "${RUNNER_TEMP}/digests/full"
+          digest="${{ steps.push-runtime.outputs.digest }}"
+          touch "${RUNNER_TEMP}/digests/runtime/${digest#sha256:}"
+          digest="${{ steps.push-full.outputs.digest }}"
+          touch "${RUNNER_TEMP}/digests/full/${digest#sha256:}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests
+          if-no-files-found: error
+          retention-days: 1
+
+  # 両 arch の確認が通ったものだけに、タグ (stfw:{version} / latest と stfw:{version}-full / full) を付ける
+  docker-publish:
+    runs-on: ubuntu-latest
+    needs: docker-build
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/metadata-action@v6
+        id: meta
+        with:
+          images: ${{ env.REGISTRY_IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
       # 全組込みプラグインのランタイム同梱版 (stfw:{version}-full / stfw:full)
       - uses: docker/metadata-action@v6
         id: meta-full
         with:
-          images: ghcr.io/scenario-test-framework/stfw
+          images: ${{ env.REGISTRY_IMAGE }}
           tags: |
             type=semver,pattern={{version}},suffix=-full
             type=raw,value=full
@@ -66,13 +164,20 @@ jobs:
           # full 側が通常版の latest を上書きしないよう明示的に無効化する
           flavor: |
             latest=false
-      - uses: docker/build-push-action@v7
-        with:
-          context: .
-          target: full
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta-full.outputs.tags }}
-          labels: ${{ steps.meta-full.outputs.labels }}
-          build-args: |
-            VERSION=${{ steps.meta.outputs.version }}
+      - name: Create manifest lists and push
+        env:
+          TAGS_RUNTIME: ${{ steps.meta.outputs.json }}
+          TAGS_FULL: ${{ steps.meta-full.outputs.json }}
+        run: |
+          set -euo pipefail
+          # $1 = タグの JSON (metadata-action の json 出力), $2 = digest を置いたディレクトリ
+          publish() {
+            local args=() f
+            mapfile -t tags < <(jq -r '.tags[]' <<< "$1")
+            for t in "${tags[@]}"; do args+=(-t "$t"); done
+            for f in "$2"/*; do args+=("${REGISTRY_IMAGE}@sha256:$(basename "$f")"); done
+            docker buildx imagetools create "${args[@]}"
+            docker buildx imagetools inspect "${tags[0]}"
+          }
+          publish "$TAGS_RUNTIME" "${RUNNER_TEMP}/digests/runtime"
+          publish "$TAGS_FULL" "${RUNNER_TEMP}/digests/full"

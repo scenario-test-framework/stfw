@@ -135,6 +135,8 @@ golangci-lint run                # CI と同じ v2 設定（.golangci.yml）
   GitHub Actions はアクションをバージョン参照し、`permissions` は最小に保つ。
 - **リリース**（`.github/workflows/release.yml`）: タグ `v*` push で goreleaser がバイナリ +
   checksums を Releases へ、Docker イメージ（`stfw` / `stfw:full`）を ghcr.io へ push する。
+  Docker イメージは arch ごとのランナーでスモークテストに通し、push したものが確かめたものと同じ中身かを
+  `verify-pushed-image.sh` で照合してから、両 arch そろってタグを付ける（失敗したらタグは動かない。AS-BUILT §10.4）。
   - **リリース手順**: ① master の CI 緑を確認 → ② 版数フォールバック
     `internal/presentation/cli/root.go` の `Version = "X.Y.Z-dev"` を**リリースする版**へバンプし、
     `docs/AS-BUILT.md` の「未注入時 `X.Y.Z-dev`」の記載も追従 → ③ `git tag vX.Y.Z && git push origin vX.Y.Z`。
@@ -168,4 +170,4 @@ golangci-lint run                # CI と同じ v2 設定（.golangci.yml）
   ラッパー、`redis-cli` は Valkey。**Chrome は apk ではなく Google 公式の Chrome for Testing の画面なし版**で、
   Trivy に見えないため版を Dockerfile の `ARG CHROME_VERSION` で固定し、定期チェックが Stable と比べる。
   Chrome の版を上げるときは `CHROME_VERSION` と両 arch の `CHROME_SHA256_*`（zip を取得して `shasum -a 256`）を同時に変える。
-  イメージの部品が欠けていないかは build.yml（amd64・arm64）と定期チェックのスモークテスト（`.github/scripts/smoke-image.sh`）が確かめる。定期チェックは公開済みの `:full` の Chrome が古いと失敗する（リリースが要る合図）。
+  イメージの部品が欠けていないかは build.yml（amd64・arm64）・リリース（公開前、両 arch）・定期チェックのスモークテスト（`.github/scripts/smoke-image.sh`）が確かめる。定期チェックは公開済みの `:full` の Chrome が古いと失敗する（リリースが要る合図）。
