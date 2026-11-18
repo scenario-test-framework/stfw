@@ -15,7 +15,7 @@
 
 | キー | 必須 | 説明 |
 |---|---|---|
-| `compare_files_version` | - | 取得する compare-files のリリースタグ (既定 v2.2.0) |
+| `compare_files_version` | - | 取得する compare-files のリリースタグ (既定 v2.2.4) |
 | `on_mismatch` | - | 比較不一致の扱い。`error` (既定) = ステップ失敗として停止 + Blocked 伝播 (回帰テスト運用) / `warn` = Warn として記録して続行 (差分確認運用。run 終了コードは Warn あり・Error なしで 3) |
 
 比較レイアウト (`compare_layout/*.json`) は次の後勝ちマージで解決される (AS-BUILT §4.11):

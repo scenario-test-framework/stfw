@@ -472,7 +472,7 @@ Assert フェーズの組込みプラグイン。期待値（`expect/`）と収�
 **プロビジョニング（`assets/plugins/process/compare`）**
 
 - compare-files はローカルで `expect`/`actual` を比較するため、`install` は**実行ホストの os_arch 版 1 種のみ**を取得する（収集系プラグインのような arch 送り分けはしない）。os_arch は `uname -s`/`uname -m` から解決する。
-- リリース資産名は `compare-files_{version無しv}_{os}_{arch}.tar.gz`（GitHub Releases）。既定バージョンは `v2.2.0`、ダウンロード元は `stfw_compare_files_download_base` で差し替え可能。バイナリは永続キャッシュ `${stfw_plugin_cache_dir}/compare-files/{os_arch}/compare_files` に配置する。`is_installed` が同キャッシュの存在で実行前ゲートする。
+- リリース資産名は `compare-files_{version無しv}_{os}_{arch}.tar.gz`（GitHub Releases）。既定バージョンは `v2.2.4`、ダウンロード元は `stfw_compare_files_download_base` で差し替え可能。バイナリは永続キャッシュ `${stfw_plugin_cache_dir}/compare-files/{os_arch}/compare_files` に配置する。`is_installed` が同キャッシュの存在で実行前ゲートする。
 - プロビジョニングモデルは collectLog（logfilter §4.8）と同一の「初回 install 優先」。キャッシュ済みなら再ダウンロードしない。**`compare_files_version` を変更したときは `${stfw_plugin_cache_dir}/compare-files/` を削除してから再 install する**（キャッシュパスに版を含めず、両プラグインで同じ運用にそろえている）。
 - キャッシュが無い場合は、版一致のイメージ同梱版 `${stfw_plugin_bundled_dir}/compare-files/{os_arch}/compare_files` を使う（stfw:full。解決順・版一致条件は §4.8「イメージ同梱版へのフォールバック」）。
 
@@ -501,7 +501,7 @@ Assert フェーズの組込みプラグイン。期待値（`expect/`）と収�
 
 | キー | 説明 |
 |---|---|
-| `compare_files_version` | 取得する compare-files のリリースタグ（既定 `v2.2.0`） |
+| `compare_files_version` | 取得する compare-files のリリースタグ（既定 `v2.2.4`） |
 | `on_mismatch` | 比較不一致（compare-files exit 3）の扱い。`error`（既定）= exit 6 に変換してステップ失敗（従来挙動・回帰テスト運用）/ `warn` = exit 3 のまま返して Warn 記録・続行（差分確認運用）。`error` / `warn` 以外の値は設定不正として exit 6 |
 
 **終了コードの対応付け**

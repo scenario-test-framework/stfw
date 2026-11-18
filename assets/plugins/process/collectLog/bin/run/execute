@@ -23,7 +23,7 @@ rc=0
 bundled="${stfw_plugin_bundled_dir:-}/logfilter"
 use_bundled=0
 if [ -n "${stfw_plugin_bundled_dir:-}" ] \
-  && [ "$(cat "${bundled}/VERSION" 2>/dev/null)" = "${stfw_process_collectLog_logfilter_version:-v2.0.0}" ]; then
+  && [ "$(cat "${bundled}/VERSION" 2>/dev/null)" = "${stfw_process_collectLog_logfilter_version:-v2.0.2}" ]; then
   use_bundled=1
 fi
 

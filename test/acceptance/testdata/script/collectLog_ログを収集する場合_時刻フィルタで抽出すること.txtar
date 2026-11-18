@@ -13,9 +13,9 @@ chmod 755 fakebin/fakelogfilter
 
 # logfilter リリース tarball のフィクスチャを作る (logfilter_{ver}_{arch}/logfilter)
 mkdir lfsrc
-mkdir lfsrc/logfilter_v2.0.0_linux_amd64
-cp fakebin/fakelogfilter lfsrc/logfilter_v2.0.0_linux_amd64/logfilter
-exec tar czf lf.tar.gz -C lfsrc logfilter_v2.0.0_linux_amd64
+mkdir lfsrc/logfilter_v2.0.2_linux_amd64
+cp fakebin/fakelogfilter lfsrc/logfilter_v2.0.2_linux_amd64/logfilter
+exec tar czf lf.tar.gz -C lfsrc logfilter_v2.0.2_linux_amd64
 env STFW_TEST_LF_TARBALL=${WORK}/lf.tar.gz
 
 # プロビジョニング (curl はモック。arch 別に logfilter をキャッシュ)

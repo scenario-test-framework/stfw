@@ -33,7 +33,7 @@ stfw_inventory:
 | `targets[].group` | ○ | inventory グループ名 (ホスト解決) |
 | `targets[].user` | ○ | ログインユーザー (secret でパスワード解決) |
 | `targets[].paths[]` | ○ | 収集対象ログのパス正規表現 (posix-extended) |
-| `logfilter_version` | - | 取得する logfilter のリリースタグ (既定 v2.0.0) |
+| `logfilter_version` | - | 取得する logfilter のリリースタグ (既定 v2.0.2) |
 | `logfilter_arches` | - | install 時にダウンロードする `{os}_{arch}` (スペース区切り) |
 
 > ⚠️ `targets` は先頭から連番で読み、**最初の `group` 未設定要素で打ち切る** (以降は黙って無視される)。実質 0 件なら何もせず成功する (no-op) ため設定漏れに注意。

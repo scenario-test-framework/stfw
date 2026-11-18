@@ -20,7 +20,7 @@ chmod 755 fakebin/sshpass
 chmod 755 fakebin/mkbin
 
 # 同梱ディレクトリ (VERSION + 既定の logfilter_arches 全 arch)
-exec mkbin bundled/logfilter v2.0.0 bundled linux_amd64 linux_arm64 darwin_arm64
+exec mkbin bundled/logfilter v2.0.2 bundled linux_amd64 linux_arm64 darwin_arm64
 env stfw_plugin_bundled_dir=${WORK}/bundled
 
 exec stfw secret keygen
@@ -39,7 +39,7 @@ execcode 3 stfw plugin install collectLog
 ! stderr 'download'
 
 # --- arch ごとの解決: キャッシュ済み arch (linux_amd64) はキャッシュ優先、他 arch は同梱で補う ---
-exec mkbin .stfw/cache/plugins/collectLog/logfilter v2.0.0 cache linux_amd64
+exec mkbin .stfw/cache/plugins/collectLog/logfilter v2.0.2 cache linux_amd64
 execcode 3 stfw plugin install collectLog
 rm remote/web01/tmp
 exec stfw run demo
@@ -57,7 +57,7 @@ stderr 'download failed'
 cp config.version.yml config/plugins/process/collectLog/config.yml
 execcode 6 stfw run demo
 stderr 'is not installed'
-stderr 'bundled logfilter is v2\.0\.0 but logfilter_version is v9\.9\.9'
+stderr 'bundled logfilter is v2\.0\.2 but logfilter_version is v9\.9\.9'
 execcode 6 stfw plugin install collectLog
 stderr 'download failed'
 

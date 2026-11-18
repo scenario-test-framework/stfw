@@ -19,6 +19,6 @@
 stfw:
   process:
     collectLog:
-      logfilter_version: v2.0.0
+      logfilter_version: v2.0.2
       logfilter_arches: linux_amd64 linux_arm64 darwin_arm64
       targets: []

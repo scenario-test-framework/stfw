@@ -223,7 +223,7 @@ echo $?   # => 0 (compare 以降 → Day2 まで完走)
 stfw:
   process:
     compare:
-      compare_files_version: v2.2.0
+      compare_files_version: v2.2.4
       on_mismatch: warn # error から書き換え
 ```
 
