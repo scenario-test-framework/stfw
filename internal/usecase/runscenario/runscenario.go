@@ -139,9 +139,14 @@ func Run(log *slog.Logger, out, errOut io.Writer, projDir string, cfg *repositor
 		}
 	}
 
-	// run_id 採番 + ジャーナル作成。同一秒・同一プロセスの再実行 (テスト等) で
-	// run_id が衝突した場合は採番時刻をずらして再採番する。
-	runID := run.NewRunID(now(), os.Getpid())
+	// run_id 採番 + ジャーナル作成。採番時刻は既存の最新 run より後にする
+	// (同一秒に続けて実行しても採番時刻で新旧が決まる。AS-BUILT §5.2)。
+	// 並走 run と同時に採番して run_id が衝突した場合は採番時刻をずらして再採番する。
+	issueAt, err := nextIssueTime(projDir, now())
+	if err != nil {
+		return err
+	}
+	runID := run.NewRunID(issueAt, os.Getpid())
 	var journal *repository.Journal
 	for i := 0; ; i++ {
 		journal, err = repository.CreateJournal(projDir, runID)
@@ -151,7 +156,7 @@ func Run(log *slog.Logger, out, errOut io.Writer, projDir string, cfg *repositor
 		if !errors.Is(err, fs.ErrExist) || i >= 10 {
 			return err
 		}
-		runID = run.NewRunID(now().Add(time.Duration(i+1)*time.Second), os.Getpid())
+		runID = run.NewRunID(issueAt.Add(time.Duration(i+1)*time.Second), os.Getpid())
 	}
 	defer func() { _ = journal.Close() }()
 
@@ -444,6 +449,24 @@ func (r *runner) runHooks(level run.NodeType, phase string, env map[string]strin
 		}
 	}
 	return true
+}
+
+// nextIssueTime は既存の最新 run を見て、新しい run_id の採番時刻を決める (AS-BUILT §5.2)。
+func nextIssueTime(projDir string, now time.Time) (time.Time, error) {
+	ids, err := repository.ListRunIDs(projDir)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("list runs: %w", err)
+	}
+	var latest time.Time
+	if len(ids) > 0 {
+		// ListRunIDs は run_id 形式のものだけを返すため Parse / Time は失敗しない
+		if id, err := run.ParseRunID(ids[len(ids)-1]); err == nil {
+			if ts, err := id.Time(); err == nil {
+				latest = ts
+			}
+		}
+	}
+	return run.NextIssueTime(now, latest), nil
 }
 
 // resolveResumeFrom は resume の引き継ぎ元 run_id を解決する (AS-BUILT §5.8)。
