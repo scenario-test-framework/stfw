@@ -64,16 +64,11 @@ jobs:
               exit 1
             fi
           done
-      # 脆弱性スキャン: 修正版のある HIGH/CRITICAL があれば失敗させる。
-      # 修正版の無い OS パッケージ (Debian 側で未提供) は直せないため合否に含めない。
+      # 脆弱性スキャン: 修正版のある脆弱性があれば失敗させる (深刻度に関係なく。同梱 k6 のみ HIGH/CRITICAL)。
+      # 修正版の無いもの (Debian 側で未提供など) は直せないため合否に含めない。判定は scan-images.sh に集約し、
+      # 週 1 回の定期チェック (scheduled-scan.yml) と共有する。
       # trivy-action は 2026-03 にタグ乗っ取りの前例があるため使わず、公式イメージを digest 固定で実行する
       - name: Scan images with Trivy
         env:
           TRIVY_IMAGE: aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
-        run: |
-          for img in stfw-scan:runtime stfw:full-ci; do
-            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" image \
-              --scanners vuln --pkg-types os,library \
-              --severity HIGH,CRITICAL --ignore-unfixed \
-              --exit-code 1 --no-progress "$img"
-          done
+        run: bash .github/scripts/scan-images.sh stfw-scan:runtime stfw:full-ci

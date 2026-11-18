@@ -1016,15 +1016,24 @@ stfw_inventory:
 | `reports-init` | one-shot で `reports` volume を `chown 1000:1000`（nginx が先に起動しても stfw が書けるようにする。nginx は `service_completed_successfully` に依存） |
 | `nginx` | `nginx:1-alpine`。`reports` volume を `/reports` に **読み取り専用（:ro）** マウントし 8080→80 で配信（`root /reports; index index.html; autoindex on`。設定は compose の `configs` インライン定義） |
 
-### 10.4 GitHub Actions（3 ワークフロー）
+### 10.4 GitHub Actions（4 ワークフロー。GitHub Pages 公開の `pages.yml` は除く）
 
 | ワークフロー | トリガー | 内容 |
 |---|---|---|
 | `ci.yml` | pull_request | golangci-lint + `go build ./...` + `go test ./...` + `govulncheck ./...`（呼び出し経路のある依存・Go 本体の脆弱性で失敗。Go 本体は go.mod の `toolchain` で判定） |
-| `build.yml` | push（master） | `go vet` + `go test` + GoReleaser snapshot（成果物を 7 日保持の artifact 化）+ Docker build（runtime / full の 2 ターゲット、push なし）+ 両イメージの Trivy スキャン（修正版のある HIGH/CRITICAL で失敗。修正版の無い OS パッケージは合否に含めない。公式イメージ `aquasec/trivy` を digest 固定で実行し、runner のアーキテクチャのみ検査） |
+| `build.yml` | push（master） | `go vet` + `go test` + GoReleaser snapshot（成果物を 7 日保持の artifact 化）+ Docker build（runtime / full の 2 ターゲット、push なし）+ 両イメージの Trivy スキャン（下の合否の基準。公式イメージ `aquasec/trivy` を digest 固定で実行し、runner のアーキテクチャのみ検査） |
+| `scheduled-scan.yml` | schedule（毎週月曜 00:17 UTC）/ workflow_dispatch | 取り込み漏れの定期チェック。① キャッシュを使わずベースイメージも取り直して両イメージを作り、build.yml と同じ基準で Trivy スキャン（Debian の新しい修正版を検出）+ 同梱 k6 の修正版がある HIGH 未満の脆弱性を報告のみ（件数を実行結果の画面に注記し、明細を実行の概要に書く。報告の失敗はジョブを失敗させない）② 同梱ツールの既定版（各プラグインの `config.yml`）が各ツールの最新リリースか（新しい版があれば失敗）③ `govulncheck ./...`。見つかったらジョブを失敗させ、リリースは止めない。schedule は既定ブランチの最新コミットで動く。**通知の条件**: schedule の通知はワークフローを作成した（cron を最後に変更した・無効化後に再度有効にした）ユーザーに届き、そのユーザーが GitHub Actions の Web またはメール通知を有効にしている必要がある。**自動停止**: 公開リポジトリは 60 日間活動が無いと schedule が自動で無効になり、その旨の通知は無い。Actions 画面で無効になっていないかを確認し、無効なら「Enable workflow」または `gh workflow enable scheduled-scan.yml` で戻す |
 | `release.yml` | tag `v*` | `go test` + GoReleaser release（GitHub Releases）+ Docker multi-arch build & push（ghcr.io へ runtime: semver + `latest` / full: `{semver}-full` + `full`。full 側は `flavor: latest=false` で plain latest の自動生成を抑止） |
 
-> 根拠: `.goreleaser.yaml`, `Dockerfile`, `compose.yaml`, `.github/workflows/{ci,build,release}.yml`
+Trivy の合否の基準（`.github/scripts/scan-images.sh`。build.yml と scheduled-scan.yml が共有）:
+
+| 対象 | 失敗にする条件 | 理由 |
+|---|---|---|
+| OS パッケージ・stfw 本体・同梱 compare-files / logfilter | 修正版のある脆弱性（深刻度に関係なく） | 作り直し・版上げで自分たちで直せる |
+| 同梱 k6（他社製） | 修正版のある HIGH / CRITICAL | 部品の修正版が出ても、k6 の新しい版が出るまで直せない（HIGH 未満は定期チェックで報告） |
+| 修正版の無い脆弱性 | 失敗にしない（`--ignore-unfixed`） | 直しようがない |
+
+> 根拠: `.goreleaser.yaml`, `Dockerfile`, `compose.yaml`, `.github/workflows/{ci,build,release,scheduled-scan}.yml`, `.github/scripts/{scan-images,check-bundled-versions,report-k6}.sh`
 
 ---
 

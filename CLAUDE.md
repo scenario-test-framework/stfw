@@ -93,8 +93,12 @@ golangci-lint run                # CI と同じ v2 設定（.golangci.yml）
   （Docker イメージは Dockerfile の `golang:1.27` タグの最新パッチでビルドされる）。
   golangci-lint はビルド Go が go.mod ターゲット未満だと拒否するので、両者のバージョン整合を保つ
   （v2.12.2 は go1.26.2 ビルド）。
-- 脆弱性スキャン: PR で `govulncheck`（ci.yml）、master でイメージの Trivy（build.yml、修正版のある
-  HIGH/CRITICAL で失敗）。修正版の無い OS パッケージの脆弱性は合否に含めない。
+- 脆弱性スキャン: PR で `govulncheck`（ci.yml）、master でイメージの Trivy（build.yml）、週 1 回の
+  定期チェック（scheduled-scan.yml）。Trivy の合否は「修正版があるのに取り込んでいない」もので判定し、
+  自分たちで直せるもの（OS パッケージ・stfw 本体・同梱 compare-files / logfilter）は深刻度に関係なく失敗、
+  他社製の同梱 k6 は HIGH/CRITICAL のみ失敗（k6 の新しい版が出るまで直せないため）。修正版の無いものは
+  合否に含めない。判定は `.github/scripts/scan-images.sh` に集約している。定期チェックが失敗したら
+  （新しい修正版・同梱ツールの新しい版が出た）、取り込みの PR を作る。
 
 ### 6. 作業単位ごとのレビュー（サブエージェント → Codex の二段）
 
@@ -120,6 +124,10 @@ golangci-lint run                # CI と同じ v2 設定（.golangci.yml）
 
 - **CI**（`.github/workflows/ci.yml`）: `lint`（golangci-lint v2）+ `test`（go test）+ `vulncheck`（govulncheck）。
   master push の `build.yml` はイメージを Trivy でスキャンする。リリース手順 ① の「master の CI 緑」はこのスキャンを含む。
+  `scheduled-scan.yml` は週 1 回（月曜 09:17 JST）と手動実行で、作り直したイメージのスキャン・同梱ツールの
+  最新版確認・govulncheck を行う。失敗の通知は cron を最後に変更した（または再度有効にした）ユーザーに届く
+  （Actions の通知設定が有効な場合）。公開リポジトリは 60 日間活動が無いと schedule が通知なしに自動で止まるため、
+  止まっていたら `gh workflow enable scheduled-scan.yml` で戻す（AS-BUILT §10.4）。
   GitHub Actions はアクションをバージョン参照し、`permissions` は最小に保つ。
 - **リリース**（`.github/workflows/release.yml`）: タグ `v*` push で goreleaser がバイナリ +
   checksums を Releases へ、Docker イメージ（`stfw` / `stfw:full`）を ghcr.io へ push する。
