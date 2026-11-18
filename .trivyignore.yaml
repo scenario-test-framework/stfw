@@ -1,0 +1,26 @@
+# Trivy の除外リスト (AS-BUILT §10.4)。修正版があるのに自分たちでは取り込めない脆弱性だけを、
+# 対応を待つ間だけ合否から外す。除外したものもスキャン結果に毎回表示される (--show-suppressed)。
+#
+# 決まり (.github/scripts/check-trivyignore.sh が CI で検査する):
+#   - paths: 対象の場所を必ず書く (イメージ内のパス)。先頭 2 階層とファイル名は書き、途中の階層だけ
+#     階層全体を * にできる (* は 1 階層だけに一致)。**、?、[ ]、{ } は使わない
+#   - expired_at: 期限を必ず書く (引用符なしの yyyy-mm-dd、明日以降かつ今日から 60 日以内)。
+#     期限日の 0 時 (UTC) に除外は効かなくなる。期限が来たら見直す
+#   - statement: 何を待っているかを必ず書く
+#   - 対応版を取り込んだら、その行を消す (定期チェックが消し忘れを警告する)
+#   - YAML の文書は 1 つだけ (--- で区切らない)
+vulnerabilities:
+  - id: CVE-2026-128085
+    paths:
+      - "opt/stfw/bundled/k6/*/k6"
+    expired_at: 2027-01-17
+    statement: >-
+      Bundled k6 v2.4.0 uses otel/sdk and otel/trace 1.46.0. k6 main already uses 1.47.0;
+      waiting for the next k6 release.
+  - id: GO-2026-5932
+    paths:
+      - "opt/stfw/bundled/k6/*/k6"
+    expired_at: 2027-01-17
+    statement: >-
+      Bundled k6 v2.4.0 uses golang.org/x/crypto 0.58.0 (unmaintained openpgp package). The fix
+      (commit 2f1f834) is in 0.59.0, which k6 main already uses; waiting for the next k6 release.

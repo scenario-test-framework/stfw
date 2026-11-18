@@ -1020,20 +1020,31 @@ stfw_inventory:
 
 | ワークフロー | トリガー | 内容 |
 |---|---|---|
-| `ci.yml` | pull_request | golangci-lint + `go build ./...` + `go test ./...` + `govulncheck ./...`（呼び出し経路のある依存・Go 本体の脆弱性で失敗。Go 本体は go.mod の `toolchain` で判定） |
+| `ci.yml` | pull_request | golangci-lint + `go build ./...` + `go test ./...` + `govulncheck ./...`（呼び出し経路のある依存・Go 本体の脆弱性で失敗。Go 本体は go.mod の `toolchain` で判定）+ 除外リストの検査の見本テスト（`test-check-trivyignore.sh`。実際の `.trivyignore.yaml` の検査と、すり抜けの見本を含む） |
 | `build.yml` | push（master） | `go vet` + `go test` + GoReleaser snapshot（成果物を 7 日保持の artifact 化）+ Docker build（runtime / full の 2 ターゲット、push なし）+ 両イメージの Trivy スキャン（下の合否の基準。公式イメージ `aquasec/trivy` を digest 固定で実行し、runner のアーキテクチャのみ検査） |
-| `scheduled-scan.yml` | schedule（毎週月曜 00:17 UTC）/ workflow_dispatch | 取り込み漏れの定期チェック。① キャッシュを使わずベースイメージも取り直して両イメージを作り、build.yml と同じ基準で Trivy スキャン（Debian の新しい修正版を検出）+ 同梱 k6 の修正版がある HIGH 未満の脆弱性を報告のみ（件数を実行結果の画面に注記し、明細を実行の概要に書く。報告の失敗はジョブを失敗させない）② 同梱ツールの既定版（各プラグインの `config.yml`）が各ツールの最新リリースか（新しい版があれば失敗）③ `govulncheck ./...`。見つかったらジョブを失敗させ、リリースは止めない。schedule は既定ブランチの最新コミットで動く。**通知の条件**: schedule の通知はワークフローを作成した（cron を最後に変更した・無効化後に再度有効にした）ユーザーに届き、そのユーザーが GitHub Actions の Web またはメール通知を有効にしている必要がある。**自動停止**: 公開リポジトリは 60 日間活動が無いと schedule が自動で無効になり、その旨の通知は無い。Actions 画面で無効になっていないかを確認し、無効なら「Enable workflow」または `gh workflow enable scheduled-scan.yml` で戻す |
+| `scheduled-scan.yml` | schedule（毎週月曜 00:17 UTC）/ workflow_dispatch | 取り込み漏れの定期チェック。① キャッシュを使わずベースイメージも取り直して両イメージを作り、build.yml と同じ基準で Trivy スキャン（Debian の新しい修正版を検出）+ 除外リストのうち、もうどのイメージでも見つからなくなった行（対応版を取り込んだ後の消し忘れ）を警告のみ（ジョブを失敗させない）② 同梱ツールの既定版（各プラグインの `config.yml`）が各ツールの最新リリースか（新しい版があれば失敗）③ `govulncheck ./...`。見つかったらジョブを失敗させ、リリースは止めない。schedule は既定ブランチの最新コミットで動く。**通知の条件**: schedule の通知はワークフローを作成した（cron を最後に変更した・無効化後に再度有効にした）ユーザーに届き、そのユーザーが GitHub Actions の Web またはメール通知を有効にしている必要がある。**自動停止**: 公開リポジトリは 60 日間活動が無いと schedule が自動で無効になり、その旨の通知は無い。Actions 画面で無効になっていないかを確認し、無効なら「Enable workflow」または `gh workflow enable scheduled-scan.yml` で戻す |
 | `release.yml` | tag `v*` | `go test` + GoReleaser release（GitHub Releases）+ Docker multi-arch build & push（ghcr.io へ runtime: semver + `latest` / full: `{semver}-full` + `full`。full 側は `flavor: latest=false` で plain latest の自動生成を抑止） |
 
 Trivy の合否の基準（`.github/scripts/scan-images.sh`。build.yml と scheduled-scan.yml が共有）:
 
-| 対象 | 失敗にする条件 | 理由 |
+| 対象 | 扱い | 理由 |
 |---|---|---|
-| OS パッケージ・stfw 本体・同梱 compare-files / logfilter | 修正版のある脆弱性（深刻度に関係なく） | 作り直し・版上げで自分たちで直せる |
-| 同梱 k6（他社製） | 修正版のある HIGH / CRITICAL | 部品の修正版が出ても、k6 の新しい版が出るまで直せない（HIGH 未満は定期チェックで報告） |
+| 修正版のある脆弱性（すべての部品・深刻度に関係なく） | 失敗 | 作り直し・版上げで取り込める |
+| 除外リスト `.trivyignore.yaml` にある脆弱性 | 合否から外す（結果には `--show-suppressed` で毎回表示） | 修正版があっても自分たちでは取り込めない「対応版待ち」（例: 他社製の同梱 k6 の部品。k6 の新しい版が出るまで直せない） |
 | 修正版の無い脆弱性 | 失敗にしない（`--ignore-unfixed`） | 直しようがない |
 
-> 根拠: `.goreleaser.yaml`, `Dockerfile`, `compose.yaml`, `.github/workflows/{ci,build,release,scheduled-scan}.yml`, `.github/scripts/{scan-images,check-bundled-versions,report-k6}.sh`
+除外リストの決まり（`.github/scripts/check-trivyignore.sh` が判定の前に検査し、違反なら失敗。yq の読み取りに失敗した場合も失敗）:
+
+| 項目 | 決まり | 理由 |
+|---|---|---|
+| `paths` | 必須（一覧）。対象の場所（イメージ内のパス）。3 階層以上で、先頭 2 階層とファイル名は具体名。途中の階層だけ階層全体を `*` にできる（例 `opt/stfw/bundled/k6/*/k6`。`*` は 1 階層だけに一致）。`**`・`?`・`[ ]`・`{ }`・`\`、文字と `*` を混ぜた階層、絶対パスは不可 | 書かない・広く書くと全体の除外になり、同じ脆弱性を別の部品でも見逃す（Trivy の照合は `**` や `{a,b}` も解釈するため、書き方を限定する） |
+| `expired_at` | 必須。引用符なしの `yyyy-mm-dd` で、明日以降かつ今日から 60 日以内（日付は UTC） | 期限が来たら失敗に戻り、見直しになる（k6 のリリース間隔 6〜7 週間を 1 回待てる長さ）。Trivy は期限日の 0 時（UTC）に除外をやめるため、期限日当日はもう効かない |
+| `statement` | 必須。何を待っているか | レビューと後からの見直しのため |
+| その他 | YAML の文書は 1 つだけ。最上位は `vulnerabilities` だけ、各行のキーは `id`・`paths`・`expired_at`・`statement` だけ（`purls` なども書かない） | Trivy は最初の文書しか読まないため、2 つ目の文書で検査をすり抜けさせない。使わない書き方で誤った除外を見落とさない |
+
+運用: 新しい指摘で失敗したら、取り込めるものは直す PR、取り込めないものは除外リストに行を足す PR を作る。対応版を取り込んだら該当の行を消す（定期チェックが消し忘れを警告する）。期限切れで失敗したら、取り込むか、理由を更新して延長する。除外リストの形式は Trivy の試験的な機能のため、Trivy の版を上げるときは「場所の限定」「期限切れで効かなくなる」「`*` の照合」が変わっていないかを確かめ直す。
+
+> 根拠: `.goreleaser.yaml`, `Dockerfile`, `compose.yaml`, `.github/workflows/{ci,build,release,scheduled-scan}.yml`, `.github/scripts/{scan-images,check-trivyignore,check-trivyignore-stale,trivyignore-lib,test-check-trivyignore,check-bundled-versions}.sh`, `.trivyignore.yaml`
 
 ---
 
