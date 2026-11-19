@@ -30,7 +30,7 @@ exec stfw secret set web01 appuser secretpw
 exec stfw run demo
 latestrun . RUN
 exists .stfw/runs/$RUN/workspace/demo/_10_99990101/_10_grp_collectLog/evidence/web01/var/log/app/app.log
-exec sh -c 'cat remote/web01/tmp/stfw_logfilter_*'
+exec cat remote/web01/uploaded-logfilter
 stdout 'logfilter=bundled'
 ! exists .stfw/cache/plugins/collectLog/logfilter
 
@@ -41,9 +41,9 @@ execcode 3 stfw plugin install collectLog
 # --- arch ごとの解決: キャッシュ済み arch (linux_amd64) はキャッシュ優先、他 arch は同梱で補う ---
 exec mkbin .stfw/cache/plugins/collectLog/logfilter v2.0.2 cache linux_amd64
 execcode 3 stfw plugin install collectLog
-rm remote/web01/tmp
+rm remote/web01/uploaded-logfilter
 exec stfw run demo
-exec sh -c 'cat remote/web01/tmp/stfw_logfilter_*'
+exec cat remote/web01/uploaded-logfilter
 stdout 'logfilter=cache'
 rm .stfw/cache/plugins/collectLog/logfilter
 
@@ -118,42 +118,82 @@ done
 exit 22
 -- fakebin/sshpass --
 #!/bin/bash
-if [ "$1" = "-p" ]; then shift 2; fi
+# sshpass -e <cmd...>: パスワードは SSHPASS 環境変数で受け取る (argv に出さない。#54)。
+# -p (argv 渡し) や SSHPASS 未設定は失敗させる。
+if [ "$1" != "-e" ]; then echo "fake sshpass: expected -e, got: $1" >&2; exit 99; fi
+if [ "${SSHPASS:-}" != "secretpw" ]; then echo "fake sshpass: SSHPASS is not the secret" >&2; exit 99; fi
+shift
 exec "$@"
 -- fakebin/ssh --
 #!/bin/bash
-# 擬似リモート: find はマニフェストから、logfilter 実行は入力の複製で再現する
+# 擬似リモート ${STFW_TEST_REMOTE}/{host}/。リモートで実行するコマンド文字列は、本物の
+# リモートシェルと同じく eval で単語に分けてから解釈する (引用符の漏れがあれば、注入が
+# ここで実際に起きる。#55)。
+if [ "${STFW_TEST_SSH_FAIL:-}" = "1" ]; then exit 255; fi
+# ログインシェルが標準出力に案内文を出すホストを再現する
+if [ "${STFW_TEST_SSH_NOISE:-}" = "1" ]; then echo "Welcome to web01"; fi
+# コマンドの後に空行を足すホストを再現する
+if [ "${STFW_TEST_SSH_TRAILER:-}" = "1" ]; then trap 'echo' EXIT; fi
 host=""
 for a in "$@"; do case "$a" in *@*) host="${a#*@}";; esac; done
-cmd="${@: -1}"
 root="${STFW_TEST_REMOTE}/${host}"
-set -- ${cmd}
+eval "set -- ${*: -1}" || exit 2
 case "$1" in
   find)
-    pat="$(sed -n "s/.*-regex '\([^']*\)'.*/\1/p" <<<"${cmd}")"
-    grep -E "${pat}" "${root}/manifest"
-    ;;
-  chmod|rm)
+    # find / -regextype posix-extended -regex PAT -type f
+    [ -f "${root}/manifest" ] || exit 0
+    grep -Ex -- "$6" "${root}/manifest"
     exit 0
     ;;
+  mktemp)
+    d="/tmp/stfw.fake$$"
+    mkdir -p "${root}${d}"
+    echo "${d}"
+    # STFW_TEST_MKTEMP_FAIL=1 なら、名前を返した後に接続が切れたことにする
+    if [ "${STFW_TEST_MKTEMP_FAIL:-}" = "1" ]; then exit 255; fi
+    ;;
+  chmod)
+    exit 0
+    ;;
+  echo)
+    shift
+    echo "$*"
+    ;;
+  rm)
+    # rm -f|-rf -- PATH: 記録してから擬似リモート上で実際に消す。
+    # STFW_TEST_RM_FAIL=1 なら消せなかったことにする
+    echo "$*" >> "${root}/rm.log"
+    if [ "${STFW_TEST_RM_FAIL:-}" = "1" ]; then exit 1; fi
+    rm "$2" -- "${root}${*: -1}"
+    ;;
+  cat)
+    shift
+    [ "$1" = "--" ] && shift
+    cat "${root}$1"
+    ;;
+  */logfilter)
+    # logfilter -f [-tf FROM] IN OUT: マーカー付与 + 入力複製で再現する
+    in="${*: -2:1}"; out="${*: -1}"
+    mkdir -p "${root}$(dirname "${out}")"
+    { echo "# filtered by logfilter"; cat "${root}${in}"; } > "${root}${out}"
+    ;;
   *)
-    infile="$(sed -E "s/.*'([^']*)' '([^']*)'[^']*\$/\1/" <<<"${cmd}")"
-    outfile="$(sed -E "s/.*'([^']*)' '([^']*)'[^']*\$/\2/" <<<"${cmd}")"
-    mkdir -p "${root}$(dirname "${outfile}")"
-    cp "${root}${infile}" "${root}${outfile}"
+    echo "fake ssh: unexpected remote command: $*" >&2
+    exit 127
     ;;
 esac
-exit 0
 -- fakebin/scp --
 #!/bin/bash
-dest="${@: -1}"
-src="${@: -2:1}"
+dest="${*: -1}"
+src="${*: -2:1}"
 if [[ "${src}" == *@*:* ]]; then
   host="${src%%:*}"; host="${host#*@}"; path="${src#*:}"
-  cp "${STFW_TEST_REMOTE}/${host}${path}" "${dest}"
+  cp "${STFW_TEST_REMOTE}/${host}${path}" "${dest}" || exit 1
 elif [[ "${dest}" == *@*:* ]]; then
   host="${dest%%:*}"; host="${host#*@}"; path="${dest#*:}"
   mkdir -p "$(dirname "${STFW_TEST_REMOTE}/${host}${path}")"
-  cp "${src}" "${STFW_TEST_REMOTE}/${host}${path}"
+  cp "${src}" "${STFW_TEST_REMOTE}/${host}${path}" || exit 1
+  # 転送された logfilter を、後片付けで消えた後も確かめられるよう控えておく
+  case "${path}" in */logfilter) cp "${src}" "${STFW_TEST_REMOTE}/${host}/uploaded-logfilter";; esac
 fi
 exit 0
