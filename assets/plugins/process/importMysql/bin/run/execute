@@ -13,10 +13,17 @@ host_group="${stfw_process_importMysql_host_group:-}"
 port="${stfw_process_importMysql_port:-3306}"
 database="${stfw_process_importMysql_database:-}"
 user="${stfw_process_importMysql_user:-}"
+# 接続の文字コード。既定 binary (変換なし。格納されたバイト列をそのまま受け渡す)。#52
+charset="${stfw_process_importMysql_charset:-binary}"
 rc=0
 
 if [ -z "${host_group}" ] || [ -z "${database}" ] || [ -z "${user}" ]; then
   echo "importMysql: host_group / database / user are required" >&2
+  exit 6
+fi
+# charset は mysql の引数と SQL (importMysql の LOAD DATA) に埋め込むため、英数字と _ だけを許す
+if ! [[ "${charset}" =~ ^[A-Za-z0-9_]+$ ]]; then
+  echo "importMysql: invalid charset: ${charset}" >&2
   exit 6
 fi
 
@@ -60,11 +67,16 @@ while :; do
   # シングルクオートを二重化する。
   t_esc="$(printf '%s' "${table}" | sed 's/`/``/g')"
   src_esc="$(printf '%s' "${src}" | sed -e 's/\\/\\\\/g' -e "s/'/''/g")"
-  load_sql="LOAD DATA LOCAL INFILE '${src_esc}' INTO TABLE \`${t_esc}\`"
+  # CSV の解釈は設定 charset に従い、既定 binary では変換せずにそのまま入れる。CHARACTER SET が無いと
+  # データベースの既定の文字コードで解釈され、latin1 のデータベースでは UTF-8 の日本語が二重に
+  # 変換されて入る。utf8mb4 を指定すると、latin1 列に UTF-8 のバイト列を入れている既存の
+  # データベースで日本語が ? になるため、既定では変換しない。接続の文字コードも同じ charset にする。
+  load_sql="LOAD DATA LOCAL INFILE '${src_esc}' INTO TABLE \`${t_esc}\` CHARACTER SET ${charset}"
   load_sql="${load_sql} FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"'"
   load_sql="${load_sql} LINES TERMINATED BY '\n' IGNORE 1 LINES"
   if ! MYSQL_PWD="${password}" mysql --local-infile=1 --host="${host}" --port="${port}" \
-      --user="${user}" --database="${database}" --execute="${load_sql}"; then
+      --user="${user}" --database="${database}" --default-character-set="${charset}" \
+      --execute="${load_sql}"; then
     echo "importMysql: import failed: ${database}.${table}" >&2
     rc=6
   fi

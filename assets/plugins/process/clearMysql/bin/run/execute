@@ -14,9 +14,16 @@ host_group="${stfw_process_clearMysql_host_group:-}"
 port="${stfw_process_clearMysql_port:-3306}"
 database="${stfw_process_clearMysql_database:-}"
 user="${stfw_process_clearMysql_user:-}"
+# 接続の文字コード。既定 binary (変換なし。格納されたバイト列をそのまま受け渡す)。#52
+charset="${stfw_process_clearMysql_charset:-binary}"
 
 if [ -z "${host_group}" ] || [ -z "${database}" ] || [ -z "${user}" ]; then
   echo "clearMysql: host_group / database / user are required" >&2
+  exit 6
+fi
+# charset は mysql の引数と SQL (importMysql の LOAD DATA) に埋め込むため、英数字と _ だけを許す
+if ! [[ "${charset}" =~ ^[A-Za-z0-9_]+$ ]]; then
+  echo "clearMysql: invalid charset: ${charset}" >&2
   exit 6
 fi
 
@@ -60,7 +67,7 @@ if [ -z "${sql}" ]; then
 fi
 
 if ! MYSQL_PWD="${password}" mysql --host="${host}" --port="${port}" \
-    --user="${user}" --database="${database}" \
+    --user="${user}" --database="${database}" --default-character-set="${charset}" \
     --execute="START TRANSACTION; ${sql}; COMMIT"; then
   echo "clearMysql: delete failed: ${database}" >&2
   exit 6

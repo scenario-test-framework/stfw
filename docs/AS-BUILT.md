@@ -401,6 +401,7 @@ Arrange（clear / import）と Collect（export）の組込みプラグイン。
 |---|---|---|
 | ホスト | config `host_group` → `stfw inventory list {host_group}` の**先頭ホスト** | RDBMS は単一 DB サーバ対象。複数解決時は先頭を使い stderr へ警告 |
 | ポート | config `port`（MySQL 既定 3306 / PostgreSQL 既定 5432） | |
+| 文字コード（MySQL のみ） | config `charset`（既定 `binary` = 変換なし） | 接続の文字コード（`--default-character-set`）と import の `LOAD DATA ... CHARACTER SET`。SQL に埋め込むため `^[A-Za-z0-9_]+$` 以外は exit 6 |
 | データベース | config `database` | |
 | ユーザー | config `user` | |
 | パスワード | `stfw secret show {host} {user}` | `MYSQL_PWD` / `PGPASSWORD` 環境変数でクライアントへ渡す（コマンドライン非露出） |
@@ -410,14 +411,14 @@ Arrange（clear / import）と Collect（export）の組込みプラグイン。
 
 | タイプ | 処理 | 入出力 |
 |---|---|---|
-| exportMysql | `mysql --batch` で `SELECT * FROM t` → `stfw plugin mysql-tsv-to-csv` で RFC4180 CSV 変換 | `evidence/{database}/{table}.csv` |
+| exportMysql | `mysql --batch --default-character-set={charset}` で `SELECT * FROM t` → `stfw plugin mysql-tsv-to-csv` で RFC4180 CSV 変換 | `evidence/{database}/{table}.csv` |
 | exportPostgres | `psql COPY (SELECT * FROM t) TO STDOUT WITH (FORMAT csv, HEADER, NULL '\N')` をシェルリダイレクトで受ける（ネイティブ RFC4180） | `evidence/{database}/{table}.csv` |
-| importMysql | `LOAD DATA LOCAL INFILE ... FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' IGNORE 1 LINES` | 入力 `{process}/data/{database}/{table}.csv` |
+| importMysql | `LOAD DATA LOCAL INFILE ... INTO TABLE t CHARACTER SET {charset} FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' IGNORE 1 LINES` | 入力 `{process}/data/{database}/{table}.csv` |
 | importPostgres | `psql COPY t FROM STDIN WITH (FORMAT csv, HEADER, NULL '\N')` をシェルリダイレクトで与える | 入力 `{process}/data/{database}/{table}.csv` |
 | clearMysql | `START TRANSACTION; DELETE FROM t; ...; COMMIT` を単一 `--execute` で発行（全削除が原子的） | — |
 | clearPostgres | `DELETE FROM t; ...` を単一 `--command` で発行（psql の `-c` は複数文を単一トランザクションで処理・`ON_ERROR_STOP=1`） | — |
 
-- CSV は 1 行目ヘッダー・NULL は `\N`（空文字と区別、mysqldump 慣行）。export / import は下記制約の範囲でラウンドトリップ可能。
+- CSV は 1 行目ヘッダー・NULL は `\N`（空文字と区別、mysqldump 慣行）。文字コードは UTF-8。MySQL 系 3 プラグインは接続の文字コードと import の `LOAD DATA ... CHARACTER SET` を config `charset` で指定する。既定の `binary` は変換なしで、CSV と DB の間でバイト列をそのまま受け渡す（v1.6.12 までは未指定で、クライアント既定の 1 バイト文字コードで話したため、export で utf8mb4 列の日本語が `?` に化け、import では latin1 のデータベースの utf8mb4 列に二重に符号化された値が入った。#52）。既定を `utf8mb4` にしないのは、latin1 列に UTF-8 のバイト列を入れている既存のデータベースで、import では日本語が `?` になり、export では二重に変換されて化けるため（実サーバーで確認）。`binary` では UTF-8 以外で格納されている値（その文字コードで正しく格納した latin1・Shift_JIS 列など）がその文字コードのまま export され CSV が UTF-8 にならないため、そうした列では `charset: utf8mb4` を指定してサーバーに変換させる。export / import は下記制約の範囲でラウンドトリップ可能。
 - 入力 CSV（import）は `{process}/data/{database}/{table}.csv`（テスト作者が用意・git 管理）。ソース不在・DB クライアント非 0 は exit 6。
 - **MySQL import の制約**: `LOAD DATA LOCAL INFILE` は既定で `ESCAPED BY '\\'` のため、`\N`→NULL は正しく解釈される一方、RFC4180 CSV（バックスラッシュを特別扱いしない）中の**リテラルのバックスラッシュを含む値**は MySQL のエスケープ解釈で変化し得る。厳密なラウンドトリップはバックスラッシュを含まないデータで保証される（PostgreSQL の `\copy` はこの制約を受けない）。RFC4180 と LOAD DATA の本質的な非整合。
 - **clear の削除セマンティクス**: TRUNCATE ではなく DELETE を使い、**FK 制約は無効化しない**（`FOREIGN_KEY_CHECKS` 等に触れない。整合性検証は常に DBMS に委ねる）。`tables[]` は**FK の子 → 親の順に列挙**する（行単位で FK 検証されるため）。参照行が残る親を削除しようとした場合は DBMS の FK 違反エラーを stderr にそのまま露出して exit 6。全削除は 1 トランザクションで原子的（部分削除は残らない。MySQL は対象テーブルが InnoDB 等のトランザクション対応エンジンであることが前提）。`ON DELETE CASCADE` は DDL 宣言どおり波及する。シーケンス / AUTO_INCREMENT はリセットしない（必要ならカスタムプラグインで行う）。

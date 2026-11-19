@@ -17,6 +17,7 @@
 | `user` | ○ | 接続ユーザー |
 | `tables[]` | ○ | インポート対象テーブル名のリスト |
 | `port` | - | MySQL ポート (既定 3306) |
+| `charset` | - | 接続の文字コード (既定 `binary` = 変換なし)。exportMysql の README の「文字コード」を参照 |
 
 > ⚠️ `tables` が 0 件の場合は何もせず成功する (no-op)。設定漏れに注意。
 
@@ -31,6 +32,9 @@ exportMysql でエクスポートした CSV をそのまま投入できる (ラ�
 ## 動作
 
 `LOAD DATA LOCAL INFILE` で CSV を投入する (ヘッダー 1 行スキップ)。
+CSV の解釈と接続の文字コードは設定 `charset` (既定 `binary` = 変換なし) に従う (`LOAD DATA ... CHARACTER SET {charset}`)。
+既定では UTF-8 の CSV を、utf8mb4 列にも、latin1 列に UTF-8 のバイト列を入れる既存の使い方にも、そのままの値で入れる。
+選び方は exportMysql の README の「文字コード」を参照。
 既存データは削除しない (初期化が必要な場合は clearMysql を先行プロセスに置く)。
 
 ## 終了コード

@@ -18,6 +18,7 @@ MySQL のテーブルをヘッダー付き CSV でエクスポートする Colle
 | `user` | ○ | 接続ユーザー |
 | `tables[]` | ○ | エクスポート対象テーブル名のリスト |
 | `port` | - | MySQL ポート (既定 3306) |
+| `charset` | - | 接続の文字コード (既定 `binary` = 変換なし)。下の「文字コード」を参照 |
 
 > ⚠️ `tables` が 0 件の場合は何もせず成功する (no-op)。設定漏れに注意。
 
@@ -37,6 +38,20 @@ stfw:
 
 `mysql --batch` で SELECT した結果 (タブ区切り) を内部ヘルパ
 `stfw plugin mysql-tsv-to-csv` で RFC4180 CSV へ変換して出力する。
+
+## 文字コード
+
+CSV は UTF-8 を前提にする。接続の文字コードは設定 `charset` で選ぶ (exportMysql / importMysql / clearMysql 共通)。
+
+| `charset` | 動き | 向いている DB |
+|---|---|---|
+| `binary` (既定) | 変換しない。格納されているバイト列をそのまま CSV と受け渡す | utf8mb4 列。latin1 列に UTF-8 のバイト列を入れている既存の DB |
+| `utf8mb4` | サーバーが列の文字コードと UTF-8 を変換する | latin1・Shift_JIS など、その文字コードで正しく格納している列 |
+
+- `binary` で UTF-8 以外の列を export すると、その文字コードのまま出力される (CSV が UTF-8 にならない)。
+- `utf8mb4` で latin1 列に UTF-8 のバイト列を入れている DB を扱うと、import では日本語が `?` になり、export では二重に変換されて化ける。
+- v1.6.12 までは指定しておらず、mysql クライアントの既定 (stfw のイメージでは 1 バイト文字コード) で話していた。
+  そのため utf8mb4 列の日本語が export で `?` に化けていた (#52)。
 
 ## 出力
 
