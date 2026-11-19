@@ -102,7 +102,7 @@ golangci-lint run                # CI と同じ v2 設定（.golangci.yml）
     60 日以内。期限日当日はもう効かない）・`statement`（何を待っているか）が必須で、`check-trivyignore.sh` が CI で検査する
     （見本テスト `test-check-trivyignore.sh` も ci.yml で実行）。除外中のものもスキャン結果に毎回表示される。
   - 対応版を取り込んだら該当の行を消す（定期チェックが消し忘れを警告）。期限切れで失敗したら、取り込むか理由を更新して延長する。
-  - 定期チェックが失敗したら（新しい修正版・同梱ツールの新しい版が出た）、取り込みの PR を作る。
+  - 定期チェックが失敗したら（新しい修正版・同梱ツールや Chrome の新しい版が出た）、取り込みの PR を作る（Wolfi の修正版は再ビルドで入るため、次のリリースで取り込む）。
 
 ### 6. 作業単位ごとのレビュー（サブエージェント → Codex の二段）
 
@@ -135,6 +135,8 @@ golangci-lint run                # CI と同じ v2 設定（.golangci.yml）
   GitHub Actions はアクションをバージョン参照し、`permissions` は最小に保つ。
 - **リリース**（`.github/workflows/release.yml`）: タグ `v*` push で goreleaser がバイナリ +
   checksums を Releases へ、Docker イメージ（`stfw` / `stfw:full`）を ghcr.io へ push する。
+  Docker イメージは arch ごとのランナーでスモークテストに通し、push したものが確かめたものと同じ中身かを
+  `verify-pushed-image.sh` で照合してから、両 arch そろってタグを付ける（確認で失敗したらタグは動かない。タグの付け替え途中で失敗したら docker-publish ジョブを再実行する。AS-BUILT §10.4）。
   - **リリース手順**: ① master の CI 緑を確認 → ② 版数フォールバック
     `internal/presentation/cli/root.go` の `Version = "X.Y.Z-dev"` を**リリースする版**へバンプし、
     `docs/AS-BUILT.md` の「未注入時 `X.Y.Z-dev`」の記載も追従 → ③ `git tag vX.Y.Z && git push origin vX.Y.Z`。
@@ -163,3 +165,9 @@ golangci-lint run                # CI と同じ v2 設定（.golangci.yml）
   install を実行して `/opt/stfw/bundled` へ同梱し、プラグインは永続キャッシュが無ければ版一致の
   同梱版を使う（`stfw_plugin_bundled_dir`。AS-BUILT §4.8 / §10.2）。同梱版の正は各プラグインの
   `config.yml` の版指定なので、版を上げるときは config.yml を変える（Dockerfile に版を書かない）。
+- **Docker イメージのベースは Wolfi**（`cgr.dev/chainguard/wolfi-base` を digest 固定。v1.7.0 で Debian から変更。
+  AS-BUILT §10.2）。パッケージ追加は `apk add`（Wolfi のパッケージ名）。full の `mysql` は MariaDB クライアントの
+  ラッパー、`redis-cli` は Valkey。**Chrome は apk ではなく Google 公式の Chrome for Testing の画面なし版**で、
+  Trivy に見えないため版を Dockerfile の `ARG CHROME_VERSION` で固定し、定期チェックが Stable と比べる。
+  Chrome の版を上げるときは `CHROME_VERSION` と両 arch の `CHROME_SHA256_*`（zip を取得して `shasum -a 256`）を同時に変える。
+  イメージの部品が欠けていないかは build.yml（amd64・arm64）・リリース（公開前、両 arch）・定期チェックのスモークテスト（`.github/scripts/smoke-image.sh`）が確かめる。定期チェックは公開済みの `:full` の Chrome が古いと失敗する（リリースが要る合図）。

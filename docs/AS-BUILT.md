@@ -525,7 +525,7 @@ Act フェーズの組込みプラグイン。テスト対象への取引入力�
 
 - k6 はローカルでテストを実行するため、`install` は**実行ホストの os_arch 版 1 種のみ**を取得する。os_arch は `uname -s`/`uname -m` から解決する。
 - リリース資産名は `k6-{version}-{os}-{arch}.{tar.gz|zip}`（GitHub Releases）。**os 命名は k6 独自で `linux`/`macos`、arch は `amd64`/`arm64`。linux は `tar.gz`・macos は `zip`** のため展開ツールを OS で分岐する（tar / unzip）。既定バージョンは `v2.4.0`、ダウンロード元は `stfw_k6_download_base` で差し替え可能。バイナリは永続キャッシュ `${stfw_plugin_cache_dir}/k6/{os_arch}/k6` に配置する（collectLog と同一の「初回 install 優先」。版変更時はキャッシュ削除）。`is_installed` が同キャッシュの存在で実行前ゲートする。キャッシュが無い場合は、版一致のイメージ同梱版 `${stfw_plugin_bundled_dir}/k6/{os_arch}/k6` を使う（stfw:full。invokeRest / invokeWeb で共有。§4.8「イメージ同梱版へのフォールバック」）。
-- invokeWeb のブラウザモードは実行時に Chromium を必要とする（stfw:full イメージに同梱。§4.12 の install は k6 バイナリのみを配置し Chromium 導入はイメージの責務）。
+- invokeWeb のブラウザモードは実行時に Chrome / Chromium を必要とする（stfw:full イメージに Google 公式の Chrome for Testing の画面なし版を同梱。§10.2。§4.12 の install は k6 バイナリのみを配置し、ブラウザの導入はイメージ／実行環境の責務）。
 
 **設定**（config.yml の `stfw.process.{invokeRest|invokeWeb}`）
 
@@ -992,9 +992,12 @@ stfw_inventory:
 
 | 項目 | 仕様 |
 |---|---|
-| ベース | ビルド: `golang:1.27` → 実行: `debian:bookworm-slim` |
-| 追加パッケージ | bash, curl, openssh-client, ca-certificates（プラグイン契約が任意言語スクリプト実行のため distroless にしない） |
-| ユーザー | `stfw`（uid 1000）。`/work/.stfw/reports` を事前作成し所有権を付与 |
+| ベース | ビルド: `golang:1.27` → 実行: `cgr.dev/chainguard/wolfi-base`（Wolfi。Chainguard のコンテナ専用ディストリビューションで glibc・`apk`。v1.7.0 で `debian:bookworm-slim` から変更）。無料で取れるのは `latest` だけのため **digest で固定**し、Dependabot（docker）が digest を更新する。ビルド時に `apk upgrade` するため、digest が古くてもパッケージは最新になる |
+| 再現性（意図した割り切り） | パッケージの版は固定しない（修正版を常に取り込むため）。そのため同じコミットでもビルドした日でパッケージの版が変わり、過去のリリースを同じ中身で作り直すことはできない。各リリースの中身は公開イメージ自体で確かめる（パッケージは `/lib/apk/db/installed`。必要なら `trivy image --format cyclonedx` などで公開イメージから SBOM を作る。SBOM は CI では作らない。Chrome は `/opt/chrome/VERSION`）。部品の欠けは各ビルドのスモークテスト（§10.4）で検出する |
+| ベースの選定理由 | Debian 12 では修正版の無い脆弱性が通常版 456 件・full 版 1843 件残り（大半は Chromium）、取り込みようがなかった。Wolfi は部品が少なく修正版への追従が早い（通常版・full 版とも 0 件。v1.7.0 時点の Trivy 0.76.2 で測定）。Alpine は脆弱性情報が修正済みのものしか載らず未修正分が見えないこと、Google 公式の Chrome が musl では動かないことから採らない。シェルの無い distroless はプラグイン契約（任意言語のスクリプト実行）のため採らない |
+| 追加パッケージ | bash, curl, openssh-client + openssh-keygen + openssh-keyscan（`stfw ssh trust` が `ssh-keygen` / `ssh-keyscan` を使う。Wolfi では別パッケージ）, ca-certificates, tzdata（`TZ` 指定を効かせる。無いと stfw も `date` も黙って UTC になる）（プラグイン契約が任意言語スクリプト実行のため distroless にしない）+ GNU 版の基本コマンド（coreutils, findutils, grep, sed, gawk, gnutar, gzip, diffutils。wolfi-base の既定は BusyBox のため、利用者のスクリプトが Debian の頃と同じ GNU 版のオプションで動くようにする。`/bin/sh` は BusyBox の ash） |
+| 利用者が追加するとき | `apk add`（Wolfi のパッケージ名）。`apt-get` は使えない。Debian 版にたまたま入っていたコマンド（`perl` など）は入らない |
+| ユーザー | `stfw`（uid 1000・gid 1000・シェル `/bin/bash`）。`/work/.stfw/reports` を事前作成し所有権を付与 |
 | 実行 | `WORKDIR /work`, `ENTRYPOINT ["stfw"]` |
 | 配布 | `ghcr.io/scenario-test-framework/stfw`（タグ: `latest` + semver。linux/amd64 + linux/arm64） |
 
@@ -1003,9 +1006,13 @@ stfw_inventory:
 | 項目 | 仕様 |
 |---|---|
 | ベース | runtime ステージからの派生（上記に追加インストール） |
-| 追加パッケージ | sshpass（collect 系 / sshExec / scpPut）、default-mysql-client（MariaDB ベースの `mysql`）、postgresql-client（`psql`）、redis-tools（`redis-cli`）、chromium + fonts-noto-cjk（invokeWeb） |
+| 追加パッケージ | sshpass（collect 系 / sshExec / scpPut）、mariadb-13.1-client + mariadb-13.1-dump + mariadb-connector-c（`mysql` / `mysqldump`）、postgresql-18-client（`psql`）、valkey-9.1-cli（`redis-cli`。Valkey は Redis 互換の後継）、fontconfig・font-noto-cjk と Chrome の依存ライブラリ（invokeWeb。共有ライブラリ名 `so:` で指定） |
+| コマンド名の用意 | Wolfi には `mysql` / `mysqldump` / `redis-cli` の名前が無いため、`/usr/local/bin/mysql` と `/usr/local/bin/mysqldump`（`mariadb` / `mariadb-dump` を呼ぶラッパー。symlink だと名前の非推奨警告が出る）と `/usr/local/bin/redis-cli`（`valkey-cli` への symlink）を置く。組込みプラグインが使うのは `mysql` だけで、`mysqldump` は Debian 版の利用者スクリプトとの互換のため。`mysqladmin` などその他の MySQL 系コマンドと `chromium` コマンドは無い（ブラウザは `K6_BROWSER_EXECUTABLE_PATH` で指す） |
+| 中身の比較（v1.6.12 → v1.7.0） | MariaDB クライアント 10.11 → 13.1、`psql` 15 → 18、`redis-cli` は Redis 7 → Valkey 9.1、OpenSSH 9.2 → 10.6、ブラウザは Debian の chromium → Chrome for Testing |
+| MySQL 接続の既定 | `/etc/my.cnf` の `[client]` に `ssl-verify-server-cert=0` と `plugin-dir=/usr/lib/mariadb/plugin`。MariaDB 11.4 以降のクライアントは既定でサーバー証明書を検証し、自己署名の MySQL 8 に繋がらないため、Debian の頃（MariaDB 10.11 クライアント）と同じ「検証しない」に戻す。MySQL 8 以降の認証方式（caching_sha2_password）の部品は mariadb-connector-c の置き場所を指す。**MySQL 8.4 / MariaDB 11.4 / PostgreSQL 15 / Redis 7.4・8 の平文サーバーへの接続を検証済み** |
+| Chrome | Google 公式の Chrome for Testing の画面なし版（`chrome-headless-shell`）を `/opt/chrome` に置く（`/opt/chrome/VERSION` に版）。Wolfi の chromium パッケージは更新が止まっている（149 版。修正版のある脆弱性 1815 件）ため使わない。**apk のパッケージではないため Trivy には見えない**。代わりに版を Dockerfile の `ARG CHROME_VERSION` で固定し、定期チェックが Chrome for Testing の Stable と比べる（§10.4）。配布物に公式のチェックサムが無いため、版を上げるときに両 arch の zip の sha256 を取得して `CHROME_SHA256_AMD64` / `CHROME_SHA256_ARM64` に記録し、ビルド時に照合する。**版を上げるときは 3 つの ARG を同時に変える**。取得と展開は別ステージで行い、取得用の部品（zip など）を full に残さない |
 | k6 / compare-files / logfilter | `/opt/stfw/bundled/{tool}/` に同梱し、ENV `stfw_plugin_bundled_dir=/opt/stfw/bundled` で公開する（プラグインは永続キャッシュが無ければ版一致の同梱版を使うため、`stfw plugin install` / ネットワークなしで実行できる。§4.8）。**取得はビルド時に各プラグインの `bin/install/install` を `stfw_plugin_cache_dir=/opt/stfw/bundled` で実行**して行い（資産名・os_arch 判定を Dockerfile に二重実装しない）、版（と logfilter の arches）は**各プラグインの既定設定 `config.yml` を正**とする（`compare_files_version` / `k6_version` / `logfilter_version` / `logfilter_arches`）。版は `{tool}/VERSION` に記録する。compare-files / k6 はイメージの arch 版 1 種、logfilter は収集先ホスト用に `logfilter_arches` の全 arch。k6 は invokeRest / invokeWeb で共有するため両者の `k6_version` が食い違うとビルド失敗。**版を上げるときは config.yml だけを変更すればイメージも追従する** |
-| Chromium 連携 | `K6_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium` と `K6_BROWSER_ARGS=no-sandbox` を ENV で設定（コンテナ内は seccomp で user namespace を作れず Chromium sandbox が起動しないため。K6_BROWSER_ARGS はカンマ区切り・`--` なしの k6 形式 — k6 `browser/env/env.go` / `chromium/browser_type.go` で確認）。**k6 v2.4.0 + 本イメージの chromium で browser テスト（goto + evaluate + check）の E2E 動作を検証済み**。なお素の `chromium --headless --dump-dom` 単体起動は環境により SIGTRAP することがあるが、k6 の起動フラグセット（prepareFlags）経由では発生しない（実利用経路は k6 経由のみ） |
+| Chrome 連携 | `K6_BROWSER_EXECUTABLE_PATH=/opt/chrome/chrome-headless-shell` と `K6_BROWSER_ARGS=no-sandbox` を ENV で設定（コンテナ内は seccomp で user namespace を作れず Chrome の sandbox が起動しないため。K6_BROWSER_ARGS はカンマ区切り・`--` なしの k6 形式 — k6 `browser/env/env.go` / `chromium/browser_type.go` で確認）。**k6 v2.4.0 + Chrome for Testing 158 で browser テスト（setContent + locator + check）の動作を linux/arm64・linux/amd64 で検証済み。日本語の描画はスクリーンショットを目視で確認済み**。スモークテスト（`.github/scripts/smoke-image.sh`。§10.4）は Chrome の起動と DOM の操作、fontconfig から日本語フォントが見えることを確かめる（描画そのものは自動では見ない） |
 | 配布 | タグ: `full` + `{semver}-full`（linux/amd64 + linux/arm64） |
 
 ### 10.3 compose.yaml（HTML レポート配信つき）
@@ -1021,9 +1028,9 @@ stfw_inventory:
 | ワークフロー | トリガー | 内容 |
 |---|---|---|
 | `ci.yml` | pull_request | golangci-lint + `go build ./...` + `go test ./...` + `govulncheck ./...`（呼び出し経路のある依存・Go 本体の脆弱性で失敗。Go 本体は go.mod の `toolchain` で判定）+ 除外リストの検査の見本テスト（`test-check-trivyignore.sh`。実際の `.trivyignore.yaml` の検査と、すり抜けの見本を含む） |
-| `build.yml` | push（master） | `go vet` + `go test` + GoReleaser snapshot（成果物を 7 日保持の artifact 化）+ Docker build（runtime / full の 2 ターゲット、push なし）+ 両イメージの Trivy スキャン（下の合否の基準。公式イメージ `aquasec/trivy` を digest 固定で実行し、runner のアーキテクチャのみ検査） |
-| `scheduled-scan.yml` | schedule（毎週月曜 00:17 UTC）/ workflow_dispatch | 取り込み漏れの定期チェック。① キャッシュを使わずベースイメージも取り直して両イメージを作り、build.yml と同じ基準で Trivy スキャン（Debian の新しい修正版を検出）+ 除外リストのうち、もうどのイメージでも見つからなくなった行（対応版を取り込んだ後の消し忘れ）を警告のみ（ジョブを失敗させない）② 同梱ツールの既定版（各プラグインの `config.yml`）が各ツールの最新リリースか（新しい版があれば失敗）③ `govulncheck ./...`。見つかったらジョブを失敗させ、リリースは止めない。schedule は既定ブランチの最新コミットで動く。**通知の条件**: schedule の通知はワークフローを作成した（cron を最後に変更した・無効化後に再度有効にした）ユーザーに届き、そのユーザーが GitHub Actions の Web またはメール通知を有効にしている必要がある。**自動停止**: 公開リポジトリは 60 日間活動が無いと schedule が自動で無効になり、その旨の通知は無い。Actions 画面で無効になっていないかを確認し、無効なら「Enable workflow」または `gh workflow enable scheduled-scan.yml` で戻す |
-| `release.yml` | tag `v*` | `go test` + GoReleaser release（GitHub Releases）+ Docker multi-arch build & push（ghcr.io へ runtime: semver + `latest` / full: `{semver}-full` + `full`。full 側は `flavor: latest=false` で plain latest の自動生成を抑止） |
+| `build.yml` | push（master） | `go vet` + `go test` + GoReleaser snapshot（成果物を 7 日保持の artifact 化）+ Docker build（runtime / full の 2 ターゲット、push なし）+ 同梱ツールの解決の確認 + 両イメージのスモークテスト（`smoke-image.sh`。stfw と組込みプラグイン・`stfw ssh trust` が呼ぶコマンドの存在と起動、GNU 版の基本コマンド、`TZ` の反映、full は DB クライアントと MySQL の認証部品・日本語フォント・同梱 Chrome での k6 ブラウザモード。ネットワークなし。amd64 は docker ジョブ、arm64 は `docker-arm64` ジョブ（`ubuntu-24.04-arm` runner）で両 arch とも行う。Chrome の依存ライブラリが arch ごとに違うため）。リリース（release.yml）でも公開前に同じスモークテストを両 arch で行う（下の release.yml の行）+ 両イメージの Trivy スキャン（下の合否の基準。公式イメージ `aquasec/trivy` を digest 固定で実行し、runner のアーキテクチャのみ検査） |
+| `scheduled-scan.yml` | schedule（毎週月曜 00:17 UTC）/ workflow_dispatch | 取り込み漏れの定期チェック。① キャッシュを使わずに両イメージを作り（ベースは digest 固定のため同じものを使い、ベースの更新は Dependabot の PR で行う。パッケージはビルド時の `apk upgrade` で最新になる）、build.yml と同じスモークテストと、同じ基準の Trivy スキャン（Wolfi の新しい修正版を検出。ビルド時の `apk upgrade` / `apk add` が最新を取るため、取り込みは再ビルド＝次のリリースで行う）+ 除外リストのうち、もうどのイメージでも見つからなくなった行（対応版を取り込んだ後の消し忘れ）を警告のみ（ジョブを失敗させない）② 同梱ツールの既定版（各プラグインの `config.yml`）が各ツールの最新リリースか、stfw:full の Chrome（Dockerfile の `CHROME_VERSION`）が Chrome for Testing の Stable か（新しい版があれば失敗。Chrome は Trivy に見えないため、この版の確認が脆弱性の取り込み漏れの検知を兼ねる。あわせて**公開済みの `:full`（amd64・arm64）の `/opt/chrome/VERSION`** も Stable と比べ、古ければ失敗する。master の版を上げてもリリースするまで利用者のイメージは古いままのため、「リリースが要る」を知らせる。中身は実行せずファイルだけ取り出す）③ `govulncheck ./...`。見つかったらジョブを失敗させ、リリースは止めない。schedule は既定ブランチの最新コミットで動く。**通知の条件**: schedule の通知はワークフローを作成した（cron を最後に変更した・無効化後に再度有効にした）ユーザーに届き、そのユーザーが GitHub Actions の Web またはメール通知を有効にしている必要がある。**自動停止**: 公開リポジトリは 60 日間活動が無いと schedule が自動で無効になり、その旨の通知は無い。Actions 画面で無効になっていないかを確認し、無効なら「Enable workflow」または `gh workflow enable scheduled-scan.yml` で戻す |
+| `release.yml` | tag `v*` | `go test` + GoReleaser release（GitHub Releases）+ Docker イメージの公開（ghcr.io へ runtime: semver + `latest` / full: `{semver}-full` + `full`。full 側は `flavor: latest=false` で plain latest の自動生成を抑止）。**公開前に両 arch でスモークテストを行う**: Wolfi のパッケージは常に最新へ更新されるため、リリース時のビルドは master で確かめたものと中身がずれうる。そのため arch ごとの専用ランナー（amd64: `ubuntu-latest`、arm64: `ubuntu-24.04-arm`）で ① 確認用にビルドしてローカルへ読み込み ② `smoke-image.sh` を runtime・full にかけ ③ 同じビルダーのキャッシュで作り直してタグなしの digest で push し ④ push したものと ① のレイヤー（diff_id の並び）が一致するかを `verify-pushed-image.sh` で確かめる（キャッシュが外れて作り直されたら失敗）。タグは両 arch の ①〜④ がすべて通ったあとに `docker-publish` ジョブが `docker buildx imagetools create` で付ける。①〜④ のどれかが失敗するとタグは動かず、利用者が取得するイメージは前のリリースのまま（push 済みのタグなし digest は ghcr.io に残る）。タグの付け替えは 1 つずつ行われ原子的ではないため、先に runtime・full とも dry-run で組み立ててから付け替える。付け替えの途中で失敗した（runtime だけ新しくなった）ときは `docker-publish` ジョブを再実行する（同じ digest を付け直すだけ）。Trivy スキャンはリリースでは行わない |
 
 Trivy の合否の基準（`.github/scripts/scan-images.sh`。build.yml と scheduled-scan.yml が共有）:
 
@@ -1044,7 +1051,7 @@ Trivy の合否の基準（`.github/scripts/scan-images.sh`。build.yml と sche
 
 運用: 新しい指摘で失敗したら、取り込めるものは直す PR、取り込めないものは除外リストに行を足す PR を作る。対応版を取り込んだら該当の行を消す（定期チェックが消し忘れを警告する）。期限切れで失敗したら、取り込むか、理由を更新して延長する。除外リストの形式は Trivy の試験的な機能のため、Trivy の版を上げるときは「場所の限定」「期限切れで効かなくなる」「`*` の照合」が変わっていないかを確かめ直す。
 
-> 根拠: `.goreleaser.yaml`, `Dockerfile`, `compose.yaml`, `.github/workflows/{ci,build,release,scheduled-scan}.yml`, `.github/scripts/{scan-images,check-trivyignore,check-trivyignore-stale,trivyignore-lib,test-check-trivyignore,check-bundled-versions}.sh`, `.trivyignore.yaml`
+> 根拠: `.goreleaser.yaml`, `Dockerfile`, `compose.yaml`, `.github/workflows/{ci,build,release,scheduled-scan}.yml`, `.github/scripts/{scan-images,check-trivyignore,check-trivyignore-stale,trivyignore-lib,test-check-trivyignore,check-bundled-versions,smoke-image}.sh`, `.github/scripts/smoke-browser.js`, `.trivyignore.yaml`
 
 ---
 

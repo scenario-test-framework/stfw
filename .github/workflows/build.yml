@@ -64,8 +64,14 @@ jobs:
               exit 1
             fi
           done
+      # stfw と組込みプラグインが呼ぶコマンド (ssh 系・GNU 版の基本コマンド・TZ・DB クライアントなど) と、
+      # 同梱の Chrome が k6 ブラウザモードで動くこと (ベースの更新や Chrome の版上げで部品が欠けたら失敗)
+      - name: smoke test image contents
+        run: |
+          bash .github/scripts/smoke-image.sh runtime stfw-scan:runtime
+          bash .github/scripts/smoke-image.sh full stfw:full-ci
       # 脆弱性スキャン: 修正版のある脆弱性があれば深刻度に関係なく失敗させる。対応版待ちのものだけ
-      # 除外リスト (.trivyignore.yaml。場所・期限・理由つき) で外す。修正版の無いもの (Debian 側で未提供など) は
+      # 除外リスト (.trivyignore.yaml。場所・期限・理由つき) で外す。修正版の無いもの (配布元で未提供など) は
       # 直せないため合否に含めない。判定は scan-images.sh に集約し、
       # 週 1 回の定期チェック (scheduled-scan.yml) と共有する。
       # trivy-action は 2026-03 にタグ乗っ取りの前例があるため使わず、公式イメージを digest 固定で実行する
@@ -73,3 +79,30 @@ jobs:
         env:
           TRIVY_IMAGE: aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
         run: bash .github/scripts/scan-images.sh stfw-scan:runtime stfw:full-ci
+
+  # 配布する arm64 版も同じスモークテストにかける (Chrome の依存ライブラリは arch ごとに違うため。
+  # 例: amd64 だけ libatk-bridge が要る)。脆弱性スキャンは両 arch とも同じソース・同じパッケージ群から
+  # 作るため amd64 (docker ジョブ) だけで行う (AS-BUILT §10.4)
+  docker-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: runtime
+          push: false
+          load: true
+          tags: stfw-scan:runtime
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: full
+          push: false
+          load: true
+          tags: stfw:full-ci
+      - name: smoke test image contents
+        run: |
+          bash .github/scripts/smoke-image.sh runtime stfw-scan:runtime
+          bash .github/scripts/smoke-image.sh full stfw:full-ci

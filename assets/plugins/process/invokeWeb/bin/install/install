@@ -3,8 +3,8 @@
 # 永続キャッシュ (${stfw_plugin_cache_dir}/k6/{os_arch}/k6) に配置する。k6 はローカルで
 # テストを実行するため、実行ホストの arch 1 種のみ取得する。
 #
-# ブラウザモード (invokeWeb) は実行時に Chromium を必要とする (stfw:full イメージに同梱)。
-# 本 install は k6 バイナリのみを配置し、Chromium の導入はイメージ/実行環境の責務とする。
+# ブラウザモード (invokeWeb) は実行時に Chrome / Chromium を必要とする (stfw:full イメージに Chrome を同梱)。
+# 本 install は k6 バイナリのみを配置し、ブラウザの導入はイメージ/実行環境の責務とする。
 #
 # プロビジョニングモデルは collectLog (logfilter) と同一の「初回 install 優先」。
 # 既にキャッシュ済みなら再ダウンロードしない。k6_version を変更したときは

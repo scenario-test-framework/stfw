@@ -100,12 +100,18 @@ docker run --rm -v "$PWD":/work ghcr.io/scenario-test-framework/stfw:latest --ve
 ```
 
 組込みプラグイン (RDBMS / Redis / ssh 系 / invokeWeb) を使う場合は、全ランタイム同梱版の
-**`stfw:full`** を使います (mysql / psql / redis-cli / sshpass / Chromium に加え、プラグインの外部ツール
+**`stfw:full`** を使います (mysql / psql / redis-cli / sshpass / 画面なし版の Chrome に加え、プラグインの外部ツール
 k6 / compare-files / logfilter も同梱しているため、既定の版を使う限り `stfw plugin install` やネットワークアクセスは不要です):
 
 ```console
 docker pull ghcr.io/scenario-test-framework/stfw:full
 ```
+
+v1.7.0 から、両イメージのベースは Debian ではなく [Wolfi](https://github.com/wolfi-dev) です (修正版の無い脆弱性を抱えないため)。
+イメージを拡張する場合は `apk add` (Wolfi のパッケージ名) でパッケージを追加してください。`apt-get` は使えません。
+full 版の `mysql` / `mysqldump` は MariaDB のクライアント、`redis-cli` は Valkey (Redis 互換) のクライアント、ブラウザは Google 公式の
+Chrome for Testing の画面なし版です (`/opt/chrome/chrome-headless-shell`。`chromium` コマンドはありません)。
+Debian 版にたまたま入っていたその他のコマンド (`mysqladmin`、`perl` など) は入っていません。
 
 ## Quick Start
 

@@ -16,7 +16,7 @@
 #           - "VUS=1"
 #
 # invokeWeb は画面への取引入力と画面操作検証 (Act) を grafana k6 (ブラウザモード) で実行する。
-# ブラウザは既定でヘッドレス。実行には Chromium が必要 (stfw:full イメージに同梱)。
+# ブラウザは既定でヘッドレス。実行には Chrome / Chromium が必要 (stfw:full イメージに Chrome を同梱)。
 # 接続情報は inventory/secret から解決し config に直書きしない。
 stfw:
   process:
