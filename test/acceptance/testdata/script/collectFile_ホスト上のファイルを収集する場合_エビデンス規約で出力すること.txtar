@@ -1,11 +1,16 @@
 # STEP: collectFile プラグイン (ホストからファイル収集 → エビデンス規約出力)
 # ssh / scp / sshpass はモックし、擬似リモート ${WORK}/remote/{host}/ から収集する。
+# モック sshpass は SSHPASS 経由 (-e) でなければ失敗する (#54)。モック ssh はリモートの
+# コマンド文字列を eval で解釈するため、引用符の漏れは実際の注入として現れる (#55)。
 
 env PATH=${WORK}/fakebin:${PATH}
 env STFW_TEST_REMOTE=${WORK}/remote
+env STFW_TEST_CANARY=${WORK}/injected
 chmod 755 fakebin/ssh
 chmod 755 fakebin/scp
 chmod 755 fakebin/sshpass
+chmod 755 fakebin/weird
+exec weird mk remote/web01
 
 # 暗号鍵とシークレット (host-user のパスワード) を用意
 exec stfw secret keygen
@@ -23,6 +28,12 @@ stdout 'hello from remote access.log'
 # 空白を含むパスも壊れず収集される (word-splitting 修正の固定)
 exists .stfw/runs/$RUN/workspace/demo/_10_99990101/_10_grp_collectFile/evidence/web01/var/log/app/'with space.log'
 
+# 引用符・空白・;・グロブ文字を含む名前も、その名前のまま収集され、名前の中のコマンドは
+# 実行されない。引用符を含むパターンも壊れない (#55)
+exec weird check .stfw/runs/$RUN/workspace/demo/_10_99990101/_10_grp_collectFile/evidence/web01
+stdout 'weird name content'
+! exists injected
+
 # パターンに合致しないファイルは収集されない
 ! exists .stfw/runs/$RUN/workspace/demo/_10_99990101/_10_grp_collectFile/evidence/web01/var/log/app/other.txt
 
@@ -34,8 +45,19 @@ env STFW_TEST_SSH_FAIL=1
 execcode 6 stfw run demo
 stderr 'ssh failed'
 
-# inventory list の失敗 (inventory ファイル不在) も握りつぶさず失敗させる
+# ログインシェルが標準出力に余計な文字列を出すホストは、収集ファイルが壊れるためエラーにする
 env STFW_TEST_SSH_FAIL=0
+env STFW_TEST_SSH_NOISE=1
+execcode 6 stfw run demo
+stderr 'the login shell on web01 writes extra output to stdout'
+env STFW_TEST_SSH_NOISE=0
+# コマンドの後に空行を足すホストも同じ (末尾の改行まで照合する)
+env STFW_TEST_SSH_TRAILER=1
+execcode 6 stfw run demo
+stderr 'the login shell on web01 writes extra output to stdout'
+env STFW_TEST_SSH_TRAILER=0
+
+# inventory list の失敗 (inventory ファイル不在) も握りつぶさず失敗させる
 cp badstfw.yml stfw.yml
 execcode 6 stfw run demo
 stderr 'inventory list failed'
@@ -68,7 +90,8 @@ stfw:
         - group: web
           user: appuser
           paths:
-            - /var/log/app/.*\.log
+            - /var/log/app/(access|with space)\.log
+            - /var/log/app/it's .*\.log
 -- remote/web01/manifest --
 /var/log/app/access.log
 /var/log/app/with space.log
@@ -81,27 +104,99 @@ spaced path content
 should not be collected
 -- fakebin/sshpass --
 #!/bin/bash
-# sshpass -p <pw> <cmd...> -> <cmd...>
-if [ "$1" = "-p" ]; then shift 2; fi
+# sshpass -e <cmd...>: パスワードは SSHPASS 環境変数で受け取る (argv に出さない。#54)。
+# -p (argv 渡し) や SSHPASS 未設定は失敗させる。
+if [ "$1" != "-e" ]; then echo "fake sshpass: expected -e, got: $1" >&2; exit 99; fi
+if [ "${SSHPASS:-}" != "secretpw" ]; then echo "fake sshpass: SSHPASS is not the secret" >&2; exit 99; fi
+shift
 exec "$@"
 -- fakebin/ssh --
 #!/bin/bash
-# ssh <opts> user@host "find / ... -regex 'PAT' ..." を擬似リモートの manifest で再現
+# 擬似リモート ${STFW_TEST_REMOTE}/{host}/。リモートで実行するコマンド文字列は、本物の
+# リモートシェルと同じく eval で単語に分けてから解釈する (引用符の漏れがあれば、注入が
+# ここで実際に起きる。#55)。
 if [ "${STFW_TEST_SSH_FAIL:-}" = "1" ]; then exit 255; fi
+# ログインシェルが標準出力に案内文を出すホストを再現する
+if [ "${STFW_TEST_SSH_NOISE:-}" = "1" ]; then echo "Welcome to web01"; fi
+# コマンドの後に空行を足すホストを再現する
+if [ "${STFW_TEST_SSH_TRAILER:-}" = "1" ]; then trap 'echo' EXIT; fi
 host=""
 for a in "$@"; do case "$a" in *@*) host="${a#*@}";; esac; done
-cmd="${@: -1}"
-pat="$(sed -n "s/.*-regex '\([^']*\)'.*/\1/p" <<<"$cmd")"
-manifest="${STFW_TEST_REMOTE}/${host}/manifest"
-[ -f "$manifest" ] || exit 0
-if [ -n "$pat" ]; then grep -E "$pat" "$manifest"; else cat "$manifest"; fi
-exit 0
+root="${STFW_TEST_REMOTE}/${host}"
+eval "set -- ${*: -1}" || exit 2
+case "$1" in
+  find)
+    # find / -regextype posix-extended -regex PAT -type f
+    [ -f "${root}/manifest" ] || exit 0
+    grep -Ex -- "$6" "${root}/manifest"
+    exit 0
+    ;;
+  mktemp)
+    d="/tmp/stfw.fake$$"
+    mkdir -p "${root}${d}"
+    echo "${d}"
+    # STFW_TEST_MKTEMP_FAIL=1 なら、名前を返した後に接続が切れたことにする
+    if [ "${STFW_TEST_MKTEMP_FAIL:-}" = "1" ]; then exit 255; fi
+    ;;
+  chmod)
+    exit 0
+    ;;
+  echo)
+    shift
+    echo "$*"
+    ;;
+  rm)
+    # rm -f|-rf -- PATH: 記録してから擬似リモート上で実際に消す。
+    # STFW_TEST_RM_FAIL=1 なら消せなかったことにする
+    echo "$*" >> "${root}/rm.log"
+    if [ "${STFW_TEST_RM_FAIL:-}" = "1" ]; then exit 1; fi
+    rm "$2" -- "${root}${*: -1}"
+    ;;
+  cat)
+    shift
+    [ "$1" = "--" ] && shift
+    cat "${root}$1"
+    ;;
+  */logfilter)
+    # logfilter -f [-tf FROM] IN OUT: マーカー付与 + 入力複製で再現する
+    in="${*: -2:1}"; out="${*: -1}"
+    mkdir -p "${root}$(dirname "${out}")"
+    { echo "# filtered by logfilter"; cat "${root}${in}"; } > "${root}${out}"
+    ;;
+  *)
+    echo "fake ssh: unexpected remote command: $*" >&2
+    exit 127
+    ;;
+esac
 -- fakebin/scp --
 #!/bin/bash
-# scp <opts> user@host:/path destdir/ を擬似リモートからのコピーで再現
-dest="${@: -1}"
-src="${@: -2:1}"
-host="${src%%:*}"; host="${host#*@}"
-path="${src#*:}"
-cp "${STFW_TEST_REMOTE}/${host}${path}" "${dest}"
+dest="${*: -1}"
+src="${*: -2:1}"
+if [[ "${src}" == *@*:* ]]; then
+  host="${src%%:*}"; host="${host#*@}"; path="${src#*:}"
+  cp "${STFW_TEST_REMOTE}/${host}${path}" "${dest}" || exit 1
+elif [[ "${dest}" == *@*:* ]]; then
+  host="${dest%%:*}"; host="${host#*@}"; path="${dest#*:}"
+  mkdir -p "$(dirname "${STFW_TEST_REMOTE}/${host}${path}")"
+  cp "${src}" "${STFW_TEST_REMOTE}/${host}${path}" || exit 1
+  # 転送された logfilter を、後片付けで消えた後も確かめられるよう控えておく
+  case "${path}" in */logfilter) cp "${src}" "${STFW_TEST_REMOTE}/${host}/uploaded-logfilter";; esac
+fi
 exit 0
+-- fakebin/weird --
+#!/bin/bash
+# weird mk {host_root} | check {evidence_host_dir}
+# 引用符・空白・;・グロブ文字を含む名前のログを擬似リモートに作る / 収集結果を確かめる (#55)。
+# 名前には、引用符が漏れると STFW_TEST_CANARY を作るコマンドが入っている。
+name="/var/log/app/it's [1]; touch \"\${STFW_TEST_CANARY}\"; '.log"
+case "$1" in
+  mk)
+    mkdir -p "$2/var/log/app"
+    echo "weird name content" > "$2${name}"
+    echo "${name}" >> "$2/manifest"
+    ;;
+  check)
+    test -f "$2${name}" || { echo "not collected: ${name}" >&2; exit 1; }
+    cat "$2${name}"
+    ;;
+esac

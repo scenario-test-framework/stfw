@@ -359,23 +359,24 @@ Collect フェーズの組込みプラグイン。エビデンスディレクト
 |---|---|---|
 | ホスト | collect config `targets[].group` → `stfw inventory list {group}` | inventory グループ名参照（config 直書き禁止、§4.7） |
 | ユーザー | collect config `targets[].user` | グループ内ホスト共通のログインユーザー |
-| パスワード | `stfw secret show {host} {user}` | secret `{host}-{user}`（age 暗号化）。プラグインが `sshpass` で非対話認証 |
+| パスワード | `stfw secret show {host} {user}` | secret `{host}-{user}`（age 暗号化）。プラグインが環境変数 `SSHPASS` + `sshpass -e` で非対話認証（argv に載せない。#54） |
 | arch | inventory の構造化ホストエントリ `arch` → `stfw inventory arch {host}` | collectLog が logfilter バイナリを arch 別に送り分けるために使う |
 | ホストキー | `stfw ssh trust`（事前登録した `~/.ssh/known_hosts`） | ssh は `-o StrictHostKeyChecking=yes` |
 
 inventory は後方互換で**文字列ホスト**と**構造化エントリ（`host` + `arch`）**の両形式を受理する（§8 の inventory 参照）。
 
-**collectFile**（`assets/plugins/process/collectFile`、requires: `ssh` / `scp` / `sshpass`）
+**collectFile**（`assets/plugins/process/collectFile`、requires: `ssh` / `sshpass`）
 
 - config: `targets[]`（`group` / `user` / `paths`。`paths` は posix-extended 正規表現リスト）。
-- 処理: 各 host で `ssh find -regex` により対象ファイルを列挙 → `sshpass scp` で `evidence/{host}/{収集元の絶対パスを再現}` へ収集。
-- secret 欠落・scp 失敗は exit 6（それ以外の host は継続）。
+- 処理: 各 host で `ssh find -regex` により対象ファイルを列挙 → 1 ファイルずつ `ssh cat` で `evidence/{host}/{収集元の絶対パスを再現}` へ収集。scp を使わないのは、scp がリモートのパスを既定の SFTP 方式ではグロブとして、旧方式ではリモートのシェルで解釈し、`[` や `'` を含む名前をそのまま取れないため（#55）。
+- 収集の前に host ごとに `echo` の結果だけが返るかを末尾の改行まで照合し、ログインシェルが標準出力に余計な文字列を（前でも後でも）出す host は exit 6（`ssh cat` の出力をそのままファイルにするため、混ざると収集ファイルが黙って壊れる）。
+- secret 欠落・収集失敗は exit 6（それ以外の host は継続。失敗したファイルの書きかけは消す）。
 
 **collectLog**（`assets/plugins/process/collectLog`、requires: `ssh` / `scp` / `sshpass`）
 
 - config: `targets[]`（collectFile と同じ）+ `logfilter_version` / `logfilter_arches`（provisioning 対象の `{os}_{arch}` をスペース区切り）。
 - provisioning（`bin/install/install`）: `logfilter`（scenario-test-framework/logfilter, GitHub Releases）を `logfilter_arches` 分ダウンロードし `stfw_plugin_cache_dir/logfilter/{os_arch}/logfilter` へ配置。`is_installed` はキャッシュ内の logfilter 存在で判定（キャッシュに無い arch は版一致のイメージ同梱版で補う。下記「イメージ同梱版へのフォールバック」）。
-- 処理: host の arch 版 logfilter を `scp` で転送 → `ssh` で実行し「業務日付の実行開始日時以降」のログ行に絞り込み → `scp` で `evidence/{host}/{絶対パス}` へ収集 → 転送したバイナリを削除。フィルタ基準時刻は `stfw_bizdate_start_ts`（RFC3339）を logfilter の `-tf 'YYYY-MM-DD HH:MM:SS.000'` へ純 bash で変換（実行ホストの TZ 基準。**収集先ホストとの時刻同期が前提**）。
+- 処理: host に `mktemp -d /tmp/stfw.XXXXXXXX` で専用ディレクトリを作る → arch 版 logfilter を `scp` でそこへ転送 → `ssh` で実行し「業務日付の実行開始日時以降」のログ行に絞り込み（出力も専用ディレクトリ）→ `scp` で `evidence/{host}/{絶対パス}` へ収集 → 専用ディレクトリごと削除（転送失敗時も削除する。削除できなければ残った場所を示して exit 6）。共有の `/tmp` に推測できる固定名で置かない（#55）。専用ディレクトリを作る前に collectFile と同じ方法でログインシェルが標準出力に何も足さないことを確かめ、足す host は exit 6（作ってから名前を読めなくなると消せないため）。mktemp の出力が `/tmp/stfw.` + 英数字等でなければ、その名前は信用せず exit 6。名前が返っても ssh か mktemp が失敗していれば、そのディレクトリを消してから exit 6。フィルタ基準時刻は `stfw_bizdate_start_ts`（RFC3339）を logfilter の `-tf 'YYYY-MM-DD HH:MM:SS.000'` へ純 bash で変換（実行ホストの TZ 基準。**収集先ホストとの時刻同期が前提**）。
 
 **プラグイン provisioning 機構（P2 で追加）**
 
@@ -554,14 +555,14 @@ Act フェーズの組込みプラグイン。テスト対象への取引入力�
 
 ### 4.13 組込みリモートアクセスプラグイン（sshExec / scpPut）
 
-リモート操作の組込みプラグイン（GitHub issue #3・要求 REQ-018）。収集系（collectFile / collectLog）が担うエビデンス収集の逆方向として、**sshExec**（Act: リモートスクリプト一括実行）と **scpPut**（Arrange: ローカルファイルの配置）を提供する（SPEC-018-01/02）。scp get は収集系が担うためスコープ外。
+リモート操作の組込みプラグイン（GitHub issue #3・要求 REQ-018）。収集系（collectFile / collectLog）が担うエビデンス収集の逆方向として、**sshExec**（Act: リモートスクリプト一括実行）と **scpPut**（Arrange: ローカルファイルの配置）を提供する（SPEC-018-01/02）。リモートからの取得は収集系が担うためスコープ外。
 
 **接続基盤（収集系と共通・§4.8）**
 
 - 接続先ホストは inventory グループで指定、ログインユーザは config で指定（ホスト + ユーザのグルーピング）。
 - パスワードは secret `{host}-{user}` から `stfw secret show` で解決し、config.yml への直書きは禁止（`host`/`hosts`/`password` キーは不可、`host_group`/`group` は可）。
 - SSH ホストキーは `stfw ssh trust`（known_hosts）を利用。`ssh_opts=(-o StrictHostKeyChecking=yes -o ConnectTimeout=10)`。
-- **パスワードは argv 露出を避けるため `SSHPASS` 環境変数 + `sshpass -e` で渡す**（P6 invoke で確立した方針。既存 collectLog の `sshpass -p` argv 方式からの改善で、collectLog の移行は本スコープ外）。Masker が secret を出力からマスクする。
+- **パスワードは argv 露出を避けるため `SSHPASS` 環境変数 + `sshpass -e` で渡す**（P6 invoke で確立した方針。収集系 collectFile / collectLog も #54 で同じ方式に移行済み）。Masker が secret を出力からマスクする。
 - 追加バイナリのプロビジョニングは無い（`ssh`/`scp`/`sshpass` はシステムコマンド）。`plugin.yml` の `requires` で実行前 PATH ゲート、`is_installed` は前提コマンド存在のみ確認。
 
 **sshExec**（`assets/plugins/process/sshExec`、requires: `ssh` / `sshpass`）

@@ -10,12 +10,36 @@
 #   ${stfw_process_dir}/evidence/{host}/{収集元の絶対パスをそのまま再現}
 #
 # 接続情報 (ホスト/パスワード) は inventory / secret から解決し、config に直書きしない。
+# パスワードは argv 露出を避けるため SSHPASS 環境変数で渡す (sshpass -e。#54)。
 # ssh のホストキーは事前に `stfw ssh trust` で known_hosts へ登録しておくこと。
 set -uo pipefail
 
 evidence_root="${stfw_process_dir}/evidence"
 ssh_opts=(-o StrictHostKeyChecking=yes -o ConnectTimeout=10)
 rc=0
+
+# rq は値を POSIX sh の単一引用符で囲む。リモートで実行するコマンド文字列に埋め込む値は
+# すべてこれを通す (値の中の ' や ; をリモートのシェルに解釈させない。#55)。
+# printf %q は bash 専用の書式を出すことがあり、ログインシェルが sh / ash でも通るこの形にする。
+# 置換は変数経由で書く (置換文字列に \' を直書きすると bash 3.2 と 5 で結果が変わる)。
+rq() {
+  local sq="'" esc="'\\''"
+  printf "'%s'" "${1//${sq}/${esc}}"
+}
+
+# quiet_shell は、ホストのログインシェルが標準出力に何も足さないことを確かめる。
+# 収集は ssh の標準出力をそのままファイルにするため、案内文などが前後に混ざると、収集した
+# ファイルが黙って壊れる。目印の 1 行だけが返ることを、末尾の改行まで含めて照合する
+# (コマンド置換は末尾の改行を落とすため、最後に "." を足してから比べる)。
+# 戻り値: 0 = 静か / 1 = 余計な出力あり / 255 = ssh の失敗。
+quiet_shell() {
+  local out
+  out="$(sshpass -e ssh "${ssh_opts[@]}" "${user}@${host}" 'echo stfw-shell-ok' < /dev/null; s=$?; printf '.'; exit "${s}")"
+  local s=$?
+  [ "${s}" -eq 255 ] && return 255
+  [ "${out}" = "stfw-shell-ok"$'\n'"." ] && return 0
+  return 1
+}
 
 i=0
 while :; do
@@ -34,6 +58,20 @@ while :; do
         rc=6
         continue
       fi
+      export SSHPASS="${password}"
+
+      quiet_shell
+      shell_rc=$?
+      if [ "${shell_rc}" -eq 255 ]; then
+        echo "collectFile: ssh failed: ${user}@${host}" >&2
+        rc=6
+        continue
+      fi
+      if [ "${shell_rc}" -ne 0 ]; then
+        echo "collectFile: the login shell on ${host} writes extra output to stdout; collected files would be corrupted (make the shell quiet for non-interactive sessions)" >&2
+        rc=6
+        continue
+      fi
 
       j=0
       while :; do
@@ -42,8 +80,8 @@ while :; do
         [ -z "${pattern}" ] && break
         j=$((j + 1))
 
-        files="$(sshpass -p "${password}" ssh "${ssh_opts[@]}" "${user}@${host}" \
-          "find / -regextype posix-extended -regex '${pattern}' -type f 2>/dev/null")"
+        files="$(sshpass -e ssh "${ssh_opts[@]}" "${user}@${host}" \
+          "find / -regextype posix-extended -regex $(rq "${pattern}") -type f 2>/dev/null")"
         ssh_rc=$?
         # ssh 自体の失敗 (接続・認証エラー = 255) はエラー扱い。find の権限エラー
         # (一部ディレクトリにアクセスできず exit 1) は正常出力として扱う。
@@ -57,9 +95,14 @@ while :; do
         while IFS= read -r f <&3; do
           [ -z "${f}" ] && continue
           destdir="${evidence_root}/${host}$(dirname "${f}")"
+          dest="${destdir}/$(basename "${f}")"
           mkdir -p "${destdir}"
-          if ! sshpass -p "${password}" scp "${ssh_opts[@]}" "${user}@${host}:${f}" "${destdir}/"; then
-            echo "collectFile: scp failed: ${host}:${f}" >&2
+          # scp ではなく ssh の cat で受け取る。scp はリモートのパスを、既定の SFTP 方式では
+          # グロブとして、旧方式ではリモートのシェルで解釈するため、[ や ' を含む名前を
+          # そのまま取れない。cat なら名前は rq で囲んだ 1 つの引数として渡る (#55)。
+          if ! sshpass -e ssh "${ssh_opts[@]}" "${user}@${host}" "cat -- $(rq "${f}")" < /dev/null > "${dest}"; then
+            echo "collectFile: failed to collect ${host}:${f}" >&2
+            rm -f "${dest}"
             rc=6
           fi
         done 3<<< "${files}"

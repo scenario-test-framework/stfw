@@ -3,13 +3,19 @@
 # logfilter の実処理 (時刻絞り込み) は外部ツールの責務のため、モック ssh が
 # 「マーカー付与 + 入力複製」で実行を再現する。
 
+# モック sshpass は SSHPASS 経由 (-e) でなければ失敗する (#54)。モック ssh はリモートの
+# コマンド文字列を eval で解釈するため、引用符の漏れは実際の注入として現れる (#55)。
+
 env PATH=${WORK}/fakebin:${PATH}
 env STFW_TEST_REMOTE=${WORK}/remote
+env STFW_TEST_CANARY=${WORK}/injected
 chmod 755 fakebin/ssh
 chmod 755 fakebin/scp
 chmod 755 fakebin/sshpass
 chmod 755 fakebin/curl
 chmod 755 fakebin/fakelogfilter
+chmod 755 fakebin/weird
+exec weird mk remote/web01
 
 # logfilter リリース tarball のフィクスチャを作る (logfilter_{ver}_{arch}/logfilter)
 mkdir lfsrc
@@ -40,6 +46,46 @@ stdout 'app started'
 exists .stfw/runs/$RUN/workspace/demo/_10_99990101/_10_grp_collectLog/evidence/web01/var/log/app/app2.log
 exec cat .stfw/runs/$RUN/workspace/demo/_10_99990101/_10_grp_collectLog/evidence/web01/var/log/app/app2.log
 stdout 'second log'
+
+# 引用符・空白・;・グロブ文字を含む名前も、その名前のまま収集され、名前の中のコマンドは
+# 実行されない (#55)
+exec weird check .stfw/runs/$RUN/workspace/demo/_10_99990101/_10_grp_collectLog/evidence/web01
+stdout 'filtered by logfilter'
+stdout 'weird name content'
+! exists injected
+
+# logfilter と出力は mktemp -d で作った専用ディレクトリに置き、最後にディレクトリごと消す (#55)
+exists remote/web01/rm.log
+grep '^rm -rf -- /tmp/stfw\.fake[0-9]+$' remote/web01/rm.log
+exec ls -A remote/web01/tmp
+! stdout .
+
+# 専用ディレクトリを消せなければ、残った場所を示して失敗する
+env STFW_TEST_RM_FAIL=1
+execcode 6 stfw run demo
+stderr 'failed to remove web01:/tmp/stfw\.fake[0-9]+; remove it by hand'
+env STFW_TEST_RM_FAIL=0
+
+# ログインシェルが標準出力に余計な文字列を出すホストは、専用ディレクトリを作る前にエラーにする
+# (作ってから名前を読めなくなり、消せないディレクトリが残るのを防ぐ)。前後どちらに足されても同じ
+rm remote/web01/tmp
+env STFW_TEST_SSH_NOISE=1
+execcode 6 stfw run demo
+stderr 'the login shell on web01 writes extra output to stdout'
+! exists remote/web01/tmp
+env STFW_TEST_SSH_NOISE=0
+env STFW_TEST_SSH_TRAILER=1
+execcode 6 stfw run demo
+stderr 'the login shell on web01 writes extra output to stdout'
+! exists remote/web01/tmp
+env STFW_TEST_SSH_TRAILER=0
+
+# mktemp が名前を返した後に接続が切れたら、作られたディレクトリを消してから失敗にする
+env STFW_TEST_MKTEMP_FAIL=1
+execcode 6 stfw run demo
+stderr 'failed to create a work directory on web01 \(exit 255\)'
+exec ls -A remote/web01/tmp
+! stdout .
 
 -- stfw.yml --
 stfw:
@@ -88,45 +134,99 @@ cp "${STFW_TEST_LF_TARBALL}" "${out}"
 exit 0
 -- fakebin/sshpass --
 #!/bin/bash
-if [ "$1" = "-p" ]; then shift 2; fi
+# sshpass -e <cmd...>: パスワードは SSHPASS 環境変数で受け取る (argv に出さない。#54)。
+# -p (argv 渡し) や SSHPASS 未設定は失敗させる。
+if [ "$1" != "-e" ]; then echo "fake sshpass: expected -e, got: $1" >&2; exit 99; fi
+if [ "${SSHPASS:-}" != "secretpw" ]; then echo "fake sshpass: SSHPASS is not the secret" >&2; exit 99; fi
+shift
 exec "$@"
 -- fakebin/ssh --
 #!/bin/bash
+# 擬似リモート ${STFW_TEST_REMOTE}/{host}/。リモートで実行するコマンド文字列は、本物の
+# リモートシェルと同じく eval で単語に分けてから解釈する (引用符の漏れがあれば、注入が
+# ここで実際に起きる。#55)。
+if [ "${STFW_TEST_SSH_FAIL:-}" = "1" ]; then exit 255; fi
+# ログインシェルが標準出力に案内文を出すホストを再現する
+if [ "${STFW_TEST_SSH_NOISE:-}" = "1" ]; then echo "Welcome to web01"; fi
+# コマンドの後に空行を足すホストを再現する
+if [ "${STFW_TEST_SSH_TRAILER:-}" = "1" ]; then trap 'echo' EXIT; fi
 host=""
 for a in "$@"; do case "$a" in *@*) host="${a#*@}";; esac; done
-cmd="${@: -1}"
 root="${STFW_TEST_REMOTE}/${host}"
-set -- ${cmd}
-first="$1"
-case "${first}" in
+eval "set -- ${*: -1}" || exit 2
+case "$1" in
   find)
-    pat="$(sed -n "s/.*-regex '\([^']*\)'.*/\1/p" <<<"${cmd}")"
-    manifest="${root}/manifest"
-    [ -f "${manifest}" ] || exit 0
-    grep -E "${pat}" "${manifest}"
-    ;;
-  chmod|rm)
+    # find / -regextype posix-extended -regex PAT -type f
+    [ -f "${root}/manifest" ] || exit 0
+    grep -Ex -- "$6" "${root}/manifest"
     exit 0
     ;;
+  mktemp)
+    d="/tmp/stfw.fake$$"
+    mkdir -p "${root}${d}"
+    echo "${d}"
+    # STFW_TEST_MKTEMP_FAIL=1 なら、名前を返した後に接続が切れたことにする
+    if [ "${STFW_TEST_MKTEMP_FAIL:-}" = "1" ]; then exit 255; fi
+    ;;
+  chmod)
+    exit 0
+    ;;
+  echo)
+    shift
+    echo "$*"
+    ;;
+  rm)
+    # rm -f|-rf -- PATH: 記録してから擬似リモート上で実際に消す。
+    # STFW_TEST_RM_FAIL=1 なら消せなかったことにする
+    echo "$*" >> "${root}/rm.log"
+    if [ "${STFW_TEST_RM_FAIL:-}" = "1" ]; then exit 1; fi
+    rm "$2" -- "${root}${*: -1}"
+    ;;
+  cat)
+    shift
+    [ "$1" = "--" ] && shift
+    cat "${root}$1"
+    ;;
+  */logfilter)
+    # logfilter -f [-tf FROM] IN OUT: マーカー付与 + 入力複製で再現する
+    in="${*: -2:1}"; out="${*: -1}"
+    mkdir -p "${root}$(dirname "${out}")"
+    { echo "# filtered by logfilter"; cat "${root}${in}"; } > "${root}${out}"
+    ;;
   *)
-    # logfilter 実行: 末尾 2 つのクオート引数が input, output
-    infile="$(sed -E "s/.*'([^']*)' '([^']*)'[^']*\$/\1/" <<<"${cmd}")"
-    outfile="$(sed -E "s/.*'([^']*)' '([^']*)'[^']*\$/\2/" <<<"${cmd}")"
-    mkdir -p "${root}$(dirname "${outfile}")"
-    { echo "# filtered by logfilter"; cat "${root}${infile}"; } > "${root}${outfile}"
+    echo "fake ssh: unexpected remote command: $*" >&2
+    exit 127
     ;;
 esac
-exit 0
 -- fakebin/scp --
 #!/bin/bash
-dest="${@: -1}"
-src="${@: -2:1}"
+dest="${*: -1}"
+src="${*: -2:1}"
 if [[ "${src}" == *@*:* ]]; then
   host="${src%%:*}"; host="${host#*@}"; path="${src#*:}"
-  cp "${STFW_TEST_REMOTE}/${host}${path}" "${dest}"
+  cp "${STFW_TEST_REMOTE}/${host}${path}" "${dest}" || exit 1
 elif [[ "${dest}" == *@*:* ]]; then
   host="${dest%%:*}"; host="${host#*@}"; path="${dest#*:}"
   mkdir -p "$(dirname "${STFW_TEST_REMOTE}/${host}${path}")"
-  cp "${src}" "${STFW_TEST_REMOTE}/${host}${path}"
+  cp "${src}" "${STFW_TEST_REMOTE}/${host}${path}" || exit 1
+  # 転送された logfilter を、後片付けで消えた後も確かめられるよう控えておく
+  case "${path}" in */logfilter) cp "${src}" "${STFW_TEST_REMOTE}/${host}/uploaded-logfilter";; esac
 fi
 exit 0
+-- fakebin/weird --
+#!/bin/bash
+# weird mk {host_root} | check {evidence_host_dir}
+# 引用符・空白・;・グロブ文字を含む名前のログを擬似リモートに作る / 収集結果を確かめる (#55)。
+# 名前には、引用符が漏れると STFW_TEST_CANARY を作るコマンドが入っている。
+name="/var/log/app/it's [1]; touch \"\${STFW_TEST_CANARY}\"; '.log"
+case "$1" in
+  mk)
+    mkdir -p "$2/var/log/app"
+    echo "weird name content" > "$2${name}"
+    echo "${name}" >> "$2/manifest"
+    ;;
+  check)
+    test -f "$2${name}" || { echo "not collected: ${name}" >&2; exit 1; }
+    cat "$2${name}"
+    ;;
+esac
