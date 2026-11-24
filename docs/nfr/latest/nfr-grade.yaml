@@ -1,8 +1,8 @@
 version: "1.0"
-event_id: "20260722_025511_nfr_wording_followup_user_approved"
-created_at: "2026-07-22T02:55:11"
-source: "前イベント 20260721_211823 で confidence: user 保護によりスキップした C.6.1.1 / B.1.1.4 の説明文言追従。ユーザー（プロダクトオーナー）が本 2 項目の文言更新を明示承認したため、保護ルールの例外として文言のみ追従する（グレード Lv・confidence: user は不変）"
-trigger_event: "nfr:20260721_211823_nfr_update_for_retract_filelog_timezone_reflect_parallel"
+event_id: "20261125_052806_reflect_ci_vuln_scan"
+created_at: "2026-11-25T05:28:06"
+source: "開発 CI 基盤と配布元の RDRA 差分に基づく非機能再評価（docs/AS-BUILT.md §10.2・§10.4 とワークフロー／スクリプト）"
+trigger_event: "rdra:20261125_052806_reflect_ci_vuln_scan"
 
 model_system:
   type: "model1"
@@ -368,9 +368,9 @@ categories:
                 important: true
                 grade: 0
                 grade_description: "性能テストなし"
-                reason: "フレームワーク自体の CI は lint（golangci-lint）+ test（Go 単体テスト + testscript 受け入れテスト）であり、性能テストは含まれないため"
+                reason: "CI の k6 ブラウザモードは同梱 Chrome の起動と DOM 操作を確認するスモークテストであり、フレームワークの性能を計測するテストは行わないため"
                 source_model: "外部システム: 開発 CI 基盤（GitHub Actions）"
-                confidence: "medium"
+                confidence: "high"
   - id: "C"
     name: "運用・保守性"
     subcategories:
@@ -481,8 +481,8 @@ categories:
                 important: true
                 grade: 1
                 grade_description: "セキュリティパッチのみ随時"
-                reason: "tag 付与時に goreleaser でリリースされる新バージョンへ利用者が随時差し替える運用のため、最低水準を適用"
-                source_model: "外部システム: 配布元（GitHub Releases / ghcr.io）、開発 CI 基盤（GitHub Actions）"
+                reason: "週次と手動の CI で修正版の取り込み漏れを確認し、Go・同梱ツール・Chrome は保守担当者が PR で対応し、Wolfi の修正版は再ビルドする次のリリースで取り込む。利用者は更新された配布物に随時差し替えるため"
+                source_model: "外部システム: 開発 CI 基盤（GitHub Actions）、外部システム: 配布元（GitHub Releases / ghcr.io）"
                 confidence: "medium"
           - id: "C.2.2"
             name: "ソフトウェア保守"
@@ -547,8 +547,8 @@ categories:
                 important: true
                 grade: 2
                 grade_description: "簡易テスト環境（本番縮小構成）"
-                reason: "stfw validate による静的検証と stfw run --dry-run により、テスト対象環境に影響を与えずに実行経路を事前検証できるため"
-                source_model: "条件: dry-run の実行範囲、run 前静的検証"
+                reason: "既存の validate・dry-run による事前検証に加え、開発 CI はコンテナ内で runtime・full の必要部品をネットワークなしで確認し、公開時は amd64・arm64 とも検証済みのレイヤーと push 後のレイヤーを照合するため"
+                source_model: "条件: dry-run の実行範囲、run 前静的検証、外部システム: 開発 CI 基盤（GitHub Actions）、外部システム: 配布元（GitHub Releases / ghcr.io）"
                 confidence: "medium"
           - id: "C.4.2"
             name: "開発環境"
@@ -558,10 +558,10 @@ categories:
                 name: "開発環境"
                 important: false
                 grade: 1
-                grade_description: "Go 開発環境 + GitHub Actions CI（PR で lint + test、master で snapshot ビルド）"
-                reason: "フレームワーク自体の開発は Go + GitHub Actions の CI で品質保証されるため"
+                grade_description: "Go 開発環境と GitHub Actions CI（PR 検証、master の snapshot とイメージ検証、定期チェック）"
+                reason: "PR では Go のビルド・lint・テストと脆弱性検査を行い、master では snapshot と両 arch のイメージの部品を確認し、amd64 でイメージの Trivy スキャンを行うため"
                 source_model: "外部システム: 開発 CI 基盤（GitHub Actions）"
-                confidence: "medium"
+                confidence: "high"
       - id: "C.5"
         name: "サポート体制"
         items:
@@ -772,7 +772,7 @@ categories:
                 important: true
                 grade: 1
                 grade_description: "簡易チェックリストによる確認"
-                reason: "リスク分析の定義が無いため、モデルシステム1のデフォルト値を適用"
+                reason: "モデルシステム1のデフォルト値を適用する。Trivy の合否判定と期限付き除外は、セキュリティ診断（E.3.1.1）とリスク管理（E.4.1.1）の根拠とする。"
                 source_model: ""
                 confidence: "default"
       - id: "E.3"
@@ -785,11 +785,11 @@ categories:
               - id: "E.3.1.1"
                 name: "セキュリティ診断"
                 important: true
-                grade: 0
-                grade_description: "診断なし"
-                reason: "CI は lint + test のみでセキュリティ診断は含まれないため（model1 デフォルトとも一致）"
+                grade: 1
+                grade_description: "ツールによる自動診断"
+                reason: "PR と定期チェックでは govulncheck が Go 本体・依存の脆弱性を、master と定期チェックでは Trivy が runtime・full の OS・ライブラリの脆弱性を検査し、Trivy の対象外の Chrome は定期的に Stable と版を照合するため"
                 source_model: "外部システム: 開発 CI 基盤（GitHub Actions）"
-                confidence: "medium"
+                confidence: "high"
       - id: "E.4"
         name: "セキュリティリスク管理"
         items:
@@ -801,10 +801,10 @@ categories:
                 name: "リスク管理プロセス"
                 important: false
                 grade: 1
-                grade_description: "リスク管理プロセスの規定なし"
-                reason: "リスク管理プロセスの定義が無いため、モデルシステム1のデフォルト値を適用"
-                source_model: ""
-                confidence: "default"
+                grade_description: "依存とイメージの脆弱性に対する継続的な対応手順"
+                reason: "取り込み漏れは週次・手動で検知し、取り込める修正版は保守担当者が PR または再ビルドで反映し、対応版待ちはパス・UTC で 60 日以内の期限・理由付きで除外する。期限切れは検査が失敗し、対応する指摘がなくなった除外は定期チェックが警告するため。カタログにレベル表がない項目のため、グレードは従来の Lv1 に据え置く。"
+                source_model: "外部システム: 開発 CI 基盤（GitHub Actions）"
+                confidence: "high"
       - id: "E.5"
         name: "アクセス・利用制限"
         items:

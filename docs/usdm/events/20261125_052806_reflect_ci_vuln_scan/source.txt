@@ -1,0 +1,23 @@
+変更要望: フレームワーク自体の CI に脆弱性スキャンと定期チェックを追加した（v1.6.12 でリリース済み。実装契約の正本は docs/AS-BUILT.md §10.4、イメージの部品確認は §10.2）
+
+背景:
+stfw の CI（GitHub Actions）は、上流の文書では「PR で lint + test、master で snapshot ビルド、tag でリリース」とだけ書かれている
+（RDRA 外部システム「開発 CI 基盤（GitHub Actions）」、NFR グレード、アーキテクチャ設計 SR-401「CI 品質ゲート」）。
+実際には次が加わっている。実装契約（docs/AS-BUILT.md §10.4）を根拠に取り込む。実装に無い挙動を発明しない。
+
+1. PR（ci.yml）: lint（golangci-lint v2）+ test に加えて、govulncheck による Go の依存の脆弱性検査と、
+   脆弱性スキャンの除外リスト（.trivyignore.yaml）の書式検査の見本テスト（scan-rules）を行う。
+2. master push（build.yml）: 両 arch（amd64 / arm64）で Docker イメージ（runtime / full）をビルドし、同梱ツールの解決の確認と
+   スモークテスト（smoke-image.sh: stfw と組込みプラグインが呼ぶコマンドの存在・起動、full は DB クライアント・Chrome での k6 ブラウザモード・
+   同梱の compare-files など）を行い、Trivy でイメージをスキャンする。
+3. Trivy の合否基準: 「修正版があるのに取り込んでいない」もので判定し、すべての部品で深刻度に関係なく失敗。修正版の無いものは合否に含めない。
+   取り込めないもの（他社製の同梱ツールの部品など、対応版待ち）は除外リスト .trivyignore.yaml に、対象の場所・期限（60 日以内）・理由つきで載せる。
+4. 定期チェック（scheduled-scan.yml。週 1 回と手動）: キャッシュなしで作り直したイメージのスモークテストと Trivy スキャン、
+   同梱ツール（k6 / compare-files / logfilter）の既定版が最新リリースか・stfw:full の Chrome が Chrome for Testing の Stable か
+   （公開済みの :full の Chrome も比べる）、govulncheck。失敗したら取り込みの PR を作る（Wolfi の修正版は再ビルドで入るため次のリリースで取り込む）。
+5. リリース（release.yml）: 公開前に両 arch のスモークテストを行い、push したイメージが確かめたものと同じ中身かを照合してからタグを付ける。
+
+影響する上流の目安:
+- RDRA: 外部システム「開発 CI 基盤（GitHub Actions）」の説明（dist-requirements 差分モード）
+- NFR: CI・テスト環境・セキュリティ（脆弱性管理）に関わるメトリクスの根拠・グレード（dist-quality-attributes 差分モード）
+- アーキテクチャ: SR-401「CI 品質ゲート」など CI・配布・セキュリティ関連の記述（dist-architecture 差分モード）

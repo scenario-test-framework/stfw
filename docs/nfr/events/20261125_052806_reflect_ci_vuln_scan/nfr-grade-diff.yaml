@@ -1,0 +1,119 @@
+# NFR グレード差分イベント（メトリクス ID でマージ）
+version: "1.0"
+event_id: "20261125_052806_reflect_ci_vuln_scan"
+created_at: "2026-11-25T05:28:06"
+source: "開発 CI 基盤と配布元の RDRA 差分に基づく非機能再評価（docs/AS-BUILT.md §10.2・§10.4 とワークフロー／スクリプト）"
+trigger_event: "rdra:20261125_052806_reflect_ci_vuln_scan"
+
+categories:
+  - id: "B"
+    name: "性能・拡張性"
+    subcategories:
+      - id: "B.4"
+        name: "性能品質保証"
+        items:
+          - id: "B.4.1"
+            name: "性能テスト"
+            important: true
+            metrics:
+              - id: "B.4.1.1"
+                name: "性能テスト"
+                important: true
+                grade: 0
+                grade_description: "性能テストなし"
+                reason: "CI の k6 ブラウザモードは同梱 Chrome の起動と DOM 操作を確認するスモークテストであり、フレームワークの性能を計測するテストは行わないため"
+                source_model: "外部システム: 開発 CI 基盤（GitHub Actions）"
+                confidence: "high"
+  - id: "C"
+    name: "運用・保守性"
+    subcategories:
+      - id: "C.2"
+        name: "保守運用"
+        items:
+          - id: "C.2.1"
+            name: "計画保守"
+            important: true
+            metrics:
+              - id: "C.2.1.2"
+                name: "パッチ適用方針"
+                important: true
+                grade: 1
+                grade_description: "セキュリティパッチのみ随時"
+                reason: "週次と手動の CI で修正版の取り込み漏れを確認し、Go・同梱ツール・Chrome は保守担当者が PR で対応し、Wolfi の修正版は再ビルドする次のリリースで取り込む。利用者は更新された配布物に随時差し替えるため"
+                source_model: "外部システム: 開発 CI 基盤（GitHub Actions）、外部システム: 配布元（GitHub Releases / ghcr.io）"
+                confidence: "medium"
+      - id: "C.4"
+        name: "運用環境"
+        items:
+          - id: "C.4.1"
+            name: "テスト環境"
+            important: true
+            metrics:
+              - id: "C.4.1.1"
+                name: "テスト環境"
+                important: true
+                grade: 2
+                grade_description: "簡易テスト環境（本番縮小構成）"
+                reason: "既存の validate・dry-run による事前検証に加え、開発 CI はコンテナ内で runtime・full の必要部品をネットワークなしで確認し、公開時は amd64・arm64 とも検証済みのレイヤーと push 後のレイヤーを照合するため"
+                source_model: "条件: dry-run の実行範囲、run 前静的検証、外部システム: 開発 CI 基盤（GitHub Actions）、外部システム: 配布元（GitHub Releases / ghcr.io）"
+                confidence: "medium"
+          - id: "C.4.2"
+            name: "開発環境"
+            important: false
+            metrics:
+              - id: "C.4.2.1"
+                name: "開発環境"
+                important: false
+                grade: 1
+                grade_description: "Go 開発環境と GitHub Actions CI（PR 検証、master の snapshot とイメージ検証、定期チェック）"
+                reason: "PR では Go のビルド・lint・テストと脆弱性検査を行い、master では snapshot と両 arch のイメージの部品を確認し、amd64 でイメージの Trivy スキャンを行うため"
+                source_model: "外部システム: 開発 CI 基盤（GitHub Actions）"
+                confidence: "high"
+  - id: "E"
+    name: "セキュリティ"
+    subcategories:
+      - id: "E.2"
+        name: "セキュリティリスク分析"
+        items:
+          - id: "E.2.1"
+            name: "リスク分析"
+            important: true
+            metrics:
+              - id: "E.2.1.1"
+                name: "セキュリティリスク分析"
+                important: true
+                grade: 1
+                grade_description: "簡易チェックリストによる確認"
+                reason: "モデルシステム1のデフォルト値を適用する。Trivy の合否判定と期限付き除外は、セキュリティ診断（E.3.1.1）とリスク管理（E.4.1.1）の根拠とする。"
+                source_model: ""
+                confidence: "default"
+      - id: "E.3"
+        name: "セキュリティ診断"
+        items:
+          - id: "E.3.1"
+            name: "セキュリティ診断"
+            important: true
+            metrics:
+              - id: "E.3.1.1"
+                name: "セキュリティ診断"
+                important: true
+                grade: 1
+                grade_description: "ツールによる自動診断"
+                reason: "PR と定期チェックでは govulncheck が Go 本体・依存の脆弱性を、master と定期チェックでは Trivy が runtime・full の OS・ライブラリの脆弱性を検査し、Trivy の対象外の Chrome は定期的に Stable と版を照合するため"
+                source_model: "外部システム: 開発 CI 基盤（GitHub Actions）"
+                confidence: "high"
+      - id: "E.4"
+        name: "セキュリティリスク管理"
+        items:
+          - id: "E.4.1"
+            name: "リスク管理"
+            important: false
+            metrics:
+              - id: "E.4.1.1"
+                name: "リスク管理プロセス"
+                important: false
+                grade: 1
+                grade_description: "依存とイメージの脆弱性に対する継続的な対応手順"
+                reason: "取り込み漏れは週次・手動で検知し、取り込める修正版は保守担当者が PR または再ビルドで反映し、対応版待ちはパス・UTC で 60 日以内の期限・理由付きで除外する。期限切れは検査が失敗し、対応する指摘がなくなった除外は定期チェックが警告するため。カタログにレベル表がない項目のため、グレードは従来の Lv1 に据え置く。"
+                source_model: "外部システム: 開発 CI 基盤（GitHub Actions）"
+                confidence: "high"
