@@ -1,0 +1,34 @@
+変更要望: 組込みプロセスタイプ compareRegex の新設（v1.8.0 でリリース済み。実装契約の正本は docs/AS-BUILT.md §4.11.1）
+
+背景:
+組込みプラグイン compare は期待値（expect/）と収集エビデンス（actual/）を「相対パスの完全一致」でファイルを組み合わせて比較する。
+名前に出力時刻や連番を含むファイル（例: balance_report_20240102093015.json）は実行のたびに名前が変わるため、compare では
+「片側だけにあるファイル」として差分になり、比較できない。
+
+要望:
+- シナリオ作成者が、名前が実行ごとに変わるファイルを、ファイル名の正規表現で期待値と組み合わせて比較検証（Assert）できること。
+- 比較方法をシナリオのディレクトリ名で読めるよう、compare の設定で動作を切り替えるのではなく、別の組込みプロセスタイプ compareRegex とする
+  （ディレクトリ名 _{seq}_{group}_compareRegex）。compare は変更しない（後方互換）。
+
+仕様:
+- 比較は外部 OSS compare-files の正規表現指定比較（compare_regex。compare と同じリリース物に含まれる）で行う。
+- 比較の組み合わせは比較対象設定 config/compare_target.csv（git 管理・必須）に書く。書式は compare-files の比較対象設定ファイルそのまま
+  （1 行 = 左ディレクトリ（期待値）, 右ディレクトリ（実績値）, ファイル名正規表現。# 始まりはコメント）。
+  左は expect/{収集系 process 名}/…、右は actual/{収集系 process 名}/… を指す。探すのは指定ディレクトリの直下だけで、名前順で最初に一致した 1 件を比較する。
+  CSV に書かなかったファイルは比較しない。
+- ディレクトリ規約（expect/ = git 管理、actual/ = evidence への file-level symlink・自動生成、result/ = 比較結果）は compare と同じ（エビデンスディレクトリ規約を拡張）。
+- 比較不一致の扱いは compare と同じ on_mismatch: error（既定）| warn。終了コードの対応付けも compare と同じ（0=一致 / 3=差分 / 6=エラー）。
+- 比較せずに合格するのを防ぐため、次は比較の前後で Error（exit 6）にする: データ行が 0 件、BOM 付き UTF-8、右に expect/ を書く・.. で戻る・process 名が無い、
+  1 行 = 1 レコードにならない書き方（行末でクォートが閉じない、行の途中の CR）、3 列でない行、on_mismatch の明示的な空文字、比較結果が出ていない、
+  古い actual/・result/ を消せない。
+- 比較レイアウト・起動設定のプロジェクト共通は compare と共有する（config/plugins/process/compare/）。compare-files の版（compare_files_version）も compare と共有し、
+  stfw:full イメージは compare_files と compare_regex を同梱する（両プラグインの版が食い違うとイメージのビルドを失敗させる）。
+- プロビジョニングは stfw plugin install compareRegex（キャッシュは compareRegex 用。stfw:full では同梱版を使い install 不要）。
+
+影響する RDRA の要素の目安:
+- バリエーション「プロセスタイプ」に compareRegex を追加（検証系）
+- 条件「エビデンスディレクトリ規約」に compareRegex の比較対象設定を追加
+- 情報「Process / Plugin 設定（config.yml）」の検証系スキーマ、情報「プラグイン」の検証系、情報「期待値（expect）」
+- 必要なら情報「比較対象設定（compare_target.csv）」を追加
+- 外部システム「compare-files（ファイル比較 OSS）」
+- 要求 REQ-014（compare）に仕様を追加するか、新しい要求とするかは USDM 分解で判断する
