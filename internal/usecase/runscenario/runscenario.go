@@ -29,7 +29,7 @@ type Options struct {
 	DryRun bool
 	From   string // 部分実行: 指定ノード以降を実行 (AS-BUILT §3.4)
 	Only   string // 部分実行: 指定サブツリーのみ実行 (AS-BUILT §3.4)
-	Resume string // resume: 前 run のワークスペース引き継ぎ ("" = 無効 / "latest" = 最新 run / run_id。AS-BUILT §5.8)
+	Resume string // resume: 前 run のワークスペース引き継ぎ ("" = 無効 / "latest" = 最新の完了済み run / run_id。AS-BUILT §5.8)
 }
 
 // Run はシナリオを内蔵ランナーで実行する。
