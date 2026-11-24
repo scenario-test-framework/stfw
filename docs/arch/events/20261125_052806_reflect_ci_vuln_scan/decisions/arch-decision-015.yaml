@@ -1,0 +1,28 @@
+schema_version: "1.0"
+artifact_type: "decision_record"
+skill_type: "architecture"
+artifact_id: "arch-decision-015"
+title: "開発 CI の検査と Docker イメージの公開条件をトリガー別に定義"
+status: "approved"
+generated_at: "2026-11-25T05:28:06"
+context: |
+  同じソースから作っても、Wolfi の更新によって master push 時とリリース時のイメージの中身は変わりうる。
+  Go の依存や同梱ツールにもコミット間に修正版が出る。Chrome for Testing は Trivy の検出対象外で、版の照合が必要になる。
+decision: |
+  既存の配布・CI ティアに、PR の Go 脆弱性検査と除外リスト検査、master のイメージの部品確認と Trivy 判定、
+  週次・手動の取り込み漏れ検知、およびタグリリース時のイメージ公開条件を記録する。
+  Docker イメージは両 arch のスモークテストと push 後のレイヤー照合に成功した digest を配布用タグに関連付ける。
+  Trivy の修正版基準は master と定期チェックで共有する。保守担当者は定期チェックの結果を受けて取り込みに対応する。
+  docs/AS-BUILT.md §10.2・§10.4 とワークフローの根拠に基づき、confidence high で自動採用した。
+consequences:
+  positive:
+    - "脆弱性の検知と Docker イメージ公開時の部品・レイヤー確認を、それぞれの実行条件から追跡できる。"
+    - "公開済み full の両 arch に同梱された Chrome の更新漏れを検知できる。"
+  negative:
+    - "定期チェックの検知後は、保守担当者による取り込みや、新しいイメージのリリースが必要になる。"
+    - "タグの付与は順次実行するため、途中の失敗によって runtime と full の公開版が一時的にずれる場合がある。"
+alternatives_considered:
+  - name: "リリースにすべての検査を集約"
+    reason_rejected: "Trivy と版の照合を定期チェックや master で実行する現行の責務と一致しない。"
+  - name: "品質ゲートを概略で記録"
+    reason_rejected: "Trivy の合否や公開用タグを付ける条件を設計から追えなくなる。"

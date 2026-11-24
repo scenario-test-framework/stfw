@@ -1,0 +1,58 @@
+version: "1.0"
+event_id: "20261125_052806_reflect_ci_vuln_scan"
+created_at: "2026-11-25T05:28:06"
+source: ".tmp/change-request-ci-vuln-scan.txt（根拠は docs/AS-BUILT.md §10.2・§10.4 と .github/workflows/・.github/scripts/）"
+system_name: "stfw"
+
+requirements:
+  - id: "REQ-011"
+    event_id: "20261125_052806_reflect_ci_vuln_scan"
+    created_at: "2026-11-25T05:28:06"
+    requirement: "開発者が、フレームワークの品質を GitHub Actions で継続的に検証し、Go と配布イメージの脆弱性対応の取り込み漏れや、イメージに必要な部品の欠落を検出できる"
+    reason: "bash 実装向けの検証基盤（shunit2 / serverspec / kcov / shellcheck / Travis CI）は Go 移行後の実装を検証できない。保守性を確保するには Go 対応のテスト・lint と、配布（goreleaser / ghcr.io）まで一貫した現行 CI/CD 基盤への刷新が必要なため。さらに、Go 本体・依存やイメージ部品の修正版の取り込み漏れを検知し、配布イメージに必要な部品を確認するため。"
+    priority: "should"
+    specifications:
+      - id: "SPEC-011-01"
+        specification: "フレームワーク自体の検証を Go の単体テスト + testscript 受け入れテスト + golangci-lint に変更する（shunit2 / serverspec / kcov / shellcheck / Travis CI は廃止）"
+        acceptance_criteria:
+          - "Given リポジトリのソースコード When go test と golangci-lint を実行する Then 単体テスト・testscript 受け入れテスト・lint が実行できる"
+          - "Given v1.0 のリポジトリ When 検証基盤を確認する Then shunit2 / serverspec / kcov / shellcheck / Travis CI の構成は存在しない"
+        affected_models:
+          - type: "external_system"
+            action: "add"
+            target: "開発 CI 基盤（GitHub Actions）"
+      - id: "SPEC-011-02"
+        specification: "GitHub Actions の PR では lint・Go のビルドとテスト・govulncheck・Trivy 除外リストの見本テストを行う。master への push では go vet・go test と GoReleaser の snapshot ビルドを行う。v* の Git タグで go test、GoReleaser によるバイナリ配布、ghcr.io へのイメージ配布を行う"
+        acceptance_criteria:
+          - "PR では golangci-lint v2、go build、go test を実行し、govulncheck で呼び出し経路のある依存・Go 本体の脆弱性を検出するとジョブが失敗する"
+          - "PR の scan-rules は実際の .trivyignore.yaml と、書式検査・パス照合の見本を検査する"
+          - "master への push では go vet と go test を実行し、GoReleaser の snapshot 成果物を artifact として保持する"
+          - "v* タグではバイナリのリリースジョブが go test を実行し、成功後に GoReleaser で配布する"
+          - "v* タグのイメージ配布では runtime と full を amd64・arm64 それぞれでスモークテストし、タグなしで push した各イメージのレイヤー（diff_id の並び）が検証済みのものと一致した後に配布用タグを付ける"
+        affected_models:
+          - type: "external_system"
+            action: "modify"
+            target: "開発 CI 基盤（GitHub Actions）"
+          - type: "external_system"
+            action: "modify"
+            target: "配布元（GitHub Releases / ghcr.io）"
+      - id: "SPEC-011-03"
+        specification: "master への push で runtime と full を amd64・arm64 でビルドし、ネットワークを切ったスモークテストで stfw・組込みプラグインに必要な部品を確認する。amd64 ジョブでは full の同梱ツールの解決も確認し、runtime と full を Trivy でスキャンする"
+        acceptance_criteria:
+          - "両 arch のスモークテストでは stfw や SSH 系コマンド、GNU 版の基本コマンドと TZ の反映を確認する。full では DB クライアント、MySQL の認証部品、日本語フォント、compare_files と compare_regex、同梱 Chrome による k6 ブラウザモードも確認する"
+          - "Trivy が検出した修正版のある OS・ライブラリの脆弱性は、深刻度を問わずスキャンを失敗させる。修正版のない指摘と、有効な除外に一致する指摘は合否の対象外とし、除外された指摘は結果に表示する"
+          - "対応版待ちの除外は .trivyignore.yaml に ID、対象を限定したパス、明日以降かつ UTC で今日から 60 日以内の期限、理由を記録する。形式違反や期限切れは検査を失敗させる"
+        affected_models:
+          - type: "external_system"
+            action: "modify"
+            target: "開発 CI 基盤（GitHub Actions）"
+      - id: "SPEC-011-04"
+        specification: "週 1 回と手動実行で、キャッシュなしで再ビルドした runtime と full のスモークテスト・Trivy スキャン、同梱ツールの既定版と Chrome の版の照合、govulncheck を行う"
+        acceptance_criteria:
+          - "毎週月曜 00:17 UTC と手動実行で、amd64 の再ビルドイメージに master と同じスモークテスト・Trivy 基準を適用する。どちらのイメージでも対応する指摘がなくなった除外は警告する"
+          - "k6・compare-files・logfilter の既定版を各ツールの最新リリースと照合する。Trivy の検出対象外の Chrome は、Dockerfile の版と公開済み :full の amd64・arm64 の版を Chrome for Testing の Stable と照合する。版の不一致はジョブを失敗させる"
+          - "検出された取り込み漏れには保守担当者が修正 PR または理由付きの除外 PR で対応する。Wolfi パッケージの修正版は再ビルドする次のリリースで取り込む。定期チェックの結果はリリースの実行条件に含めない"
+        affected_models:
+          - type: "external_system"
+            action: "modify"
+            target: "開発 CI 基盤（GitHub Actions）"
