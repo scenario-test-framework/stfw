@@ -1,0 +1,41 @@
+#!/bin/bash
+# 実行ホストの os_arch 版 compare_regex がキャッシュ済み、または版一致のイメージ同梱版
+# (stfw:full。compare と共有する compare-files/) があればインストール済みとみなす。欠けていれば
+# false を返し、stfw plugin install compareRegex で補修できるようにする (版の上書きはプロジェクト共通設定で行う)。
+os=""
+case "$(uname -s)" in
+  Linux) os=linux ;;
+  Darwin) os=darwin ;;
+  *) echo "compareRegex: unsupported OS: $(uname -s)"; exit 1 ;;
+esac
+arch=""
+case "$(uname -m)" in
+  x86_64 | amd64) arch=amd64 ;;
+  aarch64 | arm64) arch=arm64 ;;
+  *) echo "compareRegex: unsupported arch: $(uname -m)"; exit 1 ;;
+esac
+os_arch="${os}_${arch}"
+
+bin="${stfw_plugin_cache_dir}/compare-files/${os_arch}/compare_regex"
+# 永続キャッシュが無ければイメージ同梱版 (stfw:full) を使う。設定版と同梱版 (VERSION) が
+# 一致するときに限る (解決順は bin/run/execute と同じ)。
+bundled="${stfw_plugin_bundled_dir:-}/compare-files"
+version="${stfw_process_compareRegex_compare_files_version:-v2.2.4}"
+if [ ! -x "${bin}" ] && [ -n "${stfw_plugin_bundled_dir:-}" ] \
+  && [ "$(cat "${bundled}/VERSION" 2>/dev/null)" = "${version}" ]; then
+  bin="${bundled}/${os_arch}/compare_regex"
+fi
+if [ ! -x "${bin}" ]; then
+  # 同梱版はあるが版だけが食い違う場合は、原因と対処を stderr に出す
+  # (stdout は判定にしか使われず利用者に見えない)。
+  bundled_version="$(cat "${bundled}/VERSION" 2>/dev/null)"
+  if [ -n "${stfw_plugin_bundled_dir:-}" ] && [ -n "${bundled_version}" ] && [ "${bundled_version}" != "${version}" ]; then
+    echo "compareRegex: bundled compare-files is ${bundled_version} but compare_files_version is ${version}" \
+      "(set compare_files_version in config/plugins/process/compareRegex/config.yml and run \`stfw plugin install compareRegex\`)" >&2
+  fi
+  echo "compare_regex for ${os_arch} is not provisioned (run \`stfw plugin install compareRegex\`)."
+  exit 1
+fi
+
+echo "true"
+exit 0

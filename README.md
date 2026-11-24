@@ -219,6 +219,7 @@ from inventory groups and passwords from secrets; hard-coding them in configurat
 | Collect | `collectFile` / `collectLog` | collect evidence from remote hosts (with time filtering) |
 | Collect | `exportMysql` / `exportPostgres` / `exportRedis` | export a datastore to CSV |
 | Assert | `compare` | directory comparison of expected values vs. evidence (compare-files) |
+| Assert | `compareRegex` | comparison of files whose names change on every run (timestamps, sequence numbers), paired by regular expression (compare-files) |
 
 For a **runnable, close-to-real example** and an **end-to-end walkthrough** of how to assemble one:
 

@@ -1,0 +1,3 @@
+# 左ディレクトリ (期待値),右ディレクトリ (実績値),ファイル名正規表現
+# 日次残高レポートは名前に出力時刻 (14 桁) を含むため、正規表現で組み合わせる。
+expect/_45_collect_scripts/api,actual/_45_collect_scripts/api,balance_report_\d{14}\.json

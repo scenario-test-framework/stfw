@@ -16,6 +16,7 @@ index
 - [ドキュメント / spec（ラウンドトリップ）](#ドキュメント--specラウンドトリップ)
 - [ディレクトリ](#ディレクトリ)
 - [比較レイアウトの共通化](#比較レイアウトの共通化)
+- [名前が毎回変わるファイルの突合（compareRegex）](#名前が毎回変わるファイルの突合compareregex)
 - [設定の共通化（プロジェクト共通 config とプロセス差分）](#設定の共通化プロジェクト共通-config-とプロセス差分)
 
 ---
@@ -99,7 +100,9 @@ stfw の**組込みプラグインエコシステム**を実プロジェクト�
 | `_030_20240102` | `_10_arrange` | **updateBizdate**（カスタム） | Arrange | SUT の業務日付を 20240102 へ更新（残高は引き継ぐ） |
 | | `_30_act` | invokeRest | Act | 前日残高に対して取引（acc-001 -200 / acc-002 +100） |
 | | `_40_collect` | exportPostgres | Collect | 累積残高と取引履歴を収集 |
+| | `_45_collect` | scripts | Collect | 残高 API の応答を出力時刻入りの名前 `evidence/api/balance_report_{YYYYMMDDHHMMSS}.json` で収集 |
 | | `_50_assert` | compare | Assert | **繰越**した累積残高（1300 / 2400）と取引の業務日付（20240102）を突合 |
+| | `_55_assert` | **compareRegex** | Assert | 名前が毎回変わる残高レポートを、正規表現（`balance_report_\d{14}\.json`）で期待値と組み合わせて突合 |
 
 `_020` 以降は reset / seed を行いません。**前業務日の残高を引き継いだまま updateBizdate で
 業務日付だけを進める**ことで「業務日付をまたぐ」意味を示します。取引の業務日付は API の
@@ -303,7 +306,7 @@ examples/daily-balance/
     └── scenario/daily-balance/
         ├── _010_20240101/  # データ準備: clear→importMasterData→import (取引は流さない)
         ├── _020_20240101/  # Day1: updateBizdate→act→collect→assert
-        └── _030_20240102/  # Day2: updateBizdate→act→collect→assert (繰越)
+        └── _030_20240102/  # Day2: updateBizdate→act→collect→assert (繰越)。名前が毎回変わるレポートの compareRegex も
 ```
 
 接続情報は config に直書きせず、inventory（ホスト解決）と secret（パスワード）から解決します。
@@ -328,6 +331,29 @@ compare プラグインはこのディレクトリを `COMPAREFILES_CLASSPATH` �
 
 レイアウトの書き方は compare-files リポジトリの [比較レイアウトリファレンス](https://github.com/scenario-test-framework/compare-files/blob/master/docs/compare_layout.md) と [agent skills](https://github.com/scenario-test-framework/compare-files/tree/master/.claude/skills/compare-layout) を参照してください。
 
+## 名前が毎回変わるファイルの突合（compareRegex）
+
+`_030_20240102` の `_45_collect_scripts` は、残高 API の応答を「日次残高レポート」として
+**出力時刻入りの名前**（`evidence/api/balance_report_{YYYYMMDDHHMMSS}.json`）で保存します。
+実システムのバッチが日時入りのファイルを書き出す状況の代役です。
+
+名前が実行ごとに変わるため、`compare`（相対パスが同じファイルを組み合わせるディレクトリ比較）では
+突合できません。そこで **`_55_assert_compareRegex`** が、比較対象設定
+[`config/compare_target.csv`](stfw/scenario/daily-balance/_030_20240102/_55_assert_compareRegex/config/compare_target.csv)
+の正規表現で期待値と組み合わせます:
+
+```csv
+expect/_45_collect_scripts/api,actual/_45_collect_scripts/api,balance_report_\d{14}\.json
+```
+
+- 期待値 `expect/_45_collect_scripts/api/balance_report_20240102000000.json` は正規表現に一致する名前の 1 例
+- 比較方法がディレクトリ名（`_compare` / `_compareRegex`）で読めるよう、プロセスタイプを分けている
+- 収集プロセスも分けているので、`_50_assert_compare` の期待値には `_45_collect_scripts` を置かない
+  （置くと、名前の変わるファイルが「片側だけにあるファイル」として差分になる）
+
+わざと失敗させるなら、期待値の `1300` を別の値に書き換えて `./run.sh` を実行すると、
+`_55_assert_compareRegex` が差分を検出します（`result/CompareSummary.csv` に `NG`）。
+
 ## 設定の共通化（プロジェクト共通 config とプロセス差分）
 
 プラグインの設定は「プラグイン既定 → プロジェクト共通 `config/plugins/process/{type}/config.yml`
@@ -342,6 +368,7 @@ compare プラグインはこのディレクトリを `COMPAREFILES_CLASSPATH` �
 | `importMasterData` / `updateBizdate`（カスタム） | 接続系 | `tables` のみ / 差分なし |
 | `invokeRest` | `host_group: api` | 差分なし（スクリプトは既定の `script.js`） |
 | `compare` | `compare_files_version` | 差分なし |
+| `compareRegex` | なし（既定値のまま。比較レイアウトは compare の共通ディレクトリを共有） | 差分なし（組み合わせは `config/compare_target.csv`） |
 
 特に DB 接続系は、各シナリオのプロセス config に書くとユーザーを変えたときに全プロセスを
 直す必要があり、直し忘れやすくなります。そこで **接続系はプロジェクト共通の上書き設定に

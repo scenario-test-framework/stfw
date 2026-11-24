@@ -22,7 +22,7 @@ raw ベース URL: `https://raw.githubusercontent.com/scenario-test-framework/st
 | Arrange | `clearMysql` / `clearPostgres` / `clearRedis` / `importMysql` / `importPostgres` / `importRedis` / `scpPut` |
 | Act | `invokeRest` / `invokeWeb` / `sshExec` |
 | Collect | `collectLog` / `collectFile` / `exportMysql` / `exportPostgres` / `exportRedis` |
-| Assert | `compare` |
+| Assert | `compare` / `compareRegex` |
 | 汎用 | `scripts` |
 
 ## 実行可能サンプル (examples/daily-balance)

@@ -1,0 +1,24 @@
+#!/bin/bash
+# SUT の GET /accounts の応答を、出力時刻入りの名前で evidence/api/ へ保存する。
+# 実システムのバッチが「出力時刻入りのレポートファイル」を書き出す状況の代役。
+set -euo pipefail
+
+host="$(stfw inventory list api | head -1)"
+if [ -z "${host}" ]; then
+  echo "collect balance report: no host in inventory group api" >&2
+  exit 6
+fi
+
+out_dir="${stfw_process_dir}/evidence/api"
+mkdir -p "${out_dir}"
+# 前回のレポートを消してから書く。resume では前 run の evidence を引き継ぐため、残すと
+# 時刻入りのファイルが溜まり、compareRegex が名前順で最初に一致した古いレポートを比較してしまう。
+rm -f "${out_dir}"/balance_report_*.json
+out="${out_dir}/balance_report_$(date +%Y%m%d%H%M%S).json"
+if ! curl -fsS "http://${host}:8080/accounts" -o "${out}"; then
+  echo "collect balance report: GET http://${host}:8080/accounts failed" >&2
+  rm -f "${out}"
+  exit 6
+fi
+echo "collected: ${out}"
+exit 0

@@ -1,0 +1,850 @@
+# STEP: compareRegex プラグイン (比較対象設定 CSV の正規表現で expect と actual を対応付けて突合する。AS-BUILT §4.11.1)
+# curl(DL) はモックし、フェイク compare_regex で正規表現比較を再現する。
+# 収集系プロセスの代役として scripts プロセスが「名前に出力時刻を含む」evidence を生成する。
+# CSV の正規表現は ERE (フェイク) と Java 互換 (本物) で同じ意味になる書き方 ([0-9]{14}) にする。
+#
+# 検証内容:
+#   - install が compare-files のリリース物から compare_regex をキャッシュする
+#   - 名前の違うファイルを正規表現で対応付けて一致 → Success、差分 → exit 6
+#   - actual/ は compare と同じく evidence への file-level symlink で組み立てる
+#   - プロジェクト共通の比較ルールは compare のディレクトリを注入する (compareRegex 側は注入しない)
+#   - プロセスローカルの起動設定は -config で明示指定する
+#   - on_mismatch: warn は差分を Warn として続行、不正値は exit 6
+#   - CSV が無い / データ行が無い / 片側だけ一致 / compare_regex のエラー / evidence 不在は exit 6
+
+env PATH=${WORK}/fakebin:${PATH}
+chmod 755 fakebin/curl
+chmod 755 fakebin/fakecompareregex
+
+# compare-files リリース tarball のフィクスチャ (本物と同じく compare_files と compare_regex を含む)。
+# compare_files は起動されたら固有のメッセージで失敗させ、取り違えて配置したら分かるようにする
+mkdir cfsrc
+cp fakebin/fakecompareregex cfsrc/compare_regex
+cp fakebin/wrongbinary cfsrc/compare_files
+chmod 755 cfsrc/compare_regex
+chmod 755 cfsrc/compare_files
+exec tar czf cf.tar.gz -C cfsrc compare_files compare_regex
+env STFW_TEST_CF_TARBALL=${WORK}/cf.tar.gz
+
+# --- プロビジョニング: compare_regex が compareRegex のキャッシュへ置かれる ---
+exec stfw plugin install compareRegex
+exec find .stfw/cache/plugins/compareRegex/compare-files -type f
+stdout '/compare_regex$'
+! stdout '/compare_files$'
+
+# --- 一致: 出力時刻の違うファイル名を正規表現で対応付け、Success ---
+exec stfw run rx
+stdout 'run_id: _'
+latestrun . RUN
+# actual/ は evidence への file-level symlink
+exec readlink .stfw/runs/$RUN/workspace/rx/_10_99990101/_20_asrt_compareRegex/actual/_10_col_scripts/host1/out/report_20240101093015.csv
+stdout '_10_col_scripts/evidence/host1/out/report_20240101093015.csv'
+exec cat .stfw/runs/$RUN/workspace/rx/_10_99990101/_20_asrt_compareRegex/result/CompareSummary.csv
+stdout 'OK,expect/_10_col_scripts/host1/out/report_20240101000000.csv,actual/_10_col_scripts/host1/out/report_20240101093015.csv'
+stdout 'OK,expect/_10_col_scripts/host1/out/summary.csv,actual/_10_col_scripts/host1/out/summary.csv'
+# 比較対象設定はプロセスローカルの config/compare_target.csv を渡す
+exec cat .stfw/runs/$RUN/workspace/rx/_10_99990101/_20_asrt_compareRegex/result/target.txt
+stdout '^config/compare_target\.csv$'
+# 結果の出力先は -od でプロセスの result/ を指定する (起動設定の outputDir より優先させる)
+exec cat .stfw/runs/$RUN/workspace/rx/_10_99990101/_20_asrt_compareRegex/result/od.txt
+stdout '/workspace/rx/_10_99990101/_20_asrt_compareRegex/result$'
+# プロジェクト共通の比較ルールは compare のディレクトリを注入し、compareRegex 側は注入しない
+exec cat .stfw/runs/$RUN/workspace/rx/_10_99990101/_20_asrt_compareRegex/result/classpath.txt
+stdout 'config/plugins/process/compare$'
+! stdout 'plugins/process/compareRegex'
+# プロセスローカルの起動設定は -config で明示指定する
+exec cat .stfw/runs/$RUN/workspace/rx/_10_99990101/_20_asrt_compareRegex/result/configopt.txt
+stdout '^\./config/compare_files\.json$'
+# scenario/ 正本には書き込まれない
+! exists scenario/rx/_10_99990101/_20_asrt_compareRegex/actual
+! exists scenario/rx/_10_99990101/_20_asrt_compareRegex/result
+
+# --- 既存の COMPAREFILES_CLASSPATH がある: `:` 区切りで末尾に連結される ---
+env COMPAREFILES_CLASSPATH=/preset/dir
+exec stfw run rx
+latestrun . RUN
+exec cat .stfw/runs/$RUN/workspace/rx/_10_99990101/_20_asrt_compareRegex/result/classpath.txt
+stdout '^/preset/dir:.*config/plugins/process/compare$'
+env COMPAREFILES_CLASSPATH=
+
+# --- compare_regex 自体のエラー (exit 6) は差分とは別メッセージで exit 6 ---
+env STFW_TEST_CF_FAIL=1
+execcode 6 stfw run rx
+stderr 'compare-files failed'
+env STFW_TEST_CF_FAIL=0
+
+# --- 差分: 対応付けたファイルの中身が違う → exit 6 (on_mismatch 既定 error) ---
+execcode 6 stfw run rxng
+stderr 'mismatch detected'
+latestrun . RUN
+exec cat .stfw/runs/$RUN/workspace/rxng/_10_99990101/_20_asrt_compareRegex/result/CompareSummary.csv
+stdout 'NG,'
+# プロセスローカルの起動設定が無ければ -config を付けない
+exec cat .stfw/runs/$RUN/workspace/rxng/_10_99990101/_20_asrt_compareRegex/result/configopt.txt
+stdout '^\(none\)$'
+
+# --- 片側だけ一致: 実績値側に正規表現と一致するファイルが無い → LeftOnly で exit 6 ---
+execcode 6 stfw run rxlo
+stderr 'mismatch detected'
+latestrun . RUN
+exec cat .stfw/runs/$RUN/workspace/rxlo/_10_99990101/_20_asrt_compareRegex/result/CompareSummary.csv
+stdout 'LeftOnly,'
+
+# --- on_mismatch: warn は差分を Warn として記録し、後続を実行する (run は exit 3) ---
+execcode 3 stfw run rxwarn
+stderr 'mismatch detected'
+exists executed_after_compareRegex.txt
+
+# --- on_mismatch の不正値は fail-fast (exit 6) ---
+execcode 6 stfw run rxbad
+stderr 'invalid on_mismatch'
+
+# --- 比較対象設定 CSV が無い → exit 6。ワークスペースに残っていた古い比較結果
+#     (前段が書き込んで再現する。resume で前 run から引き継いだ場合と同じ状態) は今回の結果として残らない ---
+execcode 6 stfw run rxnocsv
+stderr 'compare target file not found'
+latestrun . RUN
+exists .stfw/runs/$RUN/workspace/rxnocsv/_10_99990101/stale_planted.txt
+! exists .stfw/runs/$RUN/workspace/rxnocsv/_10_99990101/_20_asrt_compareRegex/result/CompareSummary.csv
+! exists .stfw/runs/$RUN/workspace/rxnocsv/_10_99990101/_20_asrt_compareRegex/actual/stale.txt
+
+# --- CSV にデータ行が無い (CRLF の空行・コメント・クォートした "# のコメントだけ) → exit 6 (対象 0 件の素通りを防ぐ) ---
+execcode 6 stfw run rxemptycsv
+stderr 'no compare targets'
+
+# --- "" だけの行 (空セルを保存した CSV) はデータ行にならない → exit 6 ---
+execcode 6 stfw run rxquoted
+stderr 'no compare targets'
+
+# --- 右ディレクトリに expect/ を書いた (期待値どうしの比較になる) → exit 6 ---
+execcode 6 stfw run rxself
+stderr 'left must be under expect/\{process\}/ and right under actual/\{process\}/'
+
+# --- 片側のディレクトリが無い: 本物と同じく差分 (RightOnly) で exit 6 (on_mismatch 既定 error) ---
+execcode 6 stfw run rxnodir
+stderr 'mismatch detected'
+latestrun . RUN
+exec cat .stfw/runs/$RUN/workspace/rxnodir/_10_99990101/_20_asrt_compareRegex/result/CompareSummary.csv
+stdout 'RightOnly,'
+
+# --- 全セルをクォートした CSV (出力ツールの既定) も一致すれば Success ---
+exec stfw run rxquotedok
+latestrun . RUN
+exec cat .stfw/runs/$RUN/workspace/rxquotedok/_10_99990101/_20_asrt_compareRegex/result/CompareSummary.csv
+stdout 'OK,expect/_10_col_scripts/host1/out/report_20240101000000.csv,actual/_10_col_scripts/host1/out/report_20240101093015.csv'
+
+# --- クォート内の "" は " 1 文字 (その後のカンマで列が分かれない) → 3 列として読み、一致すれば Success ---
+exec stfw run rxescaped
+
+# --- CR 単独の行区切り (compare-files は CR でもレコードを分ける) → 比較の前に exit 6 ---
+execcode 6 stfw run rxbarecr
+stderr 'bare CR is not supported'
+
+# --- クォート内の改行 (コメントがデータ行を飲み込む書き方) → 比較の前に exit 6 ---
+execcode 6 stfw run rxmultiline
+stderr 'quoted values must not contain line breaks'
+
+# --- 収集系 process 名を省いた (expect / actual の直下を指す) → exit 6 ---
+execcode 6 stfw run rxnoproc
+stderr 'left must be under expect/\{process\}/ and right under actual/\{process\}/'
+
+# --- フィールド途中の " は文字、カンマ直後の " はクォート開始 (compare-files と同じ読み方)。
+#     コメント行の途中でクォートが開いたまま行末に達すると、後続のデータ行を飲み込むため比較の前に exit 6 ---
+execcode 6 stfw run rxcomment
+stderr 'quoted values must not contain line breaks'
+
+# --- カンマを含む正規表現をクォートしない (4 列になる) → exit 6 ---
+execcode 6 stfw run rxcommas
+stderr 'need 3 columns'
+
+# --- actual/{process} から .. で expect/ へ戻る指定 (期待値どうしの比較になる) → exit 6 ---
+execcode 6 stfw run rxdotdot
+stderr 'left must be under expect/\{process\}/ and right under actual/\{process\}/'
+
+# --- on_mismatch を明示的に空にした (未定義の変数の展開など) → 設定不正で exit 6 ---
+execcode 6 stfw run rxemptyopt
+stderr 'invalid on_mismatch'
+
+# --- compare_regex が比較せずに exit 0 で終わった (COMPAREFILES_OPT の -v など) → 成功として扱わず exit 6 ---
+env STFW_TEST_CF_NORESULT=1
+execcode 6 stfw run rx
+stderr 'produced no result'
+env STFW_TEST_CF_NORESULT=0
+
+# --- BOM 付き UTF-8 の CSV → exit 6 (1 行目が読めず比較が抜けるのを防ぐ) ---
+execcode 6 stfw run rxbom
+stderr 'must be UTF-8 without BOM'
+
+# --- expect が参照する収集 process の evidence が無い → exit 6 ---
+execcode 6 stfw run rxnoev
+stderr 'evidence not found'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+-- config/plugins/process/compare/compare_layout/shared.json --
+{
+  "layoutList": []
+}
+-- config/plugins/process/compareRegex/compare_layout/ignored.json --
+{
+  "layoutList": []
+}
+-- scenario/rx/metadata.yml --
+description:
+-- scenario/rx/_10_99990101/metadata.yml --
+description:
+-- scenario/rx/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/rx/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/rx/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1/out"
+printf 'hello\n' > "${stfw_process_dir}/evidence/host1/out/report_20240101093015.csv"
+printf 'total,1\n' > "${stfw_process_dir}/evidence/host1/out/summary.csv"
+exit 0
+-- scenario/rx/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rx/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex: {}
+-- scenario/rx/_10_99990101/_20_asrt_compareRegex/config/compare_files.json --
+{
+  "overwriteLayoutDir" : "",
+  "deleteWorkDir" : "true",
+  "sorted" : "false",
+  "csvHeaderRow" : 1,
+  "csvDataStartRow" : 2,
+  "codeValueForOnlyOneRecordType":"-",
+  "outputDir" : "result",
+  "outputCharset" : "utf8",
+  "compareResultFileName" : "CompareSummary.csv",
+  "compareDetailFilePrefix" : "CompareDetail_",
+  "writeDiffOnly" : "false",
+  "leftPrefix" : "期待値:",
+  "rightPrefix" : "実績値:",
+  "chunkSize" : 1000,
+  "ignoreFileRegexList" : ["^\\..*"],
+  "ignoreItemList" : []
+}
+-- scenario/rx/_10_99990101/_20_asrt_compareRegex/config/compare_target.csv --
+# 左ディレクトリ,右ディレクトリ,ファイル名正規表現
+expect/_10_col_scripts/host1/out,actual/_10_col_scripts/host1/out,report_[0-9]{14}\.csv
+
+expect/_10_col_scripts/host1/out,actual/_10_col_scripts/host1/out,summary\.csv
+-- scenario/rx/_10_99990101/_20_asrt_compareRegex/expect/_10_col_scripts/host1/out/report_20240101000000.csv --
+hello
+-- scenario/rx/_10_99990101/_20_asrt_compareRegex/expect/_10_col_scripts/host1/out/summary.csv --
+total,1
+-- scenario/rxng/metadata.yml --
+description:
+-- scenario/rxng/_10_99990101/metadata.yml --
+description:
+-- scenario/rxng/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/rxng/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/rxng/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1/out"
+printf 'hello\n' > "${stfw_process_dir}/evidence/host1/out/report_20240101093015.csv"
+exit 0
+-- scenario/rxng/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rxng/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex: {}
+-- scenario/rxng/_10_99990101/_20_asrt_compareRegex/config/compare_target.csv --
+expect/_10_col_scripts/host1/out,actual/_10_col_scripts/host1/out,report_[0-9]{14}\.csv
+-- scenario/rxng/_10_99990101/_20_asrt_compareRegex/expect/_10_col_scripts/host1/out/report_20240101000000.csv --
+DIFFERENT
+-- scenario/rxlo/metadata.yml --
+description:
+-- scenario/rxlo/_10_99990101/metadata.yml --
+description:
+-- scenario/rxlo/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/rxlo/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/rxlo/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+# 正規表現と一致しない名前で出力する (桁数が足りない)
+mkdir -p "${stfw_process_dir}/evidence/host1/out"
+printf 'hello\n' > "${stfw_process_dir}/evidence/host1/out/report_202401.csv"
+exit 0
+-- scenario/rxlo/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rxlo/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex: {}
+-- scenario/rxlo/_10_99990101/_20_asrt_compareRegex/config/compare_target.csv --
+expect/_10_col_scripts/host1/out,actual/_10_col_scripts/host1/out,report_[0-9]{14}\.csv
+-- scenario/rxlo/_10_99990101/_20_asrt_compareRegex/expect/_10_col_scripts/host1/out/report_20240101000000.csv --
+hello
+-- scenario/rxwarn/metadata.yml --
+description:
+-- scenario/rxwarn/_10_99990101/metadata.yml --
+description:
+-- scenario/rxwarn/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/rxwarn/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/rxwarn/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1/out"
+printf 'hello\n' > "${stfw_process_dir}/evidence/host1/out/report_20240101093015.csv"
+exit 0
+-- scenario/rxwarn/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rxwarn/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex:
+      on_mismatch: warn
+-- scenario/rxwarn/_10_99990101/_20_asrt_compareRegex/config/compare_target.csv --
+expect/_10_col_scripts/host1/out,actual/_10_col_scripts/host1/out,report_[0-9]{14}\.csv
+-- scenario/rxwarn/_10_99990101/_20_asrt_compareRegex/expect/_10_col_scripts/host1/out/report_20240101000000.csv --
+DIFFERENT
+-- scenario/rxwarn/_10_99990101/_30_post_scripts/metadata.yml --
+description:
+-- scenario/rxwarn/_10_99990101/_30_post_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/rxwarn/_10_99990101/_30_post_scripts/scripts/100_mark --
+#!/bin/bash
+touch "${STFW_PROJ_DIR}/executed_after_compareRegex.txt"
+exit 0
+-- scenario/rxbad/metadata.yml --
+description:
+-- scenario/rxbad/_10_99990101/metadata.yml --
+description:
+-- scenario/rxbad/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rxbad/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex:
+      on_mismatch: ignore
+-- scenario/rxbad/_10_99990101/_20_asrt_compareRegex/config/compare_target.csv --
+expect/_10_col_scripts/host1/out,actual/_10_col_scripts/host1/out,report_[0-9]{14}\.csv
+-- scenario/rxnocsv/metadata.yml --
+description:
+-- scenario/rxnocsv/_10_99990101/metadata.yml --
+description:
+-- scenario/rxnocsv/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/rxnocsv/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/rxnocsv/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1/out"
+printf 'hello\n' > "${stfw_process_dir}/evidence/host1/out/report_20240101093015.csv"
+# ワークスペースの compareRegex プロセスに古い比較結果を置く (掃除されることの確認用)
+cmp="${stfw_bizdate_dir}/_20_asrt_compareRegex"
+mkdir -p "${cmp}/result" "${cmp}/actual"
+printf 'Status,Left,Right\nSTALE,old,run\n' > "${cmp}/result/CompareSummary.csv"
+printf 'stale\n' > "${cmp}/actual/stale.txt"
+touch "${stfw_bizdate_dir}/stale_planted.txt"
+exit 0
+-- scenario/rxnocsv/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rxnocsv/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex: {}
+-- scenario/rxnocsv/_10_99990101/_20_asrt_compareRegex/expect/_10_col_scripts/host1/out/report_20240101000000.csv --
+hello
+-- scenario/rxemptycsv/metadata.yml --
+description:
+-- scenario/rxemptycsv/_10_99990101/metadata.yml --
+description:
+-- scenario/rxemptycsv/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/rxemptycsv/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/rxemptycsv/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1/out"
+printf 'hello\n' > "${stfw_process_dir}/evidence/host1/out/report_20240101093015.csv"
+# ワークスペースの compareRegex プロセスへ、CRLF の空行・コメント・クォートした "# のコメントだけの CSV を書く
+mkdir -p "${stfw_bizdate_dir}/_20_asrt_compareRegex/config"
+printf '# comment\r\n\r\n"#quoted",a,b\r\n' > "${stfw_bizdate_dir}/_20_asrt_compareRegex/config/compare_target.csv"
+exit 0
+-- scenario/rxemptycsv/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rxemptycsv/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex: {}
+-- scenario/rxemptycsv/_10_99990101/_20_asrt_compareRegex/expect/_10_col_scripts/host1/out/report_20240101000000.csv --
+hello
+-- scenario/rxbom/metadata.yml --
+description:
+-- scenario/rxbom/_10_99990101/metadata.yml --
+description:
+-- scenario/rxbom/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/rxbom/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/rxbom/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1/out"
+printf 'hello\n' > "${stfw_process_dir}/evidence/host1/out/report_20240101093015.csv"
+# ワークスペースの compareRegex プロセスへ BOM 付きの CSV を書く
+mkdir -p "${stfw_bizdate_dir}/_20_asrt_compareRegex/config"
+printf '\xef\xbb\xbfexpect/_10_col_scripts/host1/out,actual/_10_col_scripts/host1/out,report_[0-9]{14}\\.csv\n' > "${stfw_bizdate_dir}/_20_asrt_compareRegex/config/compare_target.csv"
+exit 0
+-- scenario/rxbom/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rxbom/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex: {}
+-- scenario/rxbom/_10_99990101/_20_asrt_compareRegex/expect/_10_col_scripts/host1/out/report_20240101000000.csv --
+hello
+-- scenario/rxquoted/metadata.yml --
+description:
+-- scenario/rxquoted/_10_99990101/metadata.yml --
+description:
+-- scenario/rxquoted/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/rxquoted/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/rxquoted/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1/out"
+printf 'hello\n' > "${stfw_process_dir}/evidence/host1/out/report_20240101093015.csv"
+exit 0
+-- scenario/rxquoted/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rxquoted/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex: {}
+-- scenario/rxquoted/_10_99990101/_20_asrt_compareRegex/config/compare_target.csv --
+""
+-- scenario/rxquoted/_10_99990101/_20_asrt_compareRegex/expect/_10_col_scripts/host1/out/report_20240101000000.csv --
+hello
+-- scenario/rxself/metadata.yml --
+description:
+-- scenario/rxself/_10_99990101/metadata.yml --
+description:
+-- scenario/rxself/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/rxself/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/rxself/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1/out"
+printf 'DIFFERENT\n' > "${stfw_process_dir}/evidence/host1/out/report_20240101093015.csv"
+exit 0
+-- scenario/rxself/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rxself/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex: {}
+-- scenario/rxself/_10_99990101/_20_asrt_compareRegex/config/compare_target.csv --
+expect/_10_col_scripts/host1/out,expect/_10_col_scripts/host1/out,report_[0-9]{14}\.csv
+-- scenario/rxself/_10_99990101/_20_asrt_compareRegex/expect/_10_col_scripts/host1/out/report_20240101000000.csv --
+hello
+-- scenario/rxnodir/metadata.yml --
+description:
+-- scenario/rxnodir/_10_99990101/metadata.yml --
+description:
+-- scenario/rxnodir/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/rxnodir/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/rxnodir/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+# 期待値側のディレクトリ (expect/.../host1/missing) は無く、右側には正規表現に一致しないファイルだけを置く
+mkdir -p "${stfw_process_dir}/evidence/host1/out"
+printf 'hello\n' > "${stfw_process_dir}/evidence/host1/out/other.csv"
+exit 0
+-- scenario/rxnodir/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rxnodir/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex: {}
+-- scenario/rxnodir/_10_99990101/_20_asrt_compareRegex/config/compare_target.csv --
+expect/_10_col_scripts/host1/missing,actual/_10_col_scripts/host1/out,report_[0-9]{14}\.csv
+-- scenario/rxnodir/_10_99990101/_20_asrt_compareRegex/expect/_10_col_scripts/host1/out/report_20240101000000.csv --
+hello
+-- scenario/rxquotedok/metadata.yml --
+description:
+-- scenario/rxquotedok/_10_99990101/metadata.yml --
+description:
+-- scenario/rxquotedok/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/rxquotedok/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/rxquotedok/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1/out"
+printf 'hello\n' > "${stfw_process_dir}/evidence/host1/out/report_20240101093015.csv"
+exit 0
+-- scenario/rxquotedok/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rxquotedok/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex: {}
+-- scenario/rxquotedok/_10_99990101/_20_asrt_compareRegex/config/compare_target.csv --
+"expect/_10_col_scripts/host1/out","actual/_10_col_scripts/host1/out","report_[0-9]{1,14}\.csv"
+-- scenario/rxquotedok/_10_99990101/_20_asrt_compareRegex/expect/_10_col_scripts/host1/out/report_20240101000000.csv --
+hello
+-- scenario/rxbarecr/metadata.yml --
+description:
+-- scenario/rxbarecr/_10_99990101/metadata.yml --
+description:
+-- scenario/rxbarecr/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/rxbarecr/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/rxbarecr/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1/out"
+printf 'hello\n' > "${stfw_process_dir}/evidence/host1/out/report_20240101093015.csv"
+# ワークスペースの compareRegex プロセスへ比較対象設定を書く (txtar に書けない制御文字を含むため)
+mkdir -p "${stfw_bizdate_dir}/_20_asrt_compareRegex/config"
+printf '# comment\rexpect/_10_col_scripts/host1/out,expect/_10_col_scripts/host1/out,report_[0-9]{14}\\.csv\n' > "${stfw_bizdate_dir}/_20_asrt_compareRegex/config/compare_target.csv"
+exit 0
+-- scenario/rxbarecr/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rxbarecr/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex: {}
+-- scenario/rxbarecr/_10_99990101/_20_asrt_compareRegex/expect/_10_col_scripts/host1/out/report_20240101000000.csv --
+hello
+-- scenario/rxmultiline/metadata.yml --
+description:
+-- scenario/rxmultiline/_10_99990101/metadata.yml --
+description:
+-- scenario/rxmultiline/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/rxmultiline/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/rxmultiline/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1/out"
+printf 'hello\n' > "${stfw_process_dir}/evidence/host1/out/report_20240101093015.csv"
+exit 0
+-- scenario/rxmultiline/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rxmultiline/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex: {}
+-- scenario/rxmultiline/_10_99990101/_20_asrt_compareRegex/config/compare_target.csv --
+"# note
+expect/_10_col_scripts/host1/out,actual/_10_col_scripts/host1/out,report_[0-9]{14}\.csv"
+-- scenario/rxmultiline/_10_99990101/_20_asrt_compareRegex/expect/_10_col_scripts/host1/out/report_20240101000000.csv --
+hello
+-- scenario/rxnoproc/metadata.yml --
+description:
+-- scenario/rxnoproc/_10_99990101/metadata.yml --
+description:
+-- scenario/rxnoproc/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/rxnoproc/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/rxnoproc/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1/out"
+printf 'hello\n' > "${stfw_process_dir}/evidence/host1/out/report_20240101093015.csv"
+exit 0
+-- scenario/rxnoproc/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rxnoproc/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex: {}
+-- scenario/rxnoproc/_10_99990101/_20_asrt_compareRegex/config/compare_target.csv --
+expect,actual/_10_col_scripts/host1/out,report_[0-9]{14}\.csv
+-- scenario/rxnoproc/_10_99990101/_20_asrt_compareRegex/expect/_10_col_scripts/host1/out/report_20240101000000.csv --
+hello
+-- scenario/rxcomment/metadata.yml --
+description:
+-- scenario/rxcomment/_10_99990101/metadata.yml --
+description:
+-- scenario/rxcomment/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/rxcomment/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/rxcomment/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1/out"
+printf 'DIFFERENT\n' > "${stfw_process_dir}/evidence/host1/out/report_20240101093015.csv"
+exit 0
+-- scenario/rxcomment/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rxcomment/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex: {}
+-- scenario/rxcomment/_10_99990101/_20_asrt_compareRegex/config/compare_target.csv --
+# note "a,"b
+expect/_10_col_scripts/host1/out,actual/_10_col_scripts/host1/out,report_[0-9]{14}\.csv
+-- scenario/rxcomment/_10_99990101/_20_asrt_compareRegex/expect/_10_col_scripts/host1/out/report_20240101000000.csv --
+hello
+-- scenario/rxcommas/metadata.yml --
+description:
+-- scenario/rxcommas/_10_99990101/metadata.yml --
+description:
+-- scenario/rxcommas/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/rxcommas/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/rxcommas/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1/out"
+printf 'hello\n' > "${stfw_process_dir}/evidence/host1/out/report_20240101093015.csv"
+exit 0
+-- scenario/rxcommas/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rxcommas/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex: {}
+-- scenario/rxcommas/_10_99990101/_20_asrt_compareRegex/config/compare_target.csv --
+"expect/_10_col_scripts/host1/out","actual/_10_col_scripts/host1/out",report_[0-9]{1,14}\.csv
+-- scenario/rxcommas/_10_99990101/_20_asrt_compareRegex/expect/_10_col_scripts/host1/out/report_20240101000000.csv --
+hello
+-- scenario/rxdotdot/metadata.yml --
+description:
+-- scenario/rxdotdot/_10_99990101/metadata.yml --
+description:
+-- scenario/rxdotdot/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/rxdotdot/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/rxdotdot/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1/out"
+printf 'DIFFERENT\n' > "${stfw_process_dir}/evidence/host1/out/report_20240101093015.csv"
+exit 0
+-- scenario/rxdotdot/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rxdotdot/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex: {}
+-- scenario/rxdotdot/_10_99990101/_20_asrt_compareRegex/config/compare_target.csv --
+expect/_10_col_scripts/host1/out,actual/_10_col_scripts/../../expect/_10_col_scripts/host1/out,report_[0-9]{14}\.csv
+-- scenario/rxdotdot/_10_99990101/_20_asrt_compareRegex/expect/_10_col_scripts/host1/out/report_20240101000000.csv --
+hello
+-- scenario/rxemptyopt/metadata.yml --
+description:
+-- scenario/rxemptyopt/_10_99990101/metadata.yml --
+description:
+-- scenario/rxemptyopt/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/rxemptyopt/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/rxemptyopt/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1/out"
+printf 'hello\n' > "${stfw_process_dir}/evidence/host1/out/report_20240101093015.csv"
+exit 0
+-- scenario/rxemptyopt/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rxemptyopt/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex:
+      on_mismatch: ""
+-- scenario/rxemptyopt/_10_99990101/_20_asrt_compareRegex/config/compare_target.csv --
+expect/_10_col_scripts/host1/out,actual/_10_col_scripts/host1/out,report_[0-9]{14}\.csv
+-- scenario/rxemptyopt/_10_99990101/_20_asrt_compareRegex/expect/_10_col_scripts/host1/out/report_20240101000000.csv --
+hello
+-- scenario/rxescaped/metadata.yml --
+description:
+-- scenario/rxescaped/_10_99990101/metadata.yml --
+description:
+-- scenario/rxescaped/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/rxescaped/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/rxescaped/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1/out"
+printf "hello\\n" > "${stfw_process_dir}/evidence/host1/out/report_20240101093015.csv"
+exit 0
+-- scenario/rxescaped/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rxescaped/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex: {}
+-- scenario/rxescaped/_10_99990101/_20_asrt_compareRegex/config/compare_target.csv --
+expect/_10_col_scripts/host1/out,actual/_10_col_scripts/host1/out,"(report_[0-9]{14}\.csv|x"",y)"
+-- scenario/rxescaped/_10_99990101/_20_asrt_compareRegex/expect/_10_col_scripts/host1/out/report_20240101000000.csv --
+hello
+-- scenario/rxnoev/metadata.yml --
+description:
+-- scenario/rxnoev/_10_99990101/metadata.yml --
+description:
+-- scenario/rxnoev/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rxnoev/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex: {}
+-- scenario/rxnoev/_10_99990101/_20_asrt_compareRegex/config/compare_target.csv --
+expect/_90_missing_scripts/host1/out,actual/_90_missing_scripts/host1/out,report_[0-9]{14}\.csv
+-- scenario/rxnoev/_10_99990101/_20_asrt_compareRegex/expect/_90_missing_scripts/host1/out/report_20240101000000.csv --
+hello
+-- fakebin/curl --
+#!/bin/bash
+# curl -fsSL <url> -o <out> をフィクスチャ tarball のコピーで再現
+out=""
+while [ $# -gt 0 ]; do
+  case "$1" in -o) out="$2"; shift 2;; *) shift;; esac
+done
+cp "${STFW_TEST_CF_TARBALL}" "${out}"
+exit 0
+-- fakebin/wrongbinary --
+#!/bin/bash
+# リリース物の compare_files の代役。compareRegex から起動されたら取り違えなので失敗する
+echo "wrong binary: compare_files was started" >&2
+exit 6
+-- fakebin/fakecompareregex --
+#!/bin/bash
+# fake compare_regex: 比較対象設定 CSV (左ディレクトリ,右ディレクトリ,ファイル名正規表現) の各行について、
+# 左右それぞれのディレクトリ直下で名前順に最初に一致したファイルを突合し CompareSummary.csv を出力する
+# (compare-files internal/bulk/regex.go と同じ判定)。0=全一致 / 3=差分 / 6=エラー。
+# 受け取った CSV パス・-od・-config・COMPAREFILES_CLASSPATH を result/ に記録する。-od は必須
+# (stfw は結果の出力先を必ず -od で渡す契約)。片側のディレクトリが無い行の扱いも本物と同じ
+# (compare-files internal/bulk/regex.go writeNgResult)。
+# 正規表現は ERE で評価する (本物は regexp2。テストの CSV は両方で同じ意味の書き方にする)。
+out=""
+cfgopt="(none)"
+args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -od | --outputDir) out="$2"; shift 2 ;;
+    -config | --configFile) cfgopt="$2"; shift 2 ;;
+    -*) shift ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+target="${args[0]:-}"
+if [ -z "${target}" ] || [ ! -f "${target}" ]; then
+  echo "fake compare_regex: need TARGET_FILE_PATH" >&2
+  exit 6
+fi
+if [ "${STFW_TEST_CF_FAIL:-0}" = "1" ]; then
+  echo "fake compare_regex: simulated error" >&2
+  exit 6
+fi
+if [ "${STFW_TEST_CF_NORESULT:-0}" = "1" ]; then
+  echo "compare-files 2.2.4"
+  exit 0
+fi
+if [ -z "${out}" ]; then
+  echo "fake compare_regex: -od is required" >&2
+  exit 6
+fi
+rm -rf "${out}"
+mkdir -p "${out}"
+printf '%s\n' "${target}" > "${out}/target.txt"
+printf '%s\n' "${out}" > "${out}/od.txt"
+printf '%s\n' "${cfgopt}" > "${out}/configopt.txt"
+printf '%s\n' "${COMPAREFILES_CLASSPATH:-(empty)}" > "${out}/classpath.txt"
+summary="${out}/CompareSummary.csv"
+echo "Status,Left,Right" > "${summary}"
+
+# first_match {dir} {regex}: dir 直下で名前順に最初に一致したファイルのパスを出す
+first_match() {
+  local name
+  while IFS= read -r name; do
+    if [[ "${name}" =~ ^($2)$ ]]; then
+      printf '%s\n' "$1/${name}"
+      return 0
+    fi
+  done < <(LC_ALL=C ls -1 "$1")
+  return 1
+}
+
+rc=0
+err=0
+while IFS= read -r line; do
+  line="${line%$'\r'}"
+  case "${line}" in '' | \#* | '"#'*) continue ;; esac
+  IFS=, read -r left right re <<< "${line}"
+  unq() { local v="$1"; [[ "${v}" == \"*\" ]] && v="${v:1:${#v}-2}"; printf '%s' "${v}"; }
+  left="$(unq "${left}")"; right="$(unq "${right}")"; re="$(unq "${re}")"
+  if [ -z "${re}" ]; then
+    echo "fake compare_regex: invalid line (need 3 columns): ${line}" >&2
+    exit 6
+  fi
+  lf=""; rf=""
+  [ -d "${left}" ] && lf="$(first_match "${left}" "${re}")"
+  [ -d "${right}" ] && rf="$(first_match "${right}" "${re}")"
+  if [ -n "${lf}" ] && [ -n "${rf}" ]; then
+    if diff -q "${lf}" "${rf}" > /dev/null 2>&1; then
+      echo "OK,${lf},${rf}" >> "${summary}"
+    else
+      echo "NG,${lf},${rf}" >> "${summary}"; rc=3
+    fi
+  elif [ -n "${lf}" ]; then
+    echo "LeftOnly,${lf},${right}/${re}" >> "${summary}"; rc=3
+  elif [ -n "${rf}" ]; then
+    echo "RightOnly,${left}/${re},${rf}" >> "${summary}"; rc=3
+  elif [ -d "${left}" ] && [ ! -d "${right}" ]; then
+    echo "LeftOnly,${left},[DirNotExist]${right}" >> "${summary}"; rc=3
+  elif [ ! -d "${left}" ] && [ -d "${right}" ]; then
+    echo "RightOnly,[DirNotExist]${left},${right}" >> "${summary}"; rc=3
+  else
+    echo "Error,${left}/${re},${right}/${re}" >> "${summary}"; err=1
+  fi
+done < "${target}"
+[ "${err}" -eq 1 ] && exit 6
+exit ${rc}

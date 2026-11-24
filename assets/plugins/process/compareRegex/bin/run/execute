@@ -1,0 +1,246 @@
+#!/bin/bash
+# compareRegex: 期待値 (expect/) と収集エビデンス (actual/) を、比較対象設定
+# config/compare_target.csv の正規表現で対応付けて compare-files の compare_regex で突合する (Assert)。
+# 名前に出力時刻や連番を含み、ディレクトリ比較 (compare) では組み合わせられないファイルに使う
+# (AS-BUILT §4.11.1)。
+#
+# ディレクトリ規約は compare と同じ (エビデンスディレクトリ規約・第3の互換境界):
+#   expect/  : git 管理。直下に「同一 bizdate 内の収集系 process ディレクトリ名」を置き、
+#              その配下は当該 process の evidence/ 配下と同型にする。
+#   actual/  : gitignore・自動生成。expect と同じ構造で、実体は各収集系 process の
+#              evidence/ 配下の各ファイルへの symlink。
+#   result/  : gitignore。compare-files の比較結果 (CompareSummary.csv 等) の出力先。
+#   config/compare_target.csv : git 管理・必須。compare-files の比較対象設定ファイルの書式
+#              (1 行 = 左ディレクトリ,右ディレクトリ,ファイル名正規表現。# 始まりはコメント)。
+#              左右はプロセスディレクトリからの相対パスで expect/… と actual/… を指す。
+#
+# 【actual を file-level symlink で組み立てる理由】compare と同じ。compare_regex はディレクトリ直下の
+#   エントリを列挙し、ファイル比較時の os.Open は symlink を辿るため比較は成立する。
+#
+# 終了コード: compare_regex は 0=一致 / 3=差分 (NG/LeftOnly/RightOnly) / 6=エラー を返す。
+#   差分 (exit 3) の扱いは on_mismatch 設定による選択制 (compare と同じ):
+#     error (既定) = exit 6 に変換してステップ失敗 (停止 + Blocked 伝播)
+#     warn         = exit 3 のまま返し、ランナーが Warn として記録して続行
+#   比較エラー (exit 6 等の非 0・非 3) は常に exit 6。
+#   比較レイアウト・起動設定のプロジェクト共通は compare と共有する
+#   ({proj}/config/plugins/process/compare/。COMPAREFILES_CLASSPATH で注入)。
+#
+# 制約: evidence 配下のファイル名に改行を含むケースは非対応 (find の行区切り前提)。
+set -uo pipefail
+
+os=""
+case "$(uname -s)" in
+  Linux) os=linux ;;
+  Darwin) os=darwin ;;
+  *) echo "compareRegex: unsupported OS: $(uname -s)" >&2; exit 6 ;;
+esac
+arch=""
+case "$(uname -m)" in
+  x86_64 | amd64) arch=amd64 ;;
+  aarch64 | arm64) arch=arm64 ;;
+  *) echo "compareRegex: unsupported arch: $(uname -m)" >&2; exit 6 ;;
+esac
+bin="${stfw_plugin_cache_dir}/compare-files/${os}_${arch}/compare_regex"
+# 永続キャッシュが無ければイメージ同梱版 (stfw:full) を使う。設定版と同梱版 (VERSION) が
+# 一致するときに限る (解決順は bin/install/is_installed と同じ)。
+bundled="${stfw_plugin_bundled_dir:-}/compare-files"
+if [ ! -x "${bin}" ] && [ -n "${stfw_plugin_bundled_dir:-}" ] \
+  && [ "$(cat "${bundled}/VERSION" 2>/dev/null)" = "${stfw_process_compareRegex_compare_files_version:-v2.2.4}" ]; then
+  bin="${bundled}/${os}_${arch}/compare_regex"
+fi
+if [ ! -x "${bin}" ]; then
+  echo "compareRegex: compare_regex not provisioned: ${bin} (run \`stfw plugin install compareRegex\`)" >&2
+  exit 6
+fi
+
+# 比較不一致の扱い (config キー stfw.process.compareRegex.on_mismatch)。
+# 比較実行前に検証し、設定不正は fail-fast する。
+# 未定義のときだけ既定の error にする。明示的な空 (未定義の変数の展開など) は設定不正として拒否する。
+on_mismatch="${stfw_process_compareRegex_on_mismatch-error}"
+case "${on_mismatch}" in
+  error | warn) ;;
+  *)
+    echo "compareRegex: invalid on_mismatch: ${on_mismatch} (must be error or warn)" >&2
+    exit 6
+    ;;
+esac
+
+expect_dir="${stfw_process_dir}/expect"
+actual_dir="${stfw_process_dir}/actual"
+result_dir="${stfw_process_dir}/result"
+# 比較対象設定。compare_regex にはプロセスディレクトリ (cwd) からの相対パスで渡す
+# (CSV 内の左右ディレクトリも cwd 相対で解決されるため、結果 CSV のパスが読みやすい)。
+target_file="config/compare_target.csv"
+
+# 比較の準備 (バイナリと on_mismatch の検証の後、以降のすべての検証より前) で actual/ と result/ を掃除する。
+# 以降のどの理由で失敗しても、前回 run (resume で引き継いだもの等) の古い比較結果が今回の結果として残らないようにする。
+if ! rm -rf "${actual_dir}" "${result_dir}" || ! mkdir -p "${actual_dir}"; then
+  # 消せないまま進むと、古い actual/ を今回の実測値として比較してしまう
+  echo "compareRegex: failed to clean actual/ and result/ in ${stfw_process_dir}" >&2
+  exit 6
+fi
+
+if [ ! -f "./${target_file}" ]; then
+  echo "compareRegex: compare target file not found: ${stfw_process_dir}/${target_file}" >&2
+  exit 6
+fi
+# BOM 付き UTF-8 は拒否する。compare-files は BOM を取り除かないため、1 行目の左ディレクトリが
+# 存在しない名前になり、比較が 1 件抜けたまま差分 (RightOnly) として扱われる。
+if [ "$(head -c 3 "./${target_file}" | od -An -tx1 | tr -d ' \n')" = "efbbbf" ]; then
+  echo "compareRegex: ${stfw_process_dir}/${target_file} must be UTF-8 without BOM" >&2
+  exit 6
+fi
+# CSV を検査する (awk でファイル全体を読む。途中で読み終えるパイプは SIGPIPE で失敗し得るため使わない)。
+# compare-files の CSV リーダー (internal/csvio/reader.go) と同じ規則で 1 行ずつフィールドに分ける:
+# " はフィールドの先頭でだけクォートを開き、クォート内の "" は " 1 文字、クォート内の " で閉じる。
+# リーダーはクォート内の改行を値に含めるため、行末でクォートが閉じていない書き方 (= 1 行 = 1 レコードに
+# ならない書き方) と、行の途中の CR (リーダーは CR 単独もレコードの終わりとする) は比較の前に拒否する。
+# この範囲では、次の判定は compare-files の読み方と一致する。
+#   - 読み飛ばす行は compare-files と同じ: 空のフィールド 1 つだけの行 (空行・"" だけの行) と、
+#     先頭のフィールドが # で始まる行
+#   - データ行は 3 列 (compare-files も 3 列以外をエラーにする。正規表現にカンマを含めるときはクォートする)
+#   - 左は expect/{収集系 process 名}/… 、右は actual/{収集系 process 名}/… を指し、. と .. の要素を含まないこと
+#     (右にも expect/ を書くと期待値どうしを比べて合格し、process 名を省くと意図した期待値を読まないため)
+#   - データ行が 1 行も無ければエラー (compare_regex は対象 0 件を「一致」として exit 0 を返すため)
+if ! check_msg="$(awk '
+  # parse は $0 を compare-files と同じ規則でフィールド配列 f に分け、フィールド数を返す。
+  # 行末でクォートが閉じていなければ -1 を返す。
+  function parse(line,   n, i, c, inq, start, len) {
+    n = 1; f[1] = ""; inq = 0; start = 1; len = length(line)
+    for (i = 1; i <= len; i++) {
+      c = substr(line, i, 1)
+      if (inq) {
+        if (c == "\"") {
+          if (substr(line, i + 1, 1) == "\"") { f[n] = f[n] "\""; i++ } else { inq = 0 }
+        } else { f[n] = f[n] c }
+      } else if (c == "\"" && start) { inq = 1; start = 0
+      } else if (c == ",") { n++; f[n] = ""; start = 1
+      } else { f[n] = f[n] c; start = 0 }
+    }
+    return inq ? -1 : n
+  }
+  function under(p, root,   n, seg, i) {
+    if (p ~ /"/) return 0
+    n = split(p, seg, "/")
+    if (seg[1] != root || n < 2) return 0
+    for (i = 2; i <= n; i++) {
+      if (seg[i] == "." || seg[i] == "..") return 0
+      if (i == 2 && seg[i] == "") return 0
+    }
+    return 1
+  }
+  function fail(msg) { printf "line %d: %s\n", NR, msg; err = 1; exit }
+  {
+    sub(/\r$/, "")
+    if ($0 ~ /\r/) fail("bare CR is not supported (use LF or CRLF line endings)")
+    nf = parse($0)
+    if (nf < 0) fail("quoted values must not contain line breaks")
+    if ((nf == 1 && f[1] == "") || substr(f[1], 1, 1) == "#") next
+    if (nf != 3) fail("need 3 columns: left dir, right dir, file name regex (quote the regex if it contains commas)")
+    if (!under(f[1], "expect") || !under(f[2], "actual"))
+      fail("left must be under expect/{process}/ and right under actual/{process}/ (got: " $0 ")")
+    n++
+  }
+  END {
+    if (err) exit 1
+    if (n == 0) { print "no compare targets"; exit 1 }
+  }' "./${target_file}")"; then
+  echo "compareRegex: ${stfw_process_dir}/${target_file}: ${check_msg:-failed to read}" >&2
+  exit 6
+fi
+
+if [ ! -d "${expect_dir}" ]; then
+  echo "compareRegex: expect directory not found: ${expect_dir}" >&2
+  exit 6
+fi
+
+# expect 直下のエントリ (収集系 process ディレクトリ名) を列挙。1 件も無ければエラー。
+shopt -s nullglob
+entries=("${expect_dir}"/*/)
+shopt -u nullglob
+if [ "${#entries[@]}" -eq 0 ]; then
+  echo "compareRegex: expect has no process directories: ${expect_dir}" >&2
+  exit 6
+fi
+
+for entry in "${entries[@]}"; do
+  name="$(basename "${entry}")"
+  src="${stfw_bizdate_dir}/${name}/evidence"
+  if [ ! -d "${src}" ]; then
+    echo "compareRegex: evidence not found for expect entry '${name}': ${src}" >&2
+    exit 6
+  fi
+  # actual/{name} は evidence が空でも作る (actual は expect と同じ構造を再現する)。
+  if ! mkdir -p "${actual_dir}/${name}"; then
+    echo "compareRegex: failed to create ${actual_dir}/${name}" >&2
+    exit 6
+  fi
+
+  # evidence 配下の全ファイルを列挙する。process substitution だと find の失敗
+  # (読取不能ディレクトリ等) を取りこぼすため、コマンド置換で終了コードを確認する。
+  if ! filelist="$(cd "${src}" && find . -type f)"; then
+    echo "compareRegex: failed to enumerate evidence: ${src}" >&2
+    exit 6
+  fi
+  # evidence 配下の各ファイルを、actual/{name}/ に同じ相対パスで symlink する
+  # (find 出力が空なら here-string は空行 1 つになるので skip する)。
+  while IFS= read -r rel; do
+    [ -z "${rel}" ] && continue
+    rel="${rel#./}"
+    dst="${actual_dir}/${name}/${rel}"
+    if ! mkdir -p "$(dirname "${dst}")" || ! ln -s "${src}/${rel}" "${dst}"; then
+      echo "compareRegex: failed to link evidence file: ${src}/${rel}" >&2
+      exit 6
+    fi
+  done <<< "${filelist}"
+done
+
+# プロジェクト共通の比較ルール ({proj}/config/plugins/process/compare/) を
+# COMPAREFILES_CLASSPATH で注入する。compare と共有し、compareRegex の共通ディレクトリは注入しない
+# (そこは stfw の config.yml 上書き専用)。レイアウトは後勝ちマージのため、プロセスローカルの
+# config/compare_layout/ が同一 fileRegexPattern を定義すればそちらが勝つ。
+shared_dir="${STFW_PROJ_DIR_CONFIG:-}/plugins/process/compare"
+if [ -n "${STFW_PROJ_DIR_CONFIG:-}" ] && [ -d "${shared_dir}" ]; then
+  export COMPAREFILES_CLASSPATH="${COMPAREFILES_CLASSPATH:+${COMPAREFILES_CLASSPATH}:}${shared_dir}"
+fi
+
+# 起動設定はプロセスローカルを最優先にする (compare と同じ。compare-files の既定解決は前勝ちのため、
+# 明示指定しないと共通側の起動設定が勝ってしまう)。探索順は compare-files の既定と同じ json → yaml → yml。
+config_file=""
+for cfg in compare_files.json compare_files.yaml compare_files.yml; do
+  if [ -f "./config/${cfg}" ]; then
+    config_file="./config/${cfg}"
+    break
+  fi
+done
+
+# 比較実行。cwd はプロセスディレクトリ (実行契約)。CSV の左=期待値 expect / 右=実績値 actual。
+if [ -n "${config_file}" ]; then
+  "${bin}" -config "${config_file}" -od "${result_dir}" "${target_file}"
+else
+  "${bin}" -od "${result_dir}" "${target_file}"
+fi
+cf_rc=$?
+
+# 一致 (0) や差分 (3) でも、今回の比較結果が result/ に無ければ比較は行われていない
+# (例: 環境変数 COMPAREFILES_OPT の -v / -h で版表示だけして終わった)。成功として扱わない。
+if [ "${cf_rc}" -eq 0 ] || [ "${cf_rc}" -eq 3 ]; then
+  if [ -z "$(ls -A "${result_dir}" 2>/dev/null)" ]; then
+    echo "compareRegex: compare-files produced no result in ${result_dir} (check COMPAREFILES_OPT)" >&2
+    exit 6
+  fi
+fi
+
+if [ "${cf_rc}" -eq 0 ]; then
+  exit 0
+fi
+if [ "${cf_rc}" -eq 3 ]; then
+  echo "compareRegex: mismatch detected (差分あり)。詳細は ${result_dir}/ を参照" >&2
+  if [ "${on_mismatch}" = "warn" ]; then
+    # 差分を Warn として記録して続行させる (exit 3 のまま返す)
+    exit 3
+  fi
+else
+  echo "compareRegex: compare-files failed (exit ${cf_rc})。詳細は ${result_dir}/ を参照" >&2
+fi
+exit 6

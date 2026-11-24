@@ -1,0 +1,8 @@
+# Collect: SUT の残高 API の応答を「日次残高レポート」として収集する (汎用の scripts)。
+# 出力: evidence/api/balance_report_{出力時刻 YYYYMMDDHHMMSS}.json。
+# 出力時刻入りの名前は実行ごとに変わるため、compare (ディレクトリ比較) ではなく
+# _55_assert_compareRegex (正規表現で組み合わせを決める比較) で突合する。
+# 接続先は inventory グループ api から解決する (ホストを直書きしない)。
+stfw:
+  process:
+    scripts: {}
