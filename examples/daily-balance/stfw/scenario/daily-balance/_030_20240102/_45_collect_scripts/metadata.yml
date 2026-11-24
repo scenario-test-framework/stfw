@@ -1,0 +1,4 @@
+description: |
+  残高 API の応答を出力時刻入りの名前 (evidence/api/balance_report_{YYYYMMDDHHMMSS}.json) で収集する。
+
+requirement_specifications:

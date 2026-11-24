@@ -56,7 +56,7 @@ jobs:
         run: |
           mkdir -p "${RUNNER_TEMP}/proj" && chmod 777 "${RUNNER_TEMP}/proj"
           docker run --rm --network none -v "${RUNNER_TEMP}/proj:/work" stfw:full-ci init
-          for t in compare invokeRest invokeWeb collectLog; do
+          for t in compare compareRegex invokeRest invokeWeb collectLog; do
             rc=0
             docker run --rm --network none -v "${RUNNER_TEMP}/proj:/work" stfw:full-ci plugin install "${t}" || rc=$?
             if [ "${rc}" -ne 3 ]; then

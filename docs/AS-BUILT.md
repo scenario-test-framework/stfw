@@ -335,9 +335,10 @@ teardown フックのみに追加注入される変数:
 | exportMysql / exportPostgres | `evidence/{database}/{table}.csv` | gitignore |
 | exportRedis | `evidence/{host}/{keyパターン名}.csv` | gitignore |
 | invokeWeb / invokeRest | `evidence/summary.json`（k6 end-of-test サマリ）+ `evidence/report.html`（k6 web dashboard の HTML レポート） | gitignore |
-| compare 期待値 | `{process}/expect/{収集系 process 名}/…`（evidence 配下と同型） | **git 管理** |
-| compare 実測値 | `{process}/actual/…`（収集系 process の evidence 配下の各ファイルへの file-level symlink） | gitignore |
-| compare 結果 | `{process}/result/` | gitignore |
+| compare / compareRegex 期待値 | `{process}/expect/{収集系 process 名}/…`（evidence 配下と同型） | **git 管理** |
+| compare / compareRegex 実測値 | `{process}/actual/…`（収集系 process の evidence 配下の各ファイルへの file-level symlink） | gitignore |
+| compare / compareRegex 結果 | `{process}/result/` | gitignore |
+| compareRegex 比較対象設定 | `{process}/config/compare_target.csv`（§4.11.1） | **git 管理** |
 | scpPut 配置元 | `{process}/target/{group}/…`（リモートへ配置するローカルツリー） | **git 管理** |
 | sshExec / scpPut | エビデンス出力なし（sshExec の実行スクリプトは `{process}/scripts/` に git 管理で置く） | — |
 
@@ -345,7 +346,7 @@ teardown フックのみに追加注入される変数:
 
 表中の `{process}` は **run ワークスペース内のプロセスディレクトリ**（`.stfw/runs/{run_id}/workspace/{scenario_name}/{bizdate_dir}/{process_dir}`）を指す（§5.7）。実行出力（`evidence/` / `actual/` / `result/`）は run ワークスペースにのみ生成され、`scenario/` 配下の正本には書き込まれない。この 3 つはプロセスディレクトリ直下の予約出力ディレクトリ名であり、ワークスペース複製時にも正本側のプロセスディレクトリ直下の同名ディレクトリ（旧バージョンの実行残骸）はコピーしない（§5.7）。テンプレートの `.gitignore` 除外は旧バージョンで生成された残骸の誤コミット防止のため維持する。
 
-> 実装状況: 本節はプラグイン契約の**基盤**（P1）を記述する。収集系プラグイン本体（collectFile / collectLog）は §4.8（P2）、RDBMS 系（export / import / clear × MySQL / PostgreSQL）と secret 値の Masker 登録経路は §4.9（P3）、KVS 系（Redis）は §4.10（P4）、compare（Assert）は §4.11（P5）、invoke（Act: invokeWeb / invokeRest）は §4.12（P6）、リモートアクセス系（sshExec / scpPut。GitHub issue #3）は §4.13（P7）で実装済み。全組込みプラグインが実装完了。
+> 実装状況: 本節はプラグイン契約の**基盤**（P1）を記述する。収集系プラグイン本体（collectFile / collectLog）は §4.8（P2）、RDBMS 系（export / import / clear × MySQL / PostgreSQL）と secret 値の Masker 登録経路は §4.9（P3）、KVS 系（Redis）は §4.10（P4）、compare（Assert）は §4.11（P5。正規表現比較の compareRegex は §4.11.1）、invoke（Act: invokeWeb / invokeRest）は §4.12（P6）、リモートアクセス系（sshExec / scpPut。GitHub issue #3）は §4.13（P7）で実装済み。全組込みプラグインが実装完了。
 
 > 根拠: `internal/usecase/runscenario/{runscenario,process,env}.go`, `internal/gateway/{scriptexec,lookpath}.go`, `internal/repository/{hooks,plugin,pluginmeta,evidence,config}.go`, `internal/domain/evidence/evidence.go`, `assets/plugins/process/scripts/`（同梱 scripts プラグイン）, `assets/template/.gitignore`, `test/acceptance/testdata/script/{run_実行する場合_公開envが契約どおりであること,run_全ステップ成功の場合_Successになること,run_途中でexit6になる場合_後続がBlockedになること,run_途中でexit3になる場合_Warnで続行すること,run_Warn後にexit6になる場合_Errorが優先されること,run_dryrunの場合_executeとpostexecuteをスキップすること,run_scripts以外の独自プラグインの場合_exec契約どおり実行すること,plugin_契約を検証する場合_requires不足と接続情報直書きを検出すること}.txtar`
 
@@ -383,7 +384,7 @@ inventory は後方互換で**文字列ホスト**と**構造化エントリ（`
 - `stfw init` は展開後に解決可能な全プラグインの `bin/install/install` を自動実行する（`--skip-plugin-init` で抑止）。個々の失敗は warn 継続で、`stfw plugin install {type}` により個別再実行できる。
 - provisioning 資産は**永続キャッシュ** `stfw_plugin_cache_dir`（`.stfw/cache/plugins/{type}/`）に置く。同梱プラグインの展開先（run 時は `.stfw/runs/{run_id}/plugins/`、install 時は `.stfw/plugins/`。§5.7）はプロセス実行のたびにワイプされるため、ダウンロードしたバイナリはキャッシュ側に保持する。
 - `install` / `is_installed` にはプラグイン設定（config.yml + プロジェクト上書き。プロセス非依存の `PluginConfigEnv`）も公開され、`logfilter_version` / `logfilter_arches` 等を参照できる。
-- **イメージ同梱版へのフォールバック**: 外部ツールを DL する組込みプラグイン（collectLog = logfilter / compare = compare-files / invokeRest・invokeWeb = k6）は、環境変数 `stfw_plugin_bundled_dir`（stfw は注入しない。stfw:full イメージが ENV で `/opt/stfw/bundled` を設定。§10.2）が指す同梱ディレクトリ `{stfw_plugin_bundled_dir}/{tool}/{os_arch}/{bin}` を参照できる。
+- **イメージ同梱版へのフォールバック**: 外部ツールを DL する組込みプラグイン（collectLog = logfilter / compare・compareRegex = compare-files / invokeRest・invokeWeb = k6）は、環境変数 `stfw_plugin_bundled_dir`（stfw は注入しない。stfw:full イメージが ENV で `/opt/stfw/bundled` を設定。§10.2）が指す同梱ディレクトリ `{stfw_plugin_bundled_dir}/{tool}/{os_arch}/{bin}` を参照できる。
   - 解決順は **永続キャッシュ → 同梱版 → 未プロビジョニング**（キャッシュがあれば同梱より優先。既存の「初回 install 優先」を維持）。`is_installed` と `bin/run/execute` は同じ解決順を持つ。
   - 同梱版は `{stfw_plugin_bundled_dir}/{tool}/VERSION` が**設定版**（`logfilter_version` / `compare_files_version` / `k6_version`）と一致するときだけ使う。プロジェクト共通設定（`config/plugins/process/{type}/config.yml`）で同梱版と**異なる**版を指定した場合は同梱を使わず、従来どおり install（DL）を要求する（同梱版と同じ版の指定なら同梱を使う。判定は値の一致）。
   - **版の上書き単位はプロジェクト共通設定**。install / `is_installed`（provisioning 時）はプロセス非依存の `PluginConfigEnv` を見るため、プロセスローカル `config/config.yml` だけで版を変えても provisioning には反映されない（install は既定版で「インストール済み」exit 3 のまま）。stfw:full でキャッシュが無い場合、run 時の `is_installed` は版不一致で false（exit 6）となるため、版不一致時は `is_installed` が原因と対処（`bundled {tool} is {同梱版} but {key} is {設定版} (set {key} in config/plugins/process/{type}/config.yml and run ...)`）を **stderr** に出す（stdout は判定専用で利用者に見えない）。
@@ -518,6 +519,53 @@ Assert フェーズの組込みプラグイン。期待値（`expect/`）と収�
 - **既知の制約**: evidence 配下のファイル名に改行を含むケースは非対応（`find` の行区切り前提）。
 
 > 根拠: `assets/plugins/process/compare/`, `test/acceptance/testdata/script/{compare_expectとactualを突合する場合_合否を判定すること,compare_同梱バイナリがある場合_installなしで実行できること,compare_プロジェクト共通レイアウトがある場合_探索パスへ注入されること,compare_onmismatchがwarnの場合_差分をWarnとして続行すること}.txtar`, compare-files `internal/cli/runner.go`（`configSearchDirs`/`LoadLayoutManager`）・`internal/bulk/dir.go`（`relPathList`/`Counts.ProcessStatus`）・`internal/status/status.go`（`ExitCode`）
+
+#### 4.11.1 組込み compareRegex プラグイン（Assert・正規表現で比較対象を決める）
+
+compare の**ディレクトリ比較**は expect と actual の「相対パスの完全一致」でファイルを組み合わせるため、実行ごとに名前が変わるファイル（出力時刻・連番入りのファイル名）を比較できない。compareRegex は compare-files の**正規表現比較**（同じリリース物に含まれる `compare_regex`）で、**比較対象の組み合わせを正規表現で指定**する。比較方法をプロセスタイプ名で明示するため、compare の設定で動作を切り替えるのではなく別のプロセスタイプとする（シナリオのディレクトリ名 `_{seq}_{group}_compareRegex` だけで比較方法が読める）。
+
+**プロビジョニング（`assets/plugins/process/compareRegex`）**
+
+- compare と同じリリース資産 `compare-files_{version無しv}_{os}_{arch}.tar.gz` を取得し、`compare_regex` を永続キャッシュ `${stfw_plugin_cache_dir}/compare-files/{os_arch}/compare_regex` に配置する（同じディレクトリの一時名へコピーして実行権限を付けてから最終名へ移す。容量不足などで途中で失敗しても、壊れたバイナリが最終名に残って「インストール済み」と判定されないようにする）（`stfw_plugin_cache_dir` はプラグイン種別ごと = `.stfw/cache/plugins/compareRegex/`）。既定バージョン `v2.2.4`、ダウンロード元は `stfw_compare_files_download_base` で差し替え可能、「初回 install 優先」、`compare_files_version` 変更時はキャッシュの `compare-files/` を削除して再 install、はいずれも compare と同じ。
+- キャッシュが無い場合は、版一致のイメージ同梱版 `${stfw_plugin_bundled_dir}/compare-files/{os_arch}/compare_regex` を使う（stfw:full は compare と同じ `compare-files/` へ `compare_files` と `compare_regex` を同梱し、`VERSION` を共有する。§4.8・§10.2）。
+- compare と compareRegex は同梱版を共有するため、両者の既定 `compare_files_version` が食い違うとイメージのビルドを失敗させる（invokeRest / invokeWeb の k6 と同じ）。
+
+**ディレクトリ規約（エビデンスディレクトリ規約 §4.7。compare と同じ）**
+
+| パス | 内容 | git |
+|---|---|---|
+| `expect/` | compare と同じ（直下に同一 bizdate 内の収集系 process ディレクトリ名、その配下は evidence と同型） | **git 管理** |
+| `actual/` | compare と同じ（evidence 配下の各ファイルへの file-level symlink） | gitignore（自動生成） |
+| `result/` | compare-files の比較結果（`CompareSummary.csv` 等） | gitignore |
+| `config/compare_target.csv` | **比較対象設定（必須）**。compare-files の比較対象設定ファイルの書式そのまま（CSV・UTF-8・`#` 始まりはコメント・1 行 = `左ディレクトリ,右ディレクトリ,ファイル名正規表現`） | **git 管理** |
+
+- 左右のディレクトリは作業ディレクトリ（= プロセスディレクトリ）からの相対パスで、`expect/{収集系 process 名}/…` と `actual/{収集系 process 名}/…` を指す。
+- compare-files の仕様により、探索は**指定ディレクトリの直下のみ**（再帰しない）、ファイル名順で**最初に一致した 1 件**を比較する（ディレクトリのエントリも名前で一致の対象になる）。正規表現は compare-files の正規表現エンジン（dlclark/regexp2）で評価し、`\d` や先読みを使える。
+- 1 行の判定（compare-files `writeNgResult`）: 左右とも一致すれば内容を比較（OK / NG）。左右のディレクトリが両方あって片側だけ一致すれば LeftOnly / RightOnly（差分）、どちらにも一致しなければ比較エラー。**片側のディレクトリが無い**場合は、もう一方に一致ファイルがあるかに関係なく LeftOnly / RightOnly（差分）、両方無ければ比較エラー。`actual/` は evidence のファイルだけを再現するため、evidence 側で空のディレクトリは `actual/` に現れず「右ディレクトリが無い」= 差分になる。
+- resume（§5.8）は前 run の evidence を引き継ぐ。時刻入りのファイルを出す収集ステップが前回のファイルを消さないと、ファイルが溜まって名前順で最初の（古い）ファイルが比較される。**収集ステップは自分が出す時刻入りファイルを入れ替える**（daily-balance の `_45_collect_scripts` が実例）。
+- **CSV に書かなかったファイルは比較しない**（ディレクトリ比較の「片側だけにあるファイル = 差分」は働かない）。
+
+**処理**（`bin/run/execute`、作業ディレクトリ = プロセスディレクトリ）
+
+1. `compare_regex` を解決する（キャッシュ → 版一致の同梱版。無ければ exit 6）。`on_mismatch` を検証する（`error` / `warn` 以外は exit 6。未定義のときだけ既定の `error` にし、明示的な空文字は exit 6）。
+2. `actual/` と `result/` を削除して作り直す（以降のどの失敗でも古い比較結果を残さない）。削除・作成に失敗したら exit 6（古い `actual/` を今回の実測値として比べないため）。
+3. `config/compare_target.csv` が無ければ exit 6。**BOM 付き UTF-8 は exit 6**（compare-files は BOM を取り除かず、1 行目の左ディレクトリが存在しない名前になって比較が 1 件抜けたまま差分扱いになるため）。**データ行が 1 行も無ければ exit 6**（compare-files は対象 0 件を一致として exit 0 を返すため、検証の素通りを防ぐ）。**CSV は「1 行 = 1 レコード」になる書き方だけを受け付け**、外れるものは比較の前に exit 6 にする。各行は compare-files の CSV リーダー（`internal/csvio/reader.go`）と同じ規則でフィールドに分ける: `"` は**フィールドの先頭でだけ**クォートを開き、クォート内の `""` は `"` 1 文字、クォート内の `"` で閉じる（フィールド途中の `"` はただの文字）。リーダーはクォート内の改行を値に含め、CR 単独もレコードの終わりとするため、**行末でクォートが閉じていない行**（コメント行でも後続のデータ行を飲み込む）と**行の途中の CR** は拒否する。行の終わりは LF か CRLF。読み飛ばす行は compare-files と同じく、空のフィールド 1 つだけの行（空行・`""` だけの行）と、先頭のフィールドが `#` で始まる行。**データ行は 3 列**（compare-files も 3 列以外をエラーにする。正規表現にカンマを含めるときは `"…"` でクォートする）。**データ行は、左ディレクトリが `expect/{収集系 process 名}/…`、右ディレクトリが `actual/{収集系 process 名}/…` を指し、`.` と `..` の要素を含まないこと**。外れる行があれば exit 6（右にも `expect/` を書くと期待値どうしを比べて合格し、process 名を省くと意図した期待値を読まないため。空白だけの行もここで exit 6）。
+4. compare と同じ手順で `expect/` から `actual/` を組み立てる（expect 不在・収集系 process ディレクトリ無し・evidence 不在は exit 6）。
+5. プロジェクト共通の比較ルール `{proj}/config/plugins/process/compare/` を、compare と同じく `COMPAREFILES_CLASSPATH` の末尾へ注入する。**比較レイアウト・起動設定のプロジェクト共通は compare と共有**する（同じ比較対象ファイルには、組み合わせ方に関係なく同じ比較ルールを当てるため）。`{proj}/config/plugins/process/compareRegex/` は stfw の設定チェーン（`config.yml`）専用で、ここに `compare_layout/` や起動設定を置いても読まれない。
+6. 起動設定はプロセスローカル `config/compare_files.{json,yaml,yml}` があれば `-config` で明示指定する（compare と同じ）。`-config` で渡した起動設定の欠落キーは、compare-files の既定の探索（`COMPAREFILES_CLASSPATH` → カレント → `./config`）で最初に見つかった起動設定から補われる。プロジェクト共通に起動設定が無いとプロセスローカルのファイル自身が既定として選ばれ、欠落キーが補われないため、`{}` だけでは必須キー（`outputCharset` など）不足で exit 6 になる（v2.2.4 の実物で確認）。**プロセスローカルの起動設定は compare-files 同梱の `config/compare_files.json` を複製して編集する**のが確実。プロセスローカルの比較レイアウト `config/compare_layout/` も compare と同じく後勝ちで効く。
+7. `compare_regex [-config {process-local}] -od result config/compare_target.csv` を実行する（`-od` は起動設定の `outputDir` より優先され、結果は必ずプロセスの `result/` に出る）。
+8. 終了コードが 0（一致）か 3（差分）でも `result/` が空なら exit 6（比較が行われていない。compare-files は環境変数 `COMPAREFILES_OPT` の引数を先頭に足すため、`-v` / `-h` が入っていると版表示だけで exit 0 になる）。
+
+**設定**（config.yml の `stfw.process.compareRegex`。上書きチェーンは §8.1）
+
+| キー | 説明 |
+|---|---|
+| `compare_files_version` | 取得する compare-files のリリースタグ（既定 `v2.2.4`。compare の既定と一致させる）。**上書きはプロジェクト共通 `config/plugins/process/compareRegex/config.yml` で行う**（install はプロセス非依存の設定を見る。§4.8） |
+| `on_mismatch` | compare と同じ（`error`（既定）= 差分を exit 6 / `warn` = 差分を exit 3 のまま返す / それ以外は exit 6） |
+
+**終了コードの対応付け**: compare-files の `compare_regex` も `0=一致（OK/Ignore）` / `3=差分（NG/LeftOnly/RightOnly）` / `6=エラー` を返し、対応付けは compare と同じ（差分は `on_mismatch` に従う。比較エラーは常に exit 6）。
+
+> 根拠: `assets/plugins/process/compareRegex/`, `test/acceptance/testdata/script/{compareRegex_対象指定CSVで突合する場合_正規表現で対応付けて合否を判定すること,compareRegex_同梱バイナリがある場合_installなしで実行できること}.txtar`, compare-files `cmd/compare_regex/main.go`・`internal/bulk/regex.go`（`LoadRegexTargetList`/`matchedTargetFile`/`writeNgResult`）・`internal/bulk/dir.go`（`Counts.Result`: 対象 0 件は Ignore = 成功）
 
 ### 4.12 組込み invoke プラグイン（Act・外部 OSS grafana k6）
 
@@ -1013,7 +1061,7 @@ stfw_inventory:
 | 中身の比較（v1.6.12 → v1.7.0） | MariaDB クライアント 10.11 → 13.1、`psql` 15 → 18、`redis-cli` は Redis 7 → Valkey 9.1、OpenSSH 9.2 → 10.6、ブラウザは Debian の chromium → Chrome for Testing |
 | MySQL 接続の既定 | `/etc/my.cnf` の `[client]` に `ssl-verify-server-cert=0` と `plugin-dir=/usr/lib/mariadb/plugin`。MariaDB 11.4 以降のクライアントは既定でサーバー証明書を検証し、自己署名の MySQL 8 に繋がらないため、Debian の頃（MariaDB 10.11 クライアント）と同じ「検証しない」に戻す。MySQL 8 以降の認証方式（caching_sha2_password）の部品は mariadb-connector-c の置き場所を指す。**MySQL 8.4 / MariaDB 11.4 / PostgreSQL 15 / Redis 7.4・8 の平文サーバーへの接続を検証済み** |
 | Chrome | Google 公式の Chrome for Testing の画面なし版（`chrome-headless-shell`）を `/opt/chrome` に置く（`/opt/chrome/VERSION` に版）。Wolfi の chromium パッケージは更新が止まっている（149 版。修正版のある脆弱性 1815 件）ため使わない。**apk のパッケージではないため Trivy には見えない**。代わりに版を Dockerfile の `ARG CHROME_VERSION` で固定し、定期チェックが Chrome for Testing の Stable と比べる（§10.4）。配布物に公式のチェックサムが無いため、版を上げるときに両 arch の zip の sha256 を取得して `CHROME_SHA256_AMD64` / `CHROME_SHA256_ARM64` に記録し、ビルド時に照合する。**版を上げるときは 3 つの ARG を同時に変える**。取得と展開は別ステージで行い、取得用の部品（zip など）を full に残さない |
-| k6 / compare-files / logfilter | `/opt/stfw/bundled/{tool}/` に同梱し、ENV `stfw_plugin_bundled_dir=/opt/stfw/bundled` で公開する（プラグインは永続キャッシュが無ければ版一致の同梱版を使うため、`stfw plugin install` / ネットワークなしで実行できる。§4.8）。**取得はビルド時に各プラグインの `bin/install/install` を `stfw_plugin_cache_dir=/opt/stfw/bundled` で実行**して行い（資産名・os_arch 判定を Dockerfile に二重実装しない）、版（と logfilter の arches）は**各プラグインの既定設定 `config.yml` を正**とする（`compare_files_version` / `k6_version` / `logfilter_version` / `logfilter_arches`）。版は `{tool}/VERSION` に記録する。compare-files / k6 はイメージの arch 版 1 種、logfilter は収集先ホスト用に `logfilter_arches` の全 arch。k6 は invokeRest / invokeWeb で共有するため両者の `k6_version` が食い違うとビルド失敗。**版を上げるときは config.yml だけを変更すればイメージも追従する** |
+| k6 / compare-files / logfilter | `/opt/stfw/bundled/{tool}/` に同梱し、ENV `stfw_plugin_bundled_dir=/opt/stfw/bundled` で公開する（プラグインは永続キャッシュが無ければ版一致の同梱版を使うため、`stfw plugin install` / ネットワークなしで実行できる。§4.8）。**取得はビルド時に各プラグインの `bin/install/install` を `stfw_plugin_cache_dir=/opt/stfw/bundled` で実行**して行い（資産名・os_arch 判定を Dockerfile に二重実装しない）、版（と logfilter の arches）は**各プラグインの既定設定 `config.yml` を正**とする（`compare_files_version` / `k6_version` / `logfilter_version` / `logfilter_arches`）。版は `{tool}/VERSION` に記録する。compare-files / k6 はイメージの arch 版 1 種、logfilter は収集先ホスト用に `logfilter_arches` の全 arch。k6 は invokeRest / invokeWeb で共有するため両者の `k6_version` が食い違うとビルド失敗。compare-files も compare / compareRegex で共有し（`compare-files/{os_arch}/` に `compare_files` と `compare_regex` を置き、`VERSION` は 1 つ）、両者の `compare_files_version` が食い違うとビルド失敗。**版を上げるときは config.yml だけを変更すればイメージも追従する** |
 | Chrome 連携 | `K6_BROWSER_EXECUTABLE_PATH=/opt/chrome/chrome-headless-shell` と `K6_BROWSER_ARGS=no-sandbox` を ENV で設定（コンテナ内は seccomp で user namespace を作れず Chrome の sandbox が起動しないため。K6_BROWSER_ARGS はカンマ区切り・`--` なしの k6 形式 — k6 `browser/env/env.go` / `chromium/browser_type.go` で確認）。**k6 v2.4.0 + Chrome for Testing 158 で browser テスト（setContent + locator + check）の動作を linux/arm64・linux/amd64 で検証済み。日本語の描画はスクリーンショットを目視で確認済み**。スモークテスト（`.github/scripts/smoke-image.sh`。§10.4）は Chrome の起動と DOM の操作、fontconfig から日本語フォントが見えることを確かめる（描画そのものは自動では見ない） |
 | 配布 | タグ: `full` + `{semver}-full`（linux/amd64 + linux/arm64） |
 
@@ -1030,7 +1078,7 @@ stfw_inventory:
 | ワークフロー | トリガー | 内容 |
 |---|---|---|
 | `ci.yml` | pull_request | golangci-lint + `go build ./...` + `go test ./...` + `govulncheck ./...`（呼び出し経路のある依存・Go 本体の脆弱性で失敗。Go 本体は go.mod の `toolchain` で判定）+ 除外リストの検査の見本テスト（`test-check-trivyignore.sh`。実際の `.trivyignore.yaml` の検査と、すり抜けの見本を含む） |
-| `build.yml` | push（master） | `go vet` + `go test` + GoReleaser snapshot（成果物を 7 日保持の artifact 化）+ Docker build（runtime / full の 2 ターゲット、push なし）+ 同梱ツールの解決の確認 + 両イメージのスモークテスト（`smoke-image.sh`。stfw と組込みプラグイン・`stfw ssh trust` が呼ぶコマンドの存在と起動、GNU 版の基本コマンド、`TZ` の反映、full は DB クライアントと MySQL の認証部品・日本語フォント・同梱 Chrome での k6 ブラウザモード。ネットワークなし。amd64 は docker ジョブ、arm64 は `docker-arm64` ジョブ（`ubuntu-24.04-arm` runner）で両 arch とも行う。Chrome の依存ライブラリが arch ごとに違うため）。リリース（release.yml）でも公開前に同じスモークテストを両 arch で行う（下の release.yml の行）+ 両イメージの Trivy スキャン（下の合否の基準。公式イメージ `aquasec/trivy` を digest 固定で実行し、runner のアーキテクチャのみ検査） |
+| `build.yml` | push（master） | `go vet` + `go test` + GoReleaser snapshot（成果物を 7 日保持の artifact 化）+ Docker build（runtime / full の 2 ターゲット、push なし）+ 同梱ツールの解決の確認 + 両イメージのスモークテスト（`smoke-image.sh`。stfw と組込みプラグイン・`stfw ssh trust` が呼ぶコマンドの存在と起動、GNU 版の基本コマンド、`TZ` の反映、full は DB クライアントと MySQL の認証部品・日本語フォント・同梱の compare-files（`compare_files` と `compare_regex`）の起動・同梱 Chrome での k6 ブラウザモード。ネットワークなし。amd64 は docker ジョブ、arm64 は `docker-arm64` ジョブ（`ubuntu-24.04-arm` runner）で両 arch とも行う。Chrome の依存ライブラリが arch ごとに違うため）。リリース（release.yml）でも公開前に同じスモークテストを両 arch で行う（下の release.yml の行）+ 両イメージの Trivy スキャン（下の合否の基準。公式イメージ `aquasec/trivy` を digest 固定で実行し、runner のアーキテクチャのみ検査） |
 | `scheduled-scan.yml` | schedule（毎週月曜 00:17 UTC）/ workflow_dispatch | 取り込み漏れの定期チェック。① キャッシュを使わずに両イメージを作り（ベースは digest 固定のため同じものを使い、ベースの更新は Dependabot の PR で行う。パッケージはビルド時の `apk upgrade` で最新になる）、build.yml と同じスモークテストと、同じ基準の Trivy スキャン（Wolfi の新しい修正版を検出。ビルド時の `apk upgrade` / `apk add` が最新を取るため、取り込みは再ビルド＝次のリリースで行う）+ 除外リストのうち、もうどのイメージでも見つからなくなった行（対応版を取り込んだ後の消し忘れ）を警告のみ（ジョブを失敗させない）② 同梱ツールの既定版（各プラグインの `config.yml`）が各ツールの最新リリースか、stfw:full の Chrome（Dockerfile の `CHROME_VERSION`）が Chrome for Testing の Stable か（新しい版があれば失敗。Chrome は Trivy に見えないため、この版の確認が脆弱性の取り込み漏れの検知を兼ねる。あわせて**公開済みの `:full`（amd64・arm64）の `/opt/chrome/VERSION`** も Stable と比べ、古ければ失敗する。master の版を上げてもリリースするまで利用者のイメージは古いままのため、「リリースが要る」を知らせる。中身は実行せずファイルだけ取り出す）③ `govulncheck ./...`。見つかったらジョブを失敗させ、リリースは止めない。schedule は既定ブランチの最新コミットで動く。**通知の条件**: schedule の通知はワークフローを作成した（cron を最後に変更した・無効化後に再度有効にした）ユーザーに届き、そのユーザーが GitHub Actions の Web またはメール通知を有効にしている必要がある。**自動停止**: 公開リポジトリは 60 日間活動が無いと schedule が自動で無効になり、その旨の通知は無い。Actions 画面で無効になっていないかを確認し、無効なら「Enable workflow」または `gh workflow enable scheduled-scan.yml` で戻す |
 | `release.yml` | tag `v*` | `go test` + GoReleaser release（GitHub Releases）+ Docker イメージの公開（ghcr.io へ runtime: semver + `latest` / full: `{semver}-full` + `full`。full 側は `flavor: latest=false` で plain latest の自動生成を抑止）。**公開前に両 arch でスモークテストを行う**: Wolfi のパッケージは常に最新へ更新されるため、リリース時のビルドは master で確かめたものと中身がずれうる。そのため arch ごとの専用ランナー（amd64: `ubuntu-latest`、arm64: `ubuntu-24.04-arm`）で ① 確認用にビルドしてローカルへ読み込み ② `smoke-image.sh` を runtime・full にかけ ③ 同じビルダーのキャッシュで作り直してタグなしの digest で push し ④ push したものと ① のレイヤー（diff_id の並び）が一致するかを `verify-pushed-image.sh` で確かめる（キャッシュが外れて作り直されたら失敗）。タグは両 arch の ①〜④ がすべて通ったあとに `docker-publish` ジョブが `docker buildx imagetools create` で付ける。①〜④ のどれかが失敗するとタグは動かず、利用者が取得するイメージは前のリリースのまま（push 済みのタグなし digest は ghcr.io に残る）。タグの付け替えは 1 つずつ行われ原子的ではないため、先に runtime・full とも dry-run で組み立ててから付け替える。付け替えの途中で失敗した（runtime だけ新しくなった）ときは `docker-publish` ジョブを再実行する（同じ digest を付け直すだけ）。Trivy スキャンはリリースでは行わない |
 

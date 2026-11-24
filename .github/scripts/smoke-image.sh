@@ -58,6 +58,11 @@ if [ "$kind" = full ]; then
     test -f /usr/lib/mariadb/plugin/caching_sha2_password.so || { echo "missing caching_sha2_password.so" >&2; exit 1; }
     # invokeWeb の日本語表示に使うフォント
     fc-list :lang=ja family | grep -q . || { echo "no Japanese font visible to fontconfig" >&2; exit 1; }
+    # compare / compareRegex が使う同梱の compare-files (compare_files と compare_regex は同じ版を共有する)
+    for c in compare_files compare_regex; do
+      b="$(ls /opt/stfw/bundled/compare-files/*/"$c" | head -1)"
+      "$b" -v
+    done
     echo "full commands: ok"
   ' || rc=1
 

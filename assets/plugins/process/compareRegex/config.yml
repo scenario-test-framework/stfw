@@ -1,0 +1,21 @@
+# compareRegex のデフォルト設定。
+#
+# compare_files_version : 取得する compare-files のリリースタグ。compare と同梱版を共有するため、
+#                         compare の既定 (compare/config.yml) と同じ値にする (違うとイメージのビルドが失敗する)
+# on_mismatch           : 比較不一致 (compare_regex exit 3) の扱い。compare と同じ。
+#                         error (既定) = ステップ失敗として停止 + Blocked 伝播 (回帰テスト運用)
+#                         warn         = Warn として記録して続行 (差分確認運用)
+#
+# compareRegex は期待値 (expect/) と収集エビデンス (actual/) を、比較対象設定
+# config/compare_target.csv の正規表現で対応付けて compare-files の compare_regex で突合する
+# Assert フェーズのプラグイン (AS-BUILT §4.11.1)。名前に出力時刻や連番を含むファイルの比較に使う。
+#
+# ディレクトリ規約は compare と同じ (expect/ = git 管理、actual/・result/ = gitignore・自動生成)。
+# 比較レイアウト・起動設定のプロジェクト共通は compare と共有する
+# ({proj}/config/plugins/process/compare/)。{proj}/config/plugins/process/compareRegex/ は
+# この config.yml の上書き専用で、compare_layout/ を置いても読まれない。
+stfw:
+  process:
+    compareRegex:
+      compare_files_version: v2.2.4
+      on_mismatch: error

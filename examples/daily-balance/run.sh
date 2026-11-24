@@ -29,6 +29,7 @@ stfw secret set postgres appuser apppass --force
 echo "==> プラグインの外部バイナリ (k6 / compare-files) を install (stfw:full は同梱済みのためインストール済みで終わる)"
 ensure_plugin invokeRest
 ensure_plugin compare
+ensure_plugin compareRegex
 
 echo "==> シナリオ実行 (daily-balance)"
 stfw run daily-balance

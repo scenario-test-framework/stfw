@@ -202,6 +202,7 @@ Arrange → Act → Collect → Assert のシナリオテストを部品の組�
 | Collect | `collectFile` / `collectLog` | リモートからのエビデンス収集 (時刻フィルタつき) |
 | Collect | `exportMysql` / `exportPostgres` / `exportRedis` | データストアの CSV エクスポート |
 | Assert | `compare` | 期待値とエビデンスのディレクトリ突合 (compare-files) |
+| Assert | `compareRegex` | 名前が実行ごとに変わるファイル (出力時刻・連番入り) を正規表現で対応付けて突合 (compare-files) |
 
 実プロジェクトに近い**動く例**と、組み方の**通し解説**は次を参照してください:
 

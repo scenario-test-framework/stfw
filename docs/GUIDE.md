@@ -41,6 +41,7 @@ scenario/{シナリオ}/_{seq}_{bizdate}/_{seq}_{group}_{type}/
 | | `collectFile` | リモートのファイルを収集 |
 | | `exportMysql` / `exportPostgres` / `exportRedis` | データストアの内容を CSV エビデンス化 |
 | Assert | `compare` | 期待値（expect/）と収集結果（actual/）を突合 |
+| | `compareRegex` | 名前が実行ごとに変わるファイル（出力時刻・連番入り）を、正規表現で対応付けて突合 |
 | （汎用） | `scripts` | 任意言語の実行可能ファイルを昇順実行 |
 | （汎用） | `parallel` | 配下に定義した子プロセス（`_{seq}_{group}_{type}`）を並走。親のステータスは全子の悪い方。同時実行数は `max_parallel`（0=上限なし）で制御 |
 
@@ -72,7 +73,11 @@ scenario/daily-balance/
     ├── _10_arrange_updateBizdate/    # Arrange: SUT の業務日付を 20240102 へ (カスタム)
     ├── _30_act_invokeRest/
     ├── _40_collect_exportPostgres/
-    └── _50_assert_compare/
+    ├── _45_collect_scripts/          # Collect: 残高 API の応答を出力時刻入りの名前で収集
+    ├── _50_assert_compare/
+    └── _55_assert_compareRegex/      # Assert: 名前の正規表現で組み合わせて突合
+        ├── config/compare_target.csv
+        └── expect/_45_collect_scripts/api/balance_report_20240102000000.json
 ```
 
 プロセスのグループ名（`_{seq}_{group}_{type}` の中央）をフェーズ名に揃えると、
@@ -165,6 +170,7 @@ acc-002,2300     # 2000 + 300
 Day2（`_030`）は reset / seed を持たず、updateBizdate で業務日付だけを進め、Day1 の残高
 （1500 / 2300）に取引（-200 / +100）を反映して **1300 / 2400** を検証します。
 これが「業務日付をまたぐ繰越」の表現です。
+Day2 では、出力時刻入りの名前で収集した残高レポートも `compareRegex` で突合します（名前が実行ごとに変わるファイルの比較。§5）。
 
 ## 4. 接続情報（inventory / secret / ssh trust）
 
@@ -228,6 +234,37 @@ $ stfw run --resume=_20260723120000_100 --only _020_20240101 daily-balance  # ru
 daily-balance の `transactions.json`（連番 id を Ignore・`account_id`+`bizdate` をキーに突合）が
 実例です。レイアウトの書き方は compare-files の比較レイアウトリファレンスを参照してください。
 
+### 名前が実行ごとに変わるファイル（compareRegex）
+
+`compare` は expect と actual で**相対パスが同じファイル**を組み合わせます。出力時刻や連番を
+名前に含むファイル（`balance_report_20240102093015.json` など）は実行ごとに名前が変わるため、
+`compare` では「片側だけにあるファイル」として差分になります。こうしたファイルは、比較方法が
+ディレクトリ名で読めるよう、別のプロセスタイプ **`compareRegex`** で突合します（AS-BUILT §4.11.1）。
+
+| 比べたいもの | プロセスタイプ |
+|---|---|
+| 名前が毎回同じファイル（エクスポート CSV など） | `compare`（期待値に無いファイルも差分として検知） |
+| 名前が実行ごとに変わるファイル | `compareRegex`（CSV に書いたファイルだけを比較） |
+
+`expect/` `actual/` `result/` の規約は `compare` と同じです。加えて、比較する組み合わせを
+`config/compare_target.csv`（compare-files の比較対象設定の書式）に 1 行ずつ書きます:
+
+```csv
+# 左ディレクトリ（期待値）,右ディレクトリ（実績値）,ファイル名正規表現
+expect/_45_collect_scripts/api,actual/_45_collect_scripts/api,balance_report_\d{14}\.json
+```
+
+- 左右はプロセスディレクトリからの相対パス。探すのは**指定ディレクトリの直下だけ**で、名前順で最初に一致した 1 件を比較する
+- 期待値側のファイル名は正規表現に一致する任意の 1 例でよい（例: `balance_report_20240102000000.json`）
+- **CSV に書かなかったファイルは比較しない**。同じ収集プロセスのファイルを `compare` でも突合するときは、
+  名前の変わるファイルを `compare` 側の期待値に置かず、**その `compare` プロセスのローカル起動設定**
+  （`_…_compare/config/compare_files.json`）の `ignoreFileRegexList` で除外する。プロジェクト共通
+  （`config/plugins/process/compare/`）に置くと `compareRegex` にも効き、比べたいファイルまで除外される
+- 左は `expect/{収集プロセス名}/…`、右は `actual/{収集プロセス名}/…` を指す（外れると exit 6）。1 行に 1 件を書き、クォート内で改行しない。resume で再開する場合、時刻入りのファイルを
+  出す収集ステップは前回のファイルを消してから書く（溜まると名前順で最初の古いファイルが比較される）
+- 比較レイアウトは `compare` と共有する（`config/plugins/process/compare/compare_layout/`）。`on_mismatch` も同じ意味
+- daily-balance の `_030_20240102/_55_assert_compareRegex` が実例
+
 ## 6. ホスト操作系プラグイン（ssh 経由）
 
 `sshExec` / `scpPut` / `collectLog` / `collectFile` は ssh/scp でリモートホストを操作します。
@@ -259,7 +296,7 @@ stfw run {scenario} --only _20_20240102/_30_batch_scripts   # 指定ノードだ
 （データ投入等）は再現されないため、前提が満たされていることは利用者が保証してください。
 
 `stfw run` はプラグインの外部バイナリを自動 install しません。k6（invokeRest/invokeWeb）や
-compare-files（compare）を使うシナリオは、事前に `stfw plugin install {type}` が必要です
+compare-files（compare / compareRegex）を使うシナリオは、事前に `stfw plugin install {type}` が必要です
 （`stfw init` は全プラグインの install をまとめて行います）。`stfw:full` イメージは k6 / compare-files /
 logfilter を同梱しているため、既定の版を使う限り install は不要です（版を上書きした場合は install が必要）。
 

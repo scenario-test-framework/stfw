@@ -96,6 +96,10 @@ scenario/{name}/
 - **secret 一覧**: `{host}-{user}` のペアを列挙 (DB 接続、SSH 接続)。
 - **compare の運用**: 回帰テスト (差分で停止 = `on_mismatch: error` 既定) か、
   差分確認 (最後まで流して Warn 一覧 = `on_mismatch: warn`) か。
+- **比較プロセスの選択**: 名前が毎回同じファイルは `compare` (ディレクトリ比較)、名前に出力時刻・連番を含み
+  実行ごとに変わるファイルは `compareRegex` (`config/compare_target.csv` に正規表現で組み合わせを書く)。
+  compareRegex は CSV に書いたファイルしか比較しないため、収集プロセスを分けて compare と使い分けると読みやすい
+  (実例: examples/daily-balance の `_030_20240102/_55_assert_compareRegex`)。
 
 ## 4. 一式の生成
 
@@ -260,7 +264,7 @@ stfw report                      # 6. HTML レポート
 
 手順 2 は固定コマンドではなく、**生成した scenario tree で使っている type を列挙して**
 外部バイナリが必要なものを個別に案内する (invokeRest / invokeWeb = k6、
-compare = compare-files、collectLog = logfilter。カスタムプラグインも install を持つなら含める)。
+compare / compareRegex = compare-files、collectLog = logfilter。カスタムプラグインも install を持つなら含める)。
 `stfw:full` イメージで実行する場合、既定の版の k6 / compare-files / logfilter は同梱済みのため
 install は不要 (実行しても「インストール済み」exit 3 で終わる) と添える。
 
@@ -297,5 +301,6 @@ ls .claude/skills/compare-layout/SKILL.md ~/.claude/skills/compare-layout/SKILL.
   列挙済み後続ステップのみ。後続 process / bizdate は実行もジャーナル記録もされない)。
 - compare のエビデンス規約: `expect/` (git 管理・期待値) / `actual/` (収集 evidence への
   自動 symlink) / `result/` (比較結果)。`expect/` 直下は**収集プロセスのディレクトリ名**。
+  compareRegex も同じ規約で、加えて `config/compare_target.csv` (git 管理・必須) を持つ。
 - 組込みプラグイン: clear/import/export × Mysql/Postgres/Redis、invokeRest/invokeWeb (k6)、
-  sshExec/scpPut/collectLog/collectFile (ssh)、compare、scripts (汎用)。
+  sshExec/scpPut/collectLog/collectFile (ssh)、compare/compareRegex、scripts (汎用)。

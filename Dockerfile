@@ -65,7 +65,7 @@ ENTRYPOINT ["stfw"]
 #   postgresql-18-client          : export/import/clearPostgres (psql)
 #   valkey-9.1-cli                : export/import/clearRedis (redis-cli。Valkey は Redis 互換の後継)
 #   Chrome + 依存ライブラリ + fontconfig + font-noto-cjk : invokeWeb (k6 ブラウザモード。Chrome は上の chrome ステージ)
-#   compare-files / k6 / logfilter : compare / invokeRest・invokeWeb / collectLog の外部ツール
+#   compare-files / k6 / logfilter : compare・compareRegex / invokeRest・invokeWeb / collectLog の外部ツール
 #                                    (/opt/stfw/bundled。stfw plugin install なしで実行できる)
 # 通常版のビルドは --target runtime を明示する (無指定の docker build は最終ステージ = full)。
 FROM runtime AS full
@@ -99,7 +99,8 @@ COPY --from=chrome /opt/chrome /opt/chrome
 # stfw_plugin_cache_dir=/opt/stfw/bundled で実行し、{tool}/{os_arch}/{bin} へ配置する。
 # 版 (と logfilter の arches) は各プラグインの既定設定 config.yml を正とし、{tool}/VERSION に
 # 記録する。プラグインは永続キャッシュが無く、設定版と VERSION が一致するときだけ同梱版を使う。
-# k6 は invokeRest / invokeWeb で共有するため、両者の k6_version が食い違えばビルドを失敗させる。
+# k6 は invokeRest / invokeWeb で、compare-files は compare / compareRegex で共有するため、
+# 両者の版 (k6_version / compare_files_version) が食い違えばビルドを失敗させる。
 # プラグイン資産は bind mount で読む (COPY すると層がイメージに残るため)。
 # conf は config.yml の値からクオート・インラインコメント・末尾空白/CR を除いて返す。
 RUN --mount=type=bind,source=assets/plugins/process,target=/tmp/plugins \
@@ -108,8 +109,11 @@ RUN --mount=type=bind,source=assets/plugins/process,target=/tmp/plugins \
     conf() { sed -n "s/^ *$2: *//p" "${p}/$1/config.yml" \
       | sed -e 's/\r$//' -e 's/[[:space:]]#.*$//' -e "s/[\"']//g" -e 's/[[:space:]]*$//'; }; \
     v="$(conf compare compare_files_version)"; test -n "${v}"; \
+    test "$(conf compareRegex compare_files_version)" = "${v}"; \
     stfw_process_compare_compare_files_version="${v}" stfw_plugin_cache_dir="${b}" \
       bash "${p}/compare/bin/install/install"; \
+    stfw_process_compareRegex_compare_files_version="${v}" stfw_plugin_cache_dir="${b}" \
+      bash "${p}/compareRegex/bin/install/install"; \
     echo "${v}" > "${b}/compare-files/VERSION"; \
     v="$(conf invokeRest k6_version)"; test -n "${v}"; \
     test "$(conf invokeWeb k6_version)" = "${v}"; \

@@ -2,6 +2,9 @@
 
 期待値 (`expect/`) と収集エビデンス (`actual/`) をディレクトリ突合する Assert フェーズの組込みプラグイン。比較は外部 OSS [compare-files](https://github.com/scenario-test-framework/compare-files) で行う。
 
+ファイルの組み合わせは相対パスの完全一致で決まる。名前に出力時刻や連番を含み、実行ごとに名前が変わるファイルは
+[compareRegex](../compareRegex/README.md) (比較対象を正規表現で指定する) を使う。
+
 ## 前提
 
 - プロビジョニング: `stfw plugin install compare` (通常は `stfw init` が自動実行) が
@@ -22,6 +25,7 @@
 バイナリ同梱デフォルト → **プロジェクト共通** `{proj}/config/plugins/process/compare/compare_layout/`
 (COMPAREFILES_CLASSPATH で注入) → **プロセスローカル** `config/compare_layout/`。
 シナリオ横断の共通レイアウトはプロジェクト共通に置き、プロセス固有の上書きはプロセスローカルに置く。
+プロジェクト共通のディレクトリは compareRegex も読む (同じファイルには組み合わせ方に関係なく同じ比較ルールを当てる)。
 起動設定 (`compare_files.json`) は前勝ち解決のため、プロジェクト共通側には置かないこと
 (置くとプロセスローカルの起動設定が無視される)。
 

@@ -1,0 +1,162 @@
+# STEP: compareRegex プラグインのイメージ同梱フォールバック (stfw:full。AS-BUILT §4.11.1)
+# stfw:full は compare と同じ /opt/stfw/bundled/compare-files/{os_arch}/ に compare_regex も同梱し、
+# VERSION を共有する。ここでは同梱ディレクトリをフィクスチャで再現する。
+# curl(DL) は常に失敗させ、同梱経路ではダウンロードしないことを担保する。
+#
+# 検証内容:
+#   - キャッシュも同梱も無ければ未プロビジョニング (run exit 6)
+#   - 永続キャッシュが無くても、設定版と一致する同梱版で install なしに run できる
+#   - 同梱が設定版と一致すれば plugin install は「インストール済み」(exit 3) で DL しない
+#   - 同梱に compare_files しか無い (compare_regex が無い) 場合は同梱を使わない
+#   - 設定版と同梱版が異なれば同梱を使わず、原因と対処 (compareRegex の共通設定) を出す
+#   - 永続キャッシュと同梱の両方があれば永続キャッシュを優先する
+
+env PATH=${WORK}/fakebin:${PATH}
+chmod 755 fakebin/curl
+chmod 755 fakebin/fakecompareregex
+chmod 755 fakebin/mkbin
+
+# --- キャッシュも同梱も無い: 未プロビジョニング ---
+execcode 6 stfw run rx
+stderr 'is not installed'
+
+# --- 同梱に compare_files しか無い: compare_regex は解決できない ---
+exec mkbin bundled/compare-files compare_files v2.2.4 bundled
+env stfw_plugin_bundled_dir=${WORK}/bundled
+execcode 6 stfw run rx
+stderr 'is not installed'
+
+# --- 同梱あり・キャッシュなし: install なしで run が成功し、キャッシュは作られない ---
+exec mkbin bundled/compare-files compare_regex v2.2.4 bundled
+exec stfw run rx
+stderr 'compare_regex=bundled'
+! exists .stfw/cache/plugins/compareRegex/compare-files
+
+# --- 同梱が設定版と一致: plugin install はインストール済み (exit 3) で DL しない ---
+execcode 3 stfw plugin install compareRegex
+! stderr 'download'
+! exists .stfw/cache/plugins/compareRegex/compare-files
+
+# --- 設定版と同梱版が異なる: 同梱は使わず、不一致の理由と compareRegex の共通設定を案内する ---
+execcode 6 stfw run rxver
+stderr 'is not installed'
+stderr 'bundled compare-files is v2\.2\.4 but compare_files_version is v2\.2\.3'
+stderr 'config/plugins/process/compareRegex/config\.yml'
+! stderr 'compare_regex=bundled'
+# プロジェクト共通設定で版を上書きした場合、install は同梱を使わず DL を試みる
+mkdir config/plugins/process/compareRegex
+cp config.v999.yml config/plugins/process/compareRegex/config.yml
+execcode 6 stfw plugin install compareRegex
+stderr 'download failed'
+rm config/plugins/process/compareRegex/config.yml
+
+# --- 永続キャッシュと同梱の両方がある: 永続キャッシュを優先する ---
+exec mkbin .stfw/cache/plugins/compareRegex/compare-files compare_regex v2.2.4 cache
+exec stfw run rx
+stderr 'compare_regex=cache'
+! stderr 'compare_regex=bundled'
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+-- config.v999.yml --
+stfw:
+  process:
+    compareRegex:
+      compare_files_version: v9.9.9
+-- scenario/rx/metadata.yml --
+description:
+-- scenario/rx/_10_99990101/metadata.yml --
+description:
+-- scenario/rx/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/rx/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/rx/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1"
+printf 'hello\n' > "${stfw_process_dir}/evidence/host1/report_20240101093015.txt"
+exit 0
+-- scenario/rx/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rx/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex: {}
+-- scenario/rx/_10_99990101/_20_asrt_compareRegex/config/compare_target.csv --
+expect/_10_col_scripts/host1,actual/_10_col_scripts/host1,report_[0-9]{14}\.txt
+-- scenario/rx/_10_99990101/_20_asrt_compareRegex/expect/_10_col_scripts/host1/report_20240101000000.txt --
+hello
+-- scenario/rxver/metadata.yml --
+description:
+-- scenario/rxver/_10_99990101/metadata.yml --
+description:
+-- scenario/rxver/_10_99990101/_10_col_scripts/metadata.yml --
+description:
+-- scenario/rxver/_10_99990101/_10_col_scripts/config/config.yml --
+stfw:
+  process:
+    scripts: {}
+-- scenario/rxver/_10_99990101/_10_col_scripts/scripts/100_gen --
+#!/bin/bash
+mkdir -p "${stfw_process_dir}/evidence/host1"
+printf 'hello\n' > "${stfw_process_dir}/evidence/host1/report_20240101093015.txt"
+exit 0
+-- scenario/rxver/_10_99990101/_20_asrt_compareRegex/metadata.yml --
+description:
+-- scenario/rxver/_10_99990101/_20_asrt_compareRegex/config/config.yml --
+stfw:
+  process:
+    compareRegex:
+      compare_files_version: v2.2.3
+-- scenario/rxver/_10_99990101/_20_asrt_compareRegex/config/compare_target.csv --
+expect/_10_col_scripts/host1,actual/_10_col_scripts/host1,report_[0-9]{14}\.txt
+-- scenario/rxver/_10_99990101/_20_asrt_compareRegex/expect/_10_col_scripts/host1/report_20240101000000.txt --
+hello
+-- fakebin/mkbin --
+#!/bin/bash
+# mkbin {dir} {bin} {version} {label}: {dir}/VERSION と {dir}/{os_arch}/{bin} を作る。
+# {bin} は fakecompareregex を呼ぶラッパーで、起動時に stderr へ「{bin}={label}」を出す
+# (どの配置のバイナリが使われたかを識別する)。os_arch はプラグインと同じ uname 対応。
+dir="$1"; bin="$2"; version="$3"; label="$4"
+case "$(uname -s)" in Linux) os=linux ;; Darwin) os=darwin ;; *) exit 1 ;; esac
+case "$(uname -m)" in x86_64 | amd64) arch=amd64 ;; aarch64 | arm64) arch=arm64 ;; *) exit 1 ;; esac
+mkdir -p "${dir}/${os}_${arch}"
+echo "${version}" > "${dir}/VERSION"
+printf '#!/bin/bash\necho "%s=%s" >&2\nexec fakecompareregex "$@"\n' "${bin}" "${label}" > "${dir}/${os}_${arch}/${bin}"
+chmod 755 "${dir}/${os}_${arch}/${bin}"
+-- fakebin/curl --
+#!/bin/bash
+# 同梱経路ではダウンロードしないことを担保するため、常に失敗させる
+exit 22
+-- fakebin/fakecompareregex --
+#!/bin/bash
+# fake compare_regex: CSV の各行について左右ディレクトリ直下の最初の一致ファイルを突合する。0=全一致 / 3=差分。
+out="result"
+args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -od | --outputDir) out="$2"; shift 2 ;;
+    -config | --configFile) shift 2 ;;
+    -*) shift ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+rm -rf "${out}"
+mkdir -p "${out}"
+echo "Status,Left,Right" > "${out}/CompareSummary.csv"
+rc=0
+while IFS=, read -r left right re; do
+  case "${left}" in '' | \#*) continue ;; esac
+  lf="$(LC_ALL=C ls -1 "${left}" | while IFS= read -r n; do [[ "${n}" =~ ^(${re})$ ]] && { echo "${left}/${n}"; break; }; done)"
+  rf="$(LC_ALL=C ls -1 "${right}" | while IFS= read -r n; do [[ "${n}" =~ ^(${re})$ ]] && { echo "${right}/${n}"; break; }; done)"
+  if [ -n "${lf}" ] && [ -n "${rf}" ] && diff -q "${lf}" "${rf}" > /dev/null 2>&1; then
+    echo "OK,${lf},${rf}" >> "${out}/CompareSummary.csv"
+  else
+    echo "NG,${lf},${rf}" >> "${out}/CompareSummary.csv"; rc=3
+  fi
+done < "${args[0]}"
+exit ${rc}
