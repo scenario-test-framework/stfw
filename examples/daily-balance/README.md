@@ -368,7 +368,7 @@ expect/_45_collect_scripts/api,actual/_45_collect_scripts/api,balance_report_\d{
 | `importMasterData` / `updateBizdate`（カスタム） | 接続系 | `tables` のみ / 差分なし |
 | `invokeRest` | `host_group: api` | 差分なし（スクリプトは既定の `script.js`） |
 | `compare` | `compare_files_version` | 差分なし |
-| `compareRegex` | なし（既定値のまま。比較レイアウトは compare の共通ディレクトリを共有） | 差分なし（組み合わせは `config/compare_target.csv`） |
+| `compareRegex` | なし（既定値のまま。比較レイアウトも使わない。置くなら `config/plugins/process/compareRegex/compare_layout/`） | 差分なし（組み合わせは `config/compare_target.csv`） |
 
 特に DB 接続系は、各シナリオのプロセス config に書くとユーザーを変えたときに全プロセスを
 直す必要があり、直し忘れやすくなります。そこで **接続系はプロジェクト共通の上書き設定に

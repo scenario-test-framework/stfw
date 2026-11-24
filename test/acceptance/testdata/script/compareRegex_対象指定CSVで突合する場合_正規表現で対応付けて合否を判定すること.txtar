@@ -7,7 +7,7 @@
 #   - install が compare-files のリリース物から compare_regex をキャッシュする
 #   - 名前の違うファイルを正規表現で対応付けて一致 → Success、差分 → exit 6
 #   - actual/ は compare と同じく evidence への file-level symlink で組み立てる
-#   - プロジェクト共通の比較ルールは compare のディレクトリを注入する (compareRegex 側は注入しない)
+#   - プロジェクト共通の比較ルールは compareRegex 自身のディレクトリを注入する (compare のディレクトリは注入しない)
 #   - プロセスローカルの起動設定は -config で明示指定する
 #   - on_mismatch: warn は差分を Warn として続行、不正値は exit 6
 #   - CSV が無い / データ行が無い / 片側だけ一致 / compare_regex のエラー / evidence 不在は exit 6
@@ -48,10 +48,9 @@ stdout '^config/compare_target\.csv$'
 # 結果の出力先は -od でプロセスの result/ を指定する (起動設定の outputDir より優先させる)
 exec cat .stfw/runs/$RUN/workspace/rx/_10_99990101/_20_asrt_compareRegex/result/od.txt
 stdout '/workspace/rx/_10_99990101/_20_asrt_compareRegex/result$'
-# プロジェクト共通の比較ルールは compare のディレクトリを注入し、compareRegex 側は注入しない
+# プロジェクト共通の比較ルールは compareRegex 自身のディレクトリを注入し、compare のディレクトリは注入しない
 exec cat .stfw/runs/$RUN/workspace/rx/_10_99990101/_20_asrt_compareRegex/result/classpath.txt
-stdout 'config/plugins/process/compare$'
-! stdout 'plugins/process/compareRegex'
+stdout '^/[^:]*/config/plugins/process/compareRegex$'
 # プロセスローカルの起動設定は -config で明示指定する
 exec cat .stfw/runs/$RUN/workspace/rx/_10_99990101/_20_asrt_compareRegex/result/configopt.txt
 stdout '^\./config/compare_files\.json$'
@@ -64,8 +63,16 @@ env COMPAREFILES_CLASSPATH=/preset/dir
 exec stfw run rx
 latestrun . RUN
 exec cat .stfw/runs/$RUN/workspace/rx/_10_99990101/_20_asrt_compareRegex/result/classpath.txt
-stdout '^/preset/dir:.*config/plugins/process/compare$'
+stdout '^/preset/dir:/[^:]*/config/plugins/process/compareRegex$'
 env COMPAREFILES_CLASSPATH=
+
+# --- compareRegex の共通ディレクトリが無い: compare のディレクトリがあっても何も注入しない ---
+rm config/plugins/process/compareRegex
+exists config/plugins/process/compare/compare_layout/shared.json
+exec stfw run rx
+latestrun . RUN
+exec cat .stfw/runs/$RUN/workspace/rx/_10_99990101/_20_asrt_compareRegex/result/classpath.txt
+stdout '^\(empty\)$'
 
 # --- compare_regex 自体のエラー (exit 6) は差分とは別メッセージで exit 6 ---
 env STFW_TEST_CF_FAIL=1
@@ -187,7 +194,7 @@ stfw:
 {
   "layoutList": []
 }
--- config/plugins/process/compareRegex/compare_layout/ignored.json --
+-- config/plugins/process/compareRegex/compare_layout/own.json --
 {
   "layoutList": []
 }

@@ -22,8 +22,8 @@
 #     error (既定) = exit 6 に変換してステップ失敗 (停止 + Blocked 伝播)
 #     warn         = exit 3 のまま返し、ランナーが Warn として記録して続行
 #   比較エラー (exit 6 等の非 0・非 3) は常に exit 6。
-#   比較レイアウト・起動設定のプロジェクト共通は compare と共有する
-#   ({proj}/config/plugins/process/compare/。COMPAREFILES_CLASSPATH で注入)。
+#   比較レイアウト・起動設定のプロジェクト共通は自分のディレクトリ
+#   ({proj}/config/plugins/process/compareRegex/。COMPAREFILES_CLASSPATH で注入) に置く。compare のディレクトリは読まない。
 #
 # 制約: evidence 配下のファイル名に改行を含むケースは非対応 (find の行区切り前提)。
 set -uo pipefail
@@ -195,11 +195,11 @@ for entry in "${entries[@]}"; do
   done <<< "${filelist}"
 done
 
-# プロジェクト共通の比較ルール ({proj}/config/plugins/process/compare/) を
-# COMPAREFILES_CLASSPATH で注入する。compare と共有し、compareRegex の共通ディレクトリは注入しない
-# (そこは stfw の config.yml 上書き専用)。レイアウトは後勝ちマージのため、プロセスローカルの
+# プロジェクト共通の比較ルール ({proj}/config/plugins/process/compareRegex/。stfw の config.yml と同じ場所) を
+# COMPAREFILES_CLASSPATH で注入する (AS-BUILT §4.11.1)。compare のディレクトリは注入しない
+# (どのプラグインも自分の名前のディレクトリを読む)。レイアウトは後勝ちマージのため、プロセスローカルの
 # config/compare_layout/ が同一 fileRegexPattern を定義すればそちらが勝つ。
-shared_dir="${STFW_PROJ_DIR_CONFIG:-}/plugins/process/compare"
+shared_dir="${STFW_PROJ_DIR_CONFIG:-}/plugins/process/compareRegex"
 if [ -n "${STFW_PROJ_DIR_CONFIG:-}" ] && [ -d "${shared_dir}" ]; then
   export COMPAREFILES_CLASSPATH="${COMPAREFILES_CLASSPATH:+${COMPAREFILES_CLASSPATH}:}${shared_dir}"
 fi

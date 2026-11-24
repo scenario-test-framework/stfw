@@ -22,7 +22,7 @@
 #   比較レイアウト (compare_layout/) は「同梱デフォルト → プロジェクト共通
 #   ({proj}/config/plugins/process/compare/。COMPAREFILES_CLASSPATH で注入) →
 #   プロセスローカル (./config/)」の後勝ちマージで解決される (AS-BUILT §4.11)。
-#   起動設定 (compare_files.json) は前勝ち解決のため、プロジェクト共通側には置かない。
+#   起動設定はプロセスローカル (./config/) を -config で明示指定して最優先にする (共通側はプロジェクト既定)。
 #
 # 制約: evidence 配下のファイル名に改行を含むケースは非対応 (find の行区切り前提)。
 set -uo pipefail

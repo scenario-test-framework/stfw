@@ -53,13 +53,13 @@ expect/_45_collect_scripts/api,actual/_45_collect_scripts/api,summary\.csv
 
 ## 比較ルール (比較レイアウト・起動設定)
 
-compare と同じ比較ルールを使う。プロジェクト共通は **compare のディレクトリ**
-`{proj}/config/plugins/process/compare/` (`compare_layout/*.json` など) を共有し、プロセス固有の上書きは
-プロセスローカル `config/compare_layout/` に置く (後勝ち)。起動設定 `config/compare_files.{json,yaml,yml}` は
-プロセスローカルにあれば `-config` で最優先に使う。欠落キーは compare-files の既定の探索 (`COMPAREFILES_CLASSPATH` → カレント → `./config`) で最初に見つかった起動設定から補われる。プロジェクト共通などに起動設定が無いとプロセスローカル自身が既定になり補われない (`{}` だけでは必須キー不足で exit 6)。compare-files 同梱の `config/compare_files.json` を複製して編集するのが確実。
+比較レイアウトと起動設定の仕組みは compare と同じ。プロジェクト共通は **compareRegex 自身のディレクトリ**
+`{proj}/config/plugins/process/compareRegex/` (`compare_layout/*.json` や `compare_files.json`。stfw の `config.yml` と同じ場所) に置き、
+プロセス固有の上書きはプロセスローカル `config/compare_layout/` に置く (後勝ち)。起動設定 `config/compare_files.{json,yaml,yml}` は
+プロセスローカルにあれば `-config` で最優先に使う。欠落キーは compare-files の既定の探索 (`COMPAREFILES_CLASSPATH` → カレント → `./config`) で最初に見つかった起動設定から補われる (実行環境の既存の `COMPAREFILES_CLASSPATH` に起動設定が無ければ、プロジェクト共通 `compareRegex/` の起動設定)。`./config` より前の探索先 (既存の `COMPAREFILES_CLASSPATH`・プロジェクト共通・カレント) のどこにも起動設定が無いと、プロセスローカル自身が既定になり補われない (`{}` だけでは必須キー不足で exit 6)。compare-files 同梱の `config/compare_files.json` を複製して編集するのが確実。`ignoreFileRegexList` などの一覧は、ローカルで空配列 `[]` を明示しても補完元の値を引き継ぐ (共通の除外ルールをローカルで解除することはできない)。
 
-`{proj}/config/plugins/process/compareRegex/` は stfw の設定 (`config.yml`) の上書き専用で、
-ここに `compare_layout/` や起動設定を置いても読まれない。
+compare のディレクトリ `{proj}/config/plugins/process/compare/` は読まない。compare と同じ比較ルールを使うときは複製する
+(v1.8.0 は compare のディレクトリを読み、自分のディレクトリは `config.yml` 専用だった)。
 
 ## ディレクトリ規約 (エビデンスディレクトリ規約)
 
