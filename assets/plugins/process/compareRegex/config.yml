@@ -11,9 +11,9 @@
 # Assert フェーズのプラグイン (AS-BUILT §4.11.1)。名前に出力時刻や連番を含むファイルの比較に使う。
 #
 # ディレクトリ規約は compare と同じ (expect/ = git 管理、actual/・result/ = gitignore・自動生成)。
-# 比較レイアウト・起動設定のプロジェクト共通は compare と共有する
-# ({proj}/config/plugins/process/compare/)。{proj}/config/plugins/process/compareRegex/ は
-# この config.yml の上書き専用で、compare_layout/ を置いても読まれない。
+# プロジェクト共通の {proj}/config/plugins/process/compareRegex/ には、この config.yml の上書きと並べて
+# 比較レイアウト (compare_layout/*.json) と起動設定 (compare_files.json 等) を置ける (COMPAREFILES_CLASSPATH で注入)。
+# compare のディレクトリ ({proj}/config/plugins/process/compare/) は読まない。
 stfw:
   process:
     compareRegex:

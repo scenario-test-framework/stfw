@@ -258,11 +258,12 @@ expect/_45_collect_scripts/api,actual/_45_collect_scripts/api,balance_report_\d{
 - 期待値側のファイル名は正規表現に一致する任意の 1 例でよい（例: `balance_report_20240102000000.json`）
 - **CSV に書かなかったファイルは比較しない**。同じ収集プロセスのファイルを `compare` でも突合するときは、
   名前の変わるファイルを `compare` 側の期待値に置かず、**その `compare` プロセスのローカル起動設定**
-  （`_…_compare/config/compare_files.json`）の `ignoreFileRegexList` で除外する。プロジェクト共通
-  （`config/plugins/process/compare/`）に置くと `compareRegex` にも効き、比べたいファイルまで除外される
+  （`_…_compare/config/compare_files.json`）か、compare のプロジェクト共通（`config/plugins/process/compare/`）の
+  `ignoreFileRegexList` で除外する（compare の共通ディレクトリは `compareRegex` には効かない）
 - 左は `expect/{収集プロセス名}/…`、右は `actual/{収集プロセス名}/…` を指す（外れると exit 6）。1 行に 1 件を書き、クォート内で改行しない。resume で再開する場合、時刻入りのファイルを
   出す収集ステップは前回のファイルを消してから書く（溜まると名前順で最初の古いファイルが比較される）
-- 比較レイアウトは `compare` と共有する（`config/plugins/process/compare/compare_layout/`）。`on_mismatch` も同じ意味
+- 比較レイアウト・起動設定のプロジェクト共通は `compareRegex` 自身のディレクトリ（`config/plugins/process/compareRegex/compare_layout/` など）に置く。
+  `compare` のディレクトリは読まないので、同じ比較ルールを使うときは複製する。`on_mismatch` は `compare` と同じ意味
 - daily-balance の `_030_20240102/_55_assert_compareRegex` が実例
 
 ## 6. ホスト操作系プラグイン（ssh 経由）

@@ -25,9 +25,12 @@
 バイナリ同梱デフォルト → **プロジェクト共通** `{proj}/config/plugins/process/compare/compare_layout/`
 (COMPAREFILES_CLASSPATH で注入) → **プロセスローカル** `config/compare_layout/`。
 シナリオ横断の共通レイアウトはプロジェクト共通に置き、プロセス固有の上書きはプロセスローカルに置く。
-プロジェクト共通のディレクトリは compareRegex も読む (同じファイルには組み合わせ方に関係なく同じ比較ルールを当てる)。
-起動設定 (`compare_files.json`) は前勝ち解決のため、プロジェクト共通側には置かないこと
-(置くとプロセスローカルの起動設定が無視される)。
+compareRegex はこのディレクトリを読まない (compareRegex の共通ルールは `config/plugins/process/compareRegex/` に置く)。
+起動設定 (`compare_files.{json,yaml,yml}`) はプロセスローカル `config/` にあれば `-config` で明示指定して最優先に使う。
+プロジェクト共通に置いた起動設定は、compare-files の探索 (`COMPAREFILES_CLASSPATH` の各要素 → カレント → `./config`) で
+最初に見つかった 1 件になる場合 (実行環境の既存の `COMPAREFILES_CLASSPATH` に起動設定が無い場合) に「プロジェクト既定」として効く:
+プロセスローカルが無ければそのまま使われ、あればプロセスローカルで欠けているキーの補完元になる
+(`ignoreFileRegexList` などの一覧は空配列 `[]` を明示しても引き継がれ、ローカルで解除できない。AS-BUILT §4.11)。
 
 ## ディレクトリ規約 (エビデンスディレクトリ規約)
 

@@ -18,7 +18,9 @@
 #
 # 比較レイアウト (compare_layout/) は「同梱デフォルト → プロジェクト共通
 # ({proj}/config/plugins/process/compare/) → プロセスローカル (config/)」の後勝ちマージで解決される。
-# 起動設定 (compare_files.json) は前勝ち解決のため、プロジェクト共通側には置かない (AS-BUILT §4.11)。
+# 起動設定 (compare_files.json 等) はプロセスローカル (config/) を -config で明示指定して最優先に使い、
+# プロジェクト共通に置いたものは、探索で最初に見つかる 1 件になる場合にプロジェクト既定として効く
+# (ローカルが無ければそのまま使い、あればローカルの欠落キーを補う。一覧は [] でも引き継ぐ。AS-BUILT §4.11)。
 stfw:
   process:
     compare:
