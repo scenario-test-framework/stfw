@@ -23,7 +23,8 @@ func newRunCmd(a *app) *cobra.Command {
 			"--from / --only は部分実行 (排他・シナリオ 1 つ指定時のみ)。パスはシナリオ相対の\n" +
 			"{bizdate_dir}[/{process_dir}]。--from は指定ノードから最後まで、--only は指定サブツリーのみ実行する。\n" +
 			"--resume は前 run のワークスペース (エビデンス等の生成物) を引き継いで実行する。\n" +
-			"値省略時は最新 run、指定時は --resume=<run_id> 形式 (--from / --only との併用が主用途)。",
+			"値省略時は最新の完了済み run (成否は問わない。実行中の run は除く)、指定時は --resume=<run_id> 形式\n" +
+			"(--from / --only との併用が主用途)。",
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// `--from=` のような空値の明示指定は「フィルタ未指定 = 全体実行」に
@@ -37,7 +38,7 @@ func newRunCmd(a *app) *cobra.Command {
 			}
 			// `--resume=` (空値) も「最新 run」に化けさせず fail-fast する (§5.8)
 			if cmd.Flags().Changed("resume") && resume == "" {
-				err := fmt.Errorf("--resume requires a run_id (or omit the value for the latest run)")
+				err := fmt.Errorf("--resume requires a run_id (or omit the value for the latest finished run)")
 				a.log.Error(err.Error())
 				return &exitError{code: run.ExitError, err: err}
 			}
@@ -72,7 +73,7 @@ func newRunCmd(a *app) *cobra.Command {
 	cmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "skip execute / post_execute")
 	cmd.Flags().StringVar(&from, "from", "", "resume from {bizdate_dir}[/{process_dir}] (single scenario only)")
 	cmd.Flags().StringVar(&only, "only", "", "run only {bizdate_dir}[/{process_dir}] subtree (single scenario only)")
-	cmd.Flags().StringVar(&resume, "resume", "", "carry over a previous run's workspace (no value = latest run; use --resume=<run_id> to specify)")
+	cmd.Flags().StringVar(&resume, "resume", "", "carry over a previous run's workspace (no value = latest finished run; use --resume=<run_id> to specify)")
 	// `--resume` (値なし) を「最新 run からの引き継ぎ」にする (§5.8)
 	cmd.Flags().Lookup("resume").NoOptDefVal = "latest"
 	cmd.MarkFlagsMutuallyExclusive("from", "only")
