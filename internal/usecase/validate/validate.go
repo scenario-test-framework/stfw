@@ -55,9 +55,22 @@ func Run(log *slog.Logger, out io.Writer, projDir string, names []string) error 
 		fmt.Fprintln(out, v.String())
 	}
 
+	// プロセスの config/config.yml に書かれたツールの版など (plugin.yml の provision_keys) は
+	// 使われない (プロジェクト共通までの設定で決める。AS-BUILT §4.7)。雛形で複製された旧既定版を
+	// 消せるよう警告する。
+	pinned, err := repository.CheckProvisionKeysInProcessConfig(projDir, tree.ScenarioViews())
+	if err != nil {
+		return err
+	}
+	for _, p := range pinned {
+		v := scenario.Violation{Path: p.ProcessPath, Level: scenario.ViolationWarn,
+			Message: fmt.Sprintf("%s in config/config.yml is not used; set it in config/plugins/process/%s/config.yml (the line can be removed)", p.Key, p.ProcessType)}
+		fmt.Fprintln(out, v.String())
+	}
+
 	errCount, warns := violations.Count()
 	errCount += len(forbidden)
-	warns += len(missing)
+	warns += len(missing) + len(pinned)
 	if errCount > 0 {
 		return fmt.Errorf("validation failed: %d error(s), %d warning(s)", errCount, warns)
 	}

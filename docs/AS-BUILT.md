@@ -89,7 +89,7 @@ BC 間の共有は ID とジャーナルイベントのみである。notify・H
 | `stfw init [--skip-plugin-init]` | なし | 同梱テンプレートをプロジェクトディレクトリへ展開（sample シナリオ・フック雛形・inventory・stfw.yml・.gitignore）。`stfw.yml` が既に存在する場合はエラー（再初期化禁止）。展開後、解決可能な全プラグインの provisioning（`bin/install/install`）を自動実行する（`--skip-plugin-init` で抑止。個々の失敗は warn 継続、§4.8） |
 | `stfw new scenario <name>` | name | `{proj}/scenario/{name}/` を作成し `metadata.yml` を生成（冪等）。`scenario/` ディレクトリと stfw.yml の存在が前提 |
 | `stfw new bizdate <seq> <bizdate>` | seq, bizdate（YYYYMMDD） | カレントがシナリオディレクトリであることを要求。`_{seq}_{bizdate}/metadata.yml` を生成（冪等） |
-| `stfw new process <seq> <group> <type>` | seq, group, type | カレントが業務日付ディレクトリであることを要求。プラグインを解決し `_{seq}_{group}_{type}/` を**削除して作り直し**、プラグイン `template/` を展開 + `metadata.yml` 生成 |
+| `stfw new process <seq> <group> <type>` | seq, group, type | カレントが業務日付ディレクトリであることを要求。プラグインを解決し `_{seq}_{group}_{type}/` を**削除して作り直し**、プラグイン `template/` を展開 + `metadata.yml` 生成（`template/` が無いプラグインは既定 `config.yml` を `config/config.yml` として複製し、`plugin.yml` の `provision_keys` のキーは除く。§4.7） |
 | `stfw scenario reverse <name> [-o, --out-dir <dir>]` | name | シナリオから spec (`<name>.yml`) + doc (`<name>.md`) をセット生成 (tree → spec + doc、§12)。既定出力先 `docs/` |
 | `stfw scenario scaffold <spec.yml> [--sync]` | spec ファイルパス | spec (structured yaml) からシナリオ骨格を生成 (spec → tree、§12 往復の入口)。既存シナリオディレクトリはエラー (`--sync` で差分同期: 追加/維持/削除) |
 | `stfw validate [scenario...]` | 省略時は全シナリオ | ディレクトリ規約・プラグイン解決可否・`config/config.yml` 存在を静的検証。エラー違反があれば exit 6、警告のみは exit 0 |
@@ -185,7 +185,7 @@ v0.2 は `cut -d '_'` で切り出すのみだったが、v1.0 はパース後�
 | レベル | 検出内容 |
 |---|---|
 | error（exit 6） | 業務日付・プロセスディレクトリ名の形式違反 / プロセスタイプのプラグイン未解決（`process-plugin: {type} is not installed`）/ `config/config.yml` 不存在 / **接続情報（`host` / `hosts` / `password` / `passwd`）の config 直書き**（§4.7） |
-| warn（exit 0） | シナリオ配下に残存する `*.dig` ファイル（v1.0 では不要・削除推奨） / **プラグイン `plugin.yml` の `requires` に宣言された前提コマンドが PATH に存在しない**（§4.7） |
+| warn（exit 0） | シナリオ配下に残存する `*.dig` ファイル（v1.0 では不要・削除推奨） / **プラグイン `plugin.yml` の `requires` に宣言された前提コマンドが PATH に存在しない**（§4.7） / **プロセスの `config/config.yml` に `plugin.yml` の `provision_keys`（ツールの版など）が書かれている**（使われない。プロジェクト共通 `config/plugins/process/{type}/config.yml` で指定する。§4.7） |
 
 出力形式は 1 違反 1 行: `[{level}] {対象}: {メッセージ}`。`{対象}` はディレクトリ規約・接続情報違反ではプロジェクトルート相対パス、プラグイン依存（requires）違反ではプロセスタイプ名（ディレクトリに紐づかないため）。同じ検証が `stfw run` の開始前にも自動実行され、エラー違反があれば run は開始されない。実行前ゲートでは requires 欠落も **error 扱い**（validate は環境非依存でないため警告に留めるのと対）で、run は fail-fast する（ジャーナルを作成しない）。
 
@@ -316,7 +316,8 @@ teardown フックのみに追加注入される変数:
 **プラグインメタデータ `plugin.yml`（ランタイム依存宣言）**
 
 - 配置: `{plugin}/plugin.yml`（同梱・プロジェクトいずれも可）。任意ファイルで、無ければ依存宣言なし。
-- スキーマ: `requires`（前提コマンドのリスト。例: `mysql`, `mysqldump`, `scp`, `k6`）。
+- スキーマ: `requires`（前提コマンドのリスト。例: `mysql`, `mysqldump`, `scp`, `k6`）、`provision_keys`（任意。プロビジョニング＝外部ツールの取得に使う設定キーのリスト。`stfw.process.{type}.` の下のキー名。例: collectLog は `logfilter_version` / `logfilter_arches`、compare / compareRegex は `compare_files_version`、invokeRest / invokeWeb は `k6_version`）。
+- `provision_keys` のキーは**プロジェクト共通までの設定（プラグイン既定 → `config/plugins/process/{type}/config.yml`）だけで決める**（v1.9.0〜）。プロセスの `config/config.yml` に書いても使わず（キーそのものに加え、別の書き方で同じ env 名に展開される値、例: `logfilter: {version: ..}` も捨てる）、実行時の env（`is_installed` / `execute` 等）にもプロジェクト共通までの値を渡す。install（プロセス非依存）と実行で同じ版を見るようにし、雛形でコピーされた旧既定版がツールの版上げ後に実行を止めるのを防ぐため。プロセスの設定に書かれていれば `stfw validate` が警告する（§3.5）。`stfw new process` の雛形（プラグインに `template/` が無い場合の既定 `config.yml` の複製）も、これらのキーを除いて書き出す。
 - 検証: `stfw validate` と `stfw run` の実行前ゲートが、シナリオで使用するプロセスタイプの `requires` を `exec.LookPath`（`gateway.CommandExists`）で存在チェックする。validate は警告、run は error（fail-fast）。
 
 **接続情報のグループ名参照（config 直書き禁止）**
@@ -375,7 +376,21 @@ inventory は後方互換で**文字列ホスト**と**構造化エントリ（`
 
 **collectLog**（`assets/plugins/process/collectLog`、requires: `ssh` / `scp` / `sshpass`）
 
-- config: `targets[]`（collectFile と同じ）+ `logfilter_version` / `logfilter_arches`（provisioning 対象の `{os}_{arch}` をスペース区切り）。
+- config: `targets[]`（collectFile と同じ）+ `logfilter_version` / `logfilter_arches`（provisioning 対象の `{os}_{arch}` をスペース区切り）。既定の `logfilter_version` は `v2.1.0`。
+- **構造化ログ（v1.9.0〜）**: `targets[]` の各エントリに次のキーを書くと、そのエントリの `paths` を JSON Lines / logfmt として読み、ログ内の時刻フィールドで絞り込む（logfilter v2.1.0 の機能。書かなければ従来どおりテキスト形式）。
+
+  | キー | 値 | logfilter に渡すオプション |
+  |---|---|---|
+  | `log_format` | `text`（既定）/ `json`（JSON Lines）/ `logfmt` | `-lf`（`text` のときは渡さない） |
+  | `timestamp_key` | 時刻フィールドのキー（JSON Lines はドット区切りで入れ子をたどれる。例: `log.ts`。logfmt ではドットもキー名の一部）。省略時は logfilter の既定の候補（`time` / `timestamp` / `ts` / `@timestamp`）を順に探す | `-tk` |
+  | `timestamp_format` | `auto`（既定）/ `unix` / `unixms` / `unixus` / `unixns` | `-tfmt` |
+
+  - 値の検査はどのホストにも接続する前に、収集と同じ範囲のエントリ（先頭から、最初に `group` が無いエントリの手前まで）について行い、不正なら exit 6（fail-fast）。3 つのキーのどれかを YAML の配列で書いた（フラット化で `{key}_{数字}` に展開されるもので判定する。同じ接頭辞の別のキーは対象外。空の配列・マップ `[]` / `{}` は何も展開されないため、書かなかったのと同じ既定値になる。値をマップで書いた場合は検出できない）、`log_format` が上の 3 つ以外、`timestamp_format` が上の 5 つ以外、`log_format` が `text` なのに `timestamp_key` か `timestamp_format` を書いた（logfilter も構造化ログでのみ受け付ける）、のいずれか。明示的な空文字も不正として扱う（未定義の変数の展開に気づけるよう）。
+  - 絞り込みの基準時刻は従来どおり `-tf`（`stfw_bizdate_start_ts` を変換したもの）。ログ側の時刻の読み方は logfilter v2.1.0 のとおり: `T` 区切りの ISO 8601 形式と Apache 形式はオフセットを読む、空白区切りの日時は収集先ホストのローカル時刻として読む（オフセット付きの表記は確実には読めない。`2024-01-02 09:00:00+00:00` はローカル時刻扱い、`-05:00` は変換エラーで収集失敗。オフセットを使うときは `T` 区切りにする）、Unix 時刻（数値・`unix*`）は絶対時刻。
+  - logfilter v2.1.0 は `-tk` の値の両端が同じ引用符（`'` か `"`）だと一組取り除くため、キー名そのものがそうなっている場合は同じ引用符を一組足して渡す（キー名の引用符を残す）。
+  - ログレベルでの絞り込み（logfilter の `-l` / `-lk`）は collectLog では使わない。
+- **基準時刻以降のログが 0 件のとき（v1.9.0〜）**: logfilter は該当 0 件を exit 3（警告）で返し、空の出力ファイルを作る。collectLog は exit 3 を失敗にせず、空のファイルをエビデンスとして収集して続行する（そのファイルは成功扱い。テキスト・構造化ログとも）。「その日はログが出ない」を空の期待値で確かめられるようにするため。v1.8 までは exit 3 を収集失敗として exit 6 にしていた。exit 0 / 3 以外（オプション不正 = 6 など）は従来どおり収集失敗。
+  - `logfilter_version` を v2.1.0 より前に上書きしたまま `log_format: json` / `logfmt` を書くと、logfilter がオプションを受け付けず、そのファイルの収集が失敗する（exit 6）。キャッシュ（`.stfw/cache/plugins/collectLog/logfilter/`）に v2.1.0 より前の logfilter が残っている場合も同じ（キャッシュは版を照合せず同梱版より優先されるため、版を上書きしていなくても起きる）。そのときは原因と対処（プロジェクト共通の `logfilter_version` が旧版ならまず v2.1.0 以降にするか外し、そのうえでキャッシュを消して `stfw plugin install collectLog`）を stderr に出す。
 - provisioning（`bin/install/install`）: `logfilter`（scenario-test-framework/logfilter, GitHub Releases）を `logfilter_arches` 分ダウンロードし `stfw_plugin_cache_dir/logfilter/{os_arch}/logfilter` へ配置。`is_installed` はキャッシュ内の logfilter 存在で判定（キャッシュに無い arch は版一致のイメージ同梱版で補う。下記「イメージ同梱版へのフォールバック」）。
 - 処理: host に `mktemp -d /tmp/stfw.XXXXXXXX` で専用ディレクトリを作る → arch 版 logfilter を `scp` でそこへ転送 → `ssh` で実行し「業務日付の実行開始日時以降」のログ行に絞り込み（出力も専用ディレクトリ）→ `scp` で `evidence/{host}/{絶対パス}` へ収集 → 専用ディレクトリごと削除（転送失敗時も削除する。削除できなければ残った場所を示して exit 6）。共有の `/tmp` に推測できる固定名で置かない（#55）。専用ディレクトリを作る前に collectFile と同じ方法でログインシェルが標準出力に何も足さないことを確かめ、足す host は exit 6（作ってから名前を読めなくなると消せないため）。mktemp の出力が `/tmp/stfw.` + 英数字等でなければ、その名前は信用せず exit 6。名前が返っても ssh か mktemp が失敗していれば、そのディレクトリを消してから exit 6。フィルタ基準時刻は `stfw_bizdate_start_ts`（RFC3339）を logfilter の `-tf 'YYYY-MM-DD HH:MM:SS.000'` へ純 bash で変換（実行ホストの TZ 基準。**収集先ホストとの時刻同期が前提**）。
 
@@ -387,11 +402,11 @@ inventory は後方互換で**文字列ホスト**と**構造化エントリ（`
 - **イメージ同梱版へのフォールバック**: 外部ツールを DL する組込みプラグイン（collectLog = logfilter / compare・compareRegex = compare-files / invokeRest・invokeWeb = k6）は、環境変数 `stfw_plugin_bundled_dir`（stfw は注入しない。stfw:full イメージが ENV で `/opt/stfw/bundled` を設定。§10.2）が指す同梱ディレクトリ `{stfw_plugin_bundled_dir}/{tool}/{os_arch}/{bin}` を参照できる。
   - 解決順は **永続キャッシュ → 同梱版 → 未プロビジョニング**（キャッシュがあれば同梱より優先。既存の「初回 install 優先」を維持）。`is_installed` と `bin/run/execute` は同じ解決順を持つ。
   - 同梱版は `{stfw_plugin_bundled_dir}/{tool}/VERSION` が**設定版**（`logfilter_version` / `compare_files_version` / `k6_version`）と一致するときだけ使う。プロジェクト共通設定（`config/plugins/process/{type}/config.yml`）で同梱版と**異なる**版を指定した場合は同梱を使わず、従来どおり install（DL）を要求する（同梱版と同じ版の指定なら同梱を使う。判定は値の一致）。
-  - **版の上書き単位はプロジェクト共通設定**。install / `is_installed`（provisioning 時）はプロセス非依存の `PluginConfigEnv` を見るため、プロセスローカル `config/config.yml` だけで版を変えても provisioning には反映されない（install は既定版で「インストール済み」exit 3 のまま）。stfw:full でキャッシュが無い場合、run 時の `is_installed` は版不一致で false（exit 6）となるため、版不一致時は `is_installed` が原因と対処（`bundled {tool} is {同梱版} but {key} is {設定版} (set {key} in config/plugins/process/{type}/config.yml and run ...)`）を **stderr** に出す（stdout は判定専用で利用者に見えない）。
+  - **版の上書き単位はプロジェクト共通設定**。install / `is_installed`（provisioning 時）はプロセス非依存の `PluginConfigEnv` を見る。v1.9.0 からは run 時も、`plugin.yml` の `provision_keys` に宣言したキー（版・arches）はプロセスローカル `config/config.yml` の値を使わず、プロジェクト共通までの値で決める（§4.7。v1.8 までは run 時だけプロセスローカルの値が効き、雛形でコピーされた旧既定版がツールの版上げ後に同梱版と食い違って run を止めていた）。プロジェクト共通で同梱版と異なる版を指定し、キャッシュも無い場合、run 時の `is_installed` は版不一致で false（exit 6）となるため、版不一致時は `is_installed` が原因と対処（`bundled {tool} is {同梱版} but {key} is {設定版} (set {key} in config/plugins/process/{type}/config.yml and run ...)`）を **stderr** に出す（stdout は判定専用で利用者に見えない）。
   - collectLog は `logfilter_arches` の **arch ごと**に「キャッシュ → 同梱」で解決する（同梱に無い arch を要求した場合、その arch は install が必要）。
   - 同梱版で `is_installed=true` になるため、`stfw plugin install {type}` は「インストール済み」（exit 3）、`stfw init` は "already provisioned" となり DL しない。`stfw_plugin_bundled_dir` 未設定（ホスト実行・通常版イメージ）では挙動は変わらない。
 
-> 根拠: `assets/plugins/process/{collectFile,collectLog}/`, `internal/repository/{inventory,plugin}.go`（inventory arch / `PluginCacheDir` / `PluginConfigEnv`）, `internal/usecase/plugin/plugin.go`（`InitAll` / `provisionEnv`）, `internal/usecase/inventory/inventory.go`（`Arch`）, `internal/presentation/cli/{init,inventory}.go`, `test/acceptance/testdata/script/{collectFile_ホスト上のファイルを収集する場合_エビデンス規約で出力すること,collectLog_ログを収集する場合_時刻フィルタで抽出すること,collectLog_同梱logfilterがある場合_installなしで収集できること,init_プラグイン自動provisioningの場合_skipで抑止できること}.txtar`
+> 根拠: `assets/plugins/process/{collectFile,collectLog}/`, `internal/repository/{inventory,plugin}.go`（inventory arch / `PluginCacheDir` / `PluginConfigEnv`）, `internal/usecase/plugin/plugin.go`（`InitAll` / `provisionEnv`）, `internal/usecase/inventory/inventory.go`（`Arch`）, `internal/presentation/cli/{init,inventory}.go`, `test/acceptance/testdata/script/{collectFile_ホスト上のファイルを収集する場合_エビデンス規約で出力すること,collectLog_ログを収集する場合_時刻フィルタで抽出すること,collectLog_同梱logfilterがある場合_installなしで収集できること,collectLog_構造化ログを指定する場合_logfilterへ形式と時刻キーを渡すこと,init_プラグイン自動provisioningの場合_skipで抑止できること}.txtar`
 
 ### 4.9 組込み RDBMS プラグイン（export / import / clear × MySQL / PostgreSQL）と secret マスキング
 

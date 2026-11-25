@@ -33,7 +33,17 @@ execcode 3 stfw plugin install invokeRest
 execcode 3 stfw plugin install invokeWeb
 ! stderr 'download'
 
-# --- 設定版と同梱版が異なる: 同梱は使わない ---
+# --- プロセスローカルの版は使わない (AS-BUILT §4.7): プロセスの設定に v9.9.9 があっても同梱版で動く ---
+exec stfw run invver
+stderr 'k6=bundled'
+exec stfw run invwebver
+stderr 'k6=bundled'
+
+# --- プロジェクト共通の設定版と同梱版が異なる: 同梱は使わない ---
+mkdir config/plugins/process/invokeRest
+mkdir config/plugins/process/invokeWeb
+cp config.rest.v999.yml config/plugins/process/invokeRest/config.yml
+cp config.web.v999.yml config/plugins/process/invokeWeb/config.yml
 execcode 6 stfw run invver
 stderr 'is not installed'
 stderr 'bundled k6 is v2\.4\.0 but k6_version is v9\.9\.9'
@@ -42,6 +52,8 @@ execcode 6 stfw run invwebver
 stderr 'is not installed'
 stderr 'bundled k6 is v2\.4\.0 but k6_version is v9\.9\.9'
 ! stderr 'k6=bundled'
+rm config/plugins/process/invokeRest/config.yml
+rm config/plugins/process/invokeWeb/config.yml
 
 # --- 永続キャッシュと同梱の両方がある: 永続キャッシュを優先する ---
 exec mkbin .stfw/cache/plugins/invokeRest/k6 v2.4.0 cache
@@ -61,6 +73,16 @@ execcode 6 stfw run inv
 stderr 'is not installed'
 ! stderr 'bundled k6 is'
 
+-- config.rest.v999.yml --
+stfw:
+  process:
+    invokeRest:
+      k6_version: v9.9.9
+-- config.web.v999.yml --
+stfw:
+  process:
+    invokeWeb:
+      k6_version: v9.9.9
 -- stfw.yml --
 stfw:
   project_version: 0.1.0

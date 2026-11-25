@@ -1,0 +1,455 @@
+# STEP: collectLog の構造化ログ (JSON Lines / logfmt) 対応 (AS-BUILT §4.8。logfilter v2.1.0)
+# curl(DL) / ssh / scp / sshpass はモックし、擬似リモートから収集する。モック ssh は logfilter の
+# 起動引数を remote/{host}/lf_args.log に、接続そのものを remote/calls.log に記録する。
+#
+# 検証内容:
+#   - targets[] の log_format / timestamp_key / timestamp_format が、エントリごとに -lf / -tk / -tfmt で渡る
+#   - 書かないエントリ (log_format 既定 text) には構造化ログのオプションを渡さない
+#   - 値が不正なら、どのホストにも接続する前に exit 6 (fail-fast)
+
+env PATH=${WORK}/fakebin:${PATH}
+env STFW_TEST_REMOTE=${WORK}/remote
+# ジャーナルの時刻 (UTC) と -tf (ローカル時刻) を同じ時計で比べられるようにする
+env TZ=UTC
+chmod 755 fakebin/ssh
+chmod 755 fakebin/scp
+chmod 755 fakebin/sshpass
+chmod 755 fakebin/curl
+chmod 755 fakebin/fakelogfilter
+chmod 755 fakebin/checktf
+
+mkdir lfsrc
+mkdir lfsrc/logfilter_v2.1.0_linux_amd64
+cp fakebin/fakelogfilter lfsrc/logfilter_v2.1.0_linux_amd64/logfilter
+exec tar czf lf.tar.gz -C lfsrc logfilter_v2.1.0_linux_amd64
+env STFW_TEST_LF_TARBALL=${WORK}/lf.tar.gz
+exec stfw plugin install collectLog
+exec stfw secret keygen
+exec stfw secret set web01 appuser secretpw
+
+# --- エントリごとに形式と時刻キーを渡す ---
+exec stfw run lf
+# -tf は全エントリで、今回の業務日付の開始時刻 (ジャーナルの bizdate の node_start) を秒まで同じ値で渡す
+latestrun . RUN
+exec checktf .stfw/runs/$RUN/journal.jsonl remote/web01/lf_args.log
+exec cat remote/web01/lf_args.log
+# テキスト形式 (既定) のエントリは従来どおり -f -tf だけ
+stdout '^/var/log/app/app\.log \[-f\] \[-tf\] \[[0-9-]+ [0-9:.]+\] \[/var/log/app/app\.log\] \[[^]]+\]$'
+! stdout '^/var/log/app/app\.log .*-lf'
+# JSON Lines のエントリは -lf json -tk log.ts -tfmt unixms を足す
+stdout '^/var/log/app/app\.jsonl \[-f\] \[-lf\] \[json\] \[-tk\] \[a''b;x\] \[-tfmt\] \[unixms\] \[-tf\] \[[0-9-]+ [0-9:.]+\] \[/var/log/app/app\.jsonl\] \[[^]]+\]$'
+# logfmt で時刻キーを省いたエントリは -lf logfmt だけ (時刻キーは logfilter の既定の候補を探す)
+stdout '^/var/log/app/app\.logfmt \[-f\] \[-lf\] \[logfmt\] \[-tf\] \[[0-9-]+ [0-9:.]+\] \[/var/log/app/app\.logfmt\] \[[^]]+\]$'
+! stdout 'app\.logfmt .*-tk'
+# logfmt でも明示した時刻キーと形式を渡す (logfmt ではドットもキー名の一部)
+stdout '^/var/log/app/app2\.logfmt \[-f\] \[-lf\] \[logfmt\] \[-tk\] \[event\.ts\] \[-tfmt\] \[unixus\] \[-tf\] '
+# キー名の両端に引用符があると logfilter が一組取り除くため、一組足して渡す
+stdout '^/var/log/app/quoted\.jsonl \[-f\] \[-lf\] \[json\] \[-tk\] \[""when""\] \[-tf\] '
+! exists x
+latestrun . RUN
+exists .stfw/runs/$RUN/workspace/lf/_10_99990101/_10_grp_collectLog/evidence/web01/var/log/app/app.jsonl
+
+# --- 値が不正: どのホストにも接続せずに exit 6 ---
+rm remote/calls.log
+execcode 6 stfw run lfbadformat
+stderr 'invalid log_format in targets\[1\]: xml \(must be text, json or logfmt\)'
+! exists remote/calls.log
+
+execcode 6 stfw run lfbadtsformat
+stderr 'invalid timestamp_format in targets\[1\]: seconds \(must be auto, unix, unixms, unixus or unixns\)'
+! exists remote/calls.log
+
+execcode 6 stfw run lftextkey
+stderr 'timestamp_key in targets\[1\] requires log_format json or logfmt'
+! exists remote/calls.log
+
+execcode 6 stfw run lftexttsformat
+stderr 'timestamp_format in targets\[1\] requires log_format json or logfmt'
+! exists remote/calls.log
+
+execcode 6 stfw run lfemptykey
+stderr 'invalid timestamp_key in targets\[1\]: \(empty\)'
+! exists remote/calls.log
+
+execcode 6 stfw run lfemptytsformat
+stderr 'invalid timestamp_format in targets\[1\]: \(empty\)'
+! exists remote/calls.log
+
+execcode 6 stfw run lflistmap
+stderr 'log_format in targets\[1\] must be a single value, not a list'
+! exists remote/calls.log
+
+execcode 6 stfw run lflist
+stderr 'log_format in targets\[1\] must be a single value, not a list'
+! exists remote/calls.log
+
+execcode 6 stfw run lfemptyformat
+stderr 'invalid log_format in targets\[1\]: \(empty\)'
+! exists remote/calls.log
+
+-- stfw.yml --
+stfw:
+  project_version: 0.1.0
+  loglevel: "info"
+  inventory: staging.yml
+-- config/inventory/staging.yml --
+stfw_inventory:
+  - web:
+    - host: web01
+      arch: linux_amd64
+-- scenario/lf/metadata.yml --
+description:
+-- scenario/lf/_10_99990101/metadata.yml --
+description:
+-- scenario/lf/_10_99990101/_10_grp_collectLog/metadata.yml --
+description:
+-- scenario/lf/_10_99990101/_10_grp_collectLog/config/config.yml --
+stfw:
+  process:
+    collectLog:
+      targets:
+        - group: web
+          user: appuser
+          log_format_note: legacy
+          paths:
+            - /var/log/app/app\.log
+        - group: web
+          user: appuser
+          log_format: json
+          timestamp_key: "a'b;x"
+          timestamp_format: unixms
+          paths:
+            - /var/log/app/app\.jsonl
+        - group: web
+          user: appuser
+          log_format: logfmt
+          paths:
+            - /var/log/app/app\.logfmt
+        - group: web
+          user: appuser
+          log_format: logfmt
+          timestamp_key: event.ts
+          timestamp_format: unixus
+          paths:
+            - /var/log/app/app2\.logfmt
+        - group: web
+          user: appuser
+          log_format: json
+          timestamp_key: '"when"'
+          paths:
+            - /var/log/app/quoted\.jsonl
+-- scenario/lfbadformat/metadata.yml --
+description:
+-- scenario/lfbadformat/_10_99990101/metadata.yml --
+description:
+-- scenario/lfbadformat/_10_99990101/_10_grp_collectLog/metadata.yml --
+description:
+-- scenario/lfbadformat/_10_99990101/_10_grp_collectLog/config/config.yml --
+stfw:
+  process:
+    collectLog:
+      targets:
+        - group: web
+          user: appuser
+          paths:
+            - /var/log/app/app\.log
+        - group: web
+          user: appuser
+          log_format: xml
+          paths:
+            - /var/log/app/app\.jsonl
+-- scenario/lfbadtsformat/metadata.yml --
+description:
+-- scenario/lfbadtsformat/_10_99990101/metadata.yml --
+description:
+-- scenario/lfbadtsformat/_10_99990101/_10_grp_collectLog/metadata.yml --
+description:
+-- scenario/lfbadtsformat/_10_99990101/_10_grp_collectLog/config/config.yml --
+stfw:
+  process:
+    collectLog:
+      targets:
+        - group: web
+          user: appuser
+          paths:
+            - /var/log/app/app\.log
+        - group: web
+          user: appuser
+          log_format: json
+          timestamp_format: seconds
+          paths:
+            - /var/log/app/app\.jsonl
+-- scenario/lftextkey/metadata.yml --
+description:
+-- scenario/lftextkey/_10_99990101/metadata.yml --
+description:
+-- scenario/lftextkey/_10_99990101/_10_grp_collectLog/metadata.yml --
+description:
+-- scenario/lftextkey/_10_99990101/_10_grp_collectLog/config/config.yml --
+stfw:
+  process:
+    collectLog:
+      targets:
+        - group: web
+          user: appuser
+          paths:
+            - /var/log/app/app\.log
+        - group: web
+          user: appuser
+          timestamp_key: log.ts
+          paths:
+            - /var/log/app/app\.jsonl
+-- scenario/lftexttsformat/metadata.yml --
+description:
+-- scenario/lftexttsformat/_10_99990101/metadata.yml --
+description:
+-- scenario/lftexttsformat/_10_99990101/_10_grp_collectLog/metadata.yml --
+description:
+-- scenario/lftexttsformat/_10_99990101/_10_grp_collectLog/config/config.yml --
+stfw:
+  process:
+    collectLog:
+      targets:
+        - group: web
+          user: appuser
+          paths:
+            - /var/log/app/app\.log
+        - group: web
+          user: appuser
+          timestamp_format: auto
+          paths:
+            - /var/log/app/app\.jsonl
+-- scenario/lfemptykey/metadata.yml --
+description:
+-- scenario/lfemptykey/_10_99990101/metadata.yml --
+description:
+-- scenario/lfemptykey/_10_99990101/_10_grp_collectLog/metadata.yml --
+description:
+-- scenario/lfemptykey/_10_99990101/_10_grp_collectLog/config/config.yml --
+stfw:
+  process:
+    collectLog:
+      targets:
+        - group: web
+          user: appuser
+          paths:
+            - /var/log/app/app\.log
+        - group: web
+          user: appuser
+          log_format: json
+          timestamp_key: ""
+          paths:
+            - /var/log/app/app\.jsonl
+-- scenario/lfemptytsformat/metadata.yml --
+description:
+-- scenario/lfemptytsformat/_10_99990101/metadata.yml --
+description:
+-- scenario/lfemptytsformat/_10_99990101/_10_grp_collectLog/metadata.yml --
+description:
+-- scenario/lfemptytsformat/_10_99990101/_10_grp_collectLog/config/config.yml --
+stfw:
+  process:
+    collectLog:
+      targets:
+        - group: web
+          user: appuser
+          paths:
+            - /var/log/app/app\.log
+        - group: web
+          user: appuser
+          log_format: json
+          timestamp_format: ""
+          paths:
+            - /var/log/app/app\.jsonl
+-- scenario/lflist/metadata.yml --
+description:
+-- scenario/lflist/_10_99990101/metadata.yml --
+description:
+-- scenario/lflist/_10_99990101/_10_grp_collectLog/metadata.yml --
+description:
+-- scenario/lflist/_10_99990101/_10_grp_collectLog/config/config.yml --
+stfw:
+  process:
+    collectLog:
+      targets:
+        - group: web
+          user: appuser
+          paths:
+            - /var/log/app/app\.log
+        - group: web
+          user: appuser
+          log_format:
+            - json
+          paths:
+            - /var/log/app/app\.jsonl
+-- scenario/lflistmap/metadata.yml --
+description:
+-- scenario/lflistmap/_10_99990101/metadata.yml --
+description:
+-- scenario/lflistmap/_10_99990101/_10_grp_collectLog/metadata.yml --
+description:
+-- scenario/lflistmap/_10_99990101/_10_grp_collectLog/config/config.yml --
+stfw:
+  process:
+    collectLog:
+      targets:
+        - group: web
+          user: appuser
+          paths:
+            - /var/log/app/app\.log
+        - group: web
+          user: appuser
+          log_format:
+            - name: json
+          paths:
+            - /var/log/app/app\.jsonl
+-- scenario/lfemptyformat/metadata.yml --
+description:
+-- scenario/lfemptyformat/_10_99990101/metadata.yml --
+description:
+-- scenario/lfemptyformat/_10_99990101/_10_grp_collectLog/metadata.yml --
+description:
+-- scenario/lfemptyformat/_10_99990101/_10_grp_collectLog/config/config.yml --
+stfw:
+  process:
+    collectLog:
+      targets:
+        - group: web
+          user: appuser
+          paths:
+            - /var/log/app/app\.log
+        - group: web
+          user: appuser
+          log_format: ""
+          paths:
+            - /var/log/app/app\.jsonl
+-- remote/web01/manifest --
+/var/log/app/app.log
+/var/log/app/app.jsonl
+/var/log/app/app.logfmt
+/var/log/app/app2.logfmt
+/var/log/app/quoted.jsonl
+-- remote/web01/var/log/app/app.log --
+2024-01-02 09:00:01.000 INFO text log
+-- remote/web01/var/log/app/app.jsonl --
+{"a'b;x":1704153600000,"level":"info","msg":"json log"}
+-- remote/web01/var/log/app/app.logfmt --
+time=2024-01-02T10:00:00+09:00 level=info msg=logfmt
+-- remote/web01/var/log/app/app2.logfmt --
+event.ts=1704153600000000 level=info msg=logfmt2
+-- remote/web01/var/log/app/quoted.jsonl --
+{""when"":"2024-01-02T10:00:00+09:00","when":"2000-01-01T00:00:00Z","msg":"quoted"}
+-- fakebin/fakelogfilter --
+#!/bin/bash
+# 実体は使われない (モック ssh が logfilter 実行を再現する)。存在確認用。
+exit 0
+-- fakebin/curl --
+#!/bin/bash
+# curl -fsSL <url> -o <out> をフィクスチャ tarball のコピーで再現
+out=""
+while [ $# -gt 0 ]; do
+  case "$1" in -o) out="$2"; shift 2;; *) shift;; esac
+done
+cp "${STFW_TEST_LF_TARBALL}" "${out}"
+exit 0
+-- fakebin/sshpass --
+#!/bin/bash
+# sshpass -e <cmd...>: パスワードは SSHPASS 環境変数で受け取る (argv に出さない。#54)。
+# -p (argv 渡し) や SSHPASS 未設定は失敗させる。
+if [ "$1" != "-e" ]; then echo "fake sshpass: expected -e, got: $1" >&2; exit 99; fi
+if [ "${SSHPASS:-}" != "secretpw" ]; then echo "fake sshpass: SSHPASS is not the secret" >&2; exit 99; fi
+shift
+exec "$@"
+-- fakebin/ssh --
+#!/bin/bash
+# 擬似リモート ${STFW_TEST_REMOTE}/{host}/。リモートで実行するコマンド文字列は、本物の
+# リモートシェルと同じく eval で単語に分けてから解釈する (引用符の漏れがあれば、注入が
+# ここで実際に起きる。#55)。
+if [ "${STFW_TEST_SSH_FAIL:-}" = "1" ]; then exit 255; fi
+# ログインシェルが標準出力に案内文を出すホストを再現する
+if [ "${STFW_TEST_SSH_NOISE:-}" = "1" ]; then echo "Welcome to web01"; fi
+# コマンドの後に空行を足すホストを再現する
+if [ "${STFW_TEST_SSH_TRAILER:-}" = "1" ]; then trap 'echo' EXIT; fi
+echo "$*" >> "${STFW_TEST_REMOTE}/calls.log"
+host=""
+for a in "$@"; do case "$a" in *@*) host="${a#*@}";; esac; done
+root="${STFW_TEST_REMOTE}/${host}"
+eval "set -- ${*: -1}" || exit 2
+case "$1" in
+  find)
+    # find / -regextype posix-extended -regex PAT -type f
+    [ -f "${root}/manifest" ] || exit 0
+    grep -Ex -- "$6" "${root}/manifest"
+    exit 0
+    ;;
+  mktemp)
+    d="/tmp/stfw.fake$$"
+    mkdir -p "${root}${d}"
+    echo "${d}"
+    # STFW_TEST_MKTEMP_FAIL=1 なら、名前を返した後に接続が切れたことにする
+    if [ "${STFW_TEST_MKTEMP_FAIL:-}" = "1" ]; then exit 255; fi
+    ;;
+  chmod)
+    exit 0
+    ;;
+  echo)
+    shift
+    echo "$*"
+    ;;
+  rm)
+    # rm -f|-rf -- PATH: 記録してから擬似リモート上で実際に消す。
+    # STFW_TEST_RM_FAIL=1 なら消せなかったことにする
+    echo "$*" >> "${root}/rm.log"
+    if [ "${STFW_TEST_RM_FAIL:-}" = "1" ]; then exit 1; fi
+    rm "$2" -- "${root}${*: -1}"
+    ;;
+  cat)
+    shift
+    [ "$1" = "--" ] && shift
+    cat "${root}$1"
+    ;;
+  */logfilter)
+    # logfilter -f [-tf FROM] IN OUT: マーカー付与 + 入力複製で再現する
+    in="${*: -2:1}"; out="${*: -1}"
+    shift
+    { printf "%s" "${in}"; printf " [%s]" "$@"; echo; } >> "${root}/lf_args.log"
+    mkdir -p "${root}$(dirname "${out}")"
+    # STFW_TEST_LF_FAIL=1: オプション不正などの失敗 (本物は exit 6)
+    if [ "${STFW_TEST_LF_FAIL:-}" = "1" ]; then exit 6; fi
+    # STFW_TEST_LF_NOMATCH=1: 該当 0 件 (本物は空の出力ファイルを作って exit 3)
+    if [ "${STFW_TEST_LF_NOMATCH:-}" = "1" ]; then : > "${root}${out}"; exit 3; fi
+    { echo "# filtered by logfilter"; cat "${root}${in}"; } > "${root}${out}"
+    ;;
+  *)
+    echo "fake ssh: unexpected remote command: $*" >&2
+    exit 127
+    ;;
+esac
+-- fakebin/scp --
+#!/bin/bash
+dest="${*: -1}"
+src="${*: -2:1}"
+if [[ "${src}" == *@*:* ]]; then
+  host="${src%%:*}"; host="${host#*@}"; path="${src#*:}"
+  cp "${STFW_TEST_REMOTE}/${host}${path}" "${dest}" || exit 1
+elif [[ "${dest}" == *@*:* ]]; then
+  host="${dest%%:*}"; host="${host#*@}"; path="${dest#*:}"
+  mkdir -p "$(dirname "${STFW_TEST_REMOTE}/${host}${path}")"
+  cp "${src}" "${STFW_TEST_REMOTE}/${host}${path}" || exit 1
+  # 転送された logfilter を、後片付けで消えた後も確かめられるよう控えておく
+  case "${path}" in */logfilter) cp "${src}" "${STFW_TEST_REMOTE}/${host}/uploaded-logfilter";; esac
+fi
+exit 0
+-- fakebin/checktf --
+#!/bin/bash
+# checktf JOURNAL LOG: logfilter の起動引数の記録 (引数を [..] で区切った行) から -tf の値を取り出し、
+# 全行で同じ値で、ジャーナルの bizdate の node_start (UTC。テストは TZ=UTC で実行する) を
+# 秒まで同じにした値 (YYYY-MM-DD HH:MM:SS.000) であることを確かめる。
+ts="$(grep '"node_type":"bizdate"' "$1" | grep '"event":"node_start"' | head -1 \
+  | sed -E 's/.*"ts":"([0-9-]+)T([0-9:]+)Z".*/\1 \2.000/')"
+vals="$(grep -o -- '\[-tf\] \[[^]]*\]' "$2" | sed -e 's/^\[-tf\] \[//' -e 's/\]$//' | sort -u)"
+if [ -z "${ts}" ] || [ "${vals}" != "${ts}" ]; then
+  echo "checktf: -tf (${vals}) is not the bizdate start (${ts})" >&2
+  exit 1
+fi
+echo "checktf: ok ${vals}"

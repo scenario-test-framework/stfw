@@ -7,6 +7,10 @@
 #   group : inventory グループ名 (ホスト解決)
 #   user  : ログインユーザー (secret {host}-{user} でパスワード解決)
 #   paths : 収集対象ログのパス正規表現 (posix-extended)
+#   log_format       : (任意) text (既定) / json (JSON Lines) / logfmt
+#   timestamp_key    : (任意) 構造化ログの時刻フィールドのキー (JSON Lines はドット区切りで入れ子をたどる。logfmt はキー名そのもの)
+#   timestamp_format : (任意) auto (既定) / unix / unixms / unixus / unixns
+#   (構造化ログの 3 キーは logfilter v2.1.0 以降。json / logfmt のときだけ timestamp_* を書ける)
 #
 #   stfw:
 #     process:
@@ -19,6 +23,6 @@
 stfw:
   process:
     collectLog:
-      logfilter_version: v2.0.2
+      logfilter_version: v2.1.0
       logfilter_arches: linux_amd64 linux_arm64 darwin_arm64
       targets: []

@@ -11,9 +11,9 @@ chmod 755 fakebin/fakelogfilter
 
 # logfilter リリース tarball フィクスチャ
 mkdir lfsrc
-mkdir lfsrc/logfilter_v2.0.2_x
-cp fakebin/fakelogfilter lfsrc/logfilter_v2.0.2_x/logfilter
-exec tar czf lf.tar.gz -C lfsrc logfilter_v2.0.2_x
+mkdir lfsrc/logfilter_v2.1.0_x
+cp fakebin/fakelogfilter lfsrc/logfilter_v2.1.0_x/logfilter
+exec tar czf lf.tar.gz -C lfsrc logfilter_v2.1.0_x
 env STFW_TEST_LF_TARBALL=${WORK}/lf.tar.gz
 
 # --- 一部 arch (linux_amd64) だけ存在する半端な状態 ---

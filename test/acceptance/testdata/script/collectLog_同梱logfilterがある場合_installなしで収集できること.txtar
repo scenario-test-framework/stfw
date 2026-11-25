@@ -10,6 +10,8 @@
 #   - 同梱が設定版と一致すれば plugin install は「インストール済み」(exit 3) で DL しない
 #   - arch ごとに「永続キャッシュ → 同梱」の順で解決する (キャッシュ済み arch はキャッシュ優先)
 #   - 設定版が異なる / 同梱に無い arch を要求する場合は未プロビジョニング扱い
+#   - 旧版の雛形でプロセスの設定に旧既定版 (logfilter_version: v2.0.2) が残っていても、版は
+#     プロジェクト共通までの設定で決まり、同梱版で収集できる。validate は消してよいと警告する (AS-BUILT §4.7)
 
 env PATH=${WORK}/fakebin:${PATH}
 env STFW_TEST_REMOTE=${WORK}/remote
@@ -20,7 +22,7 @@ chmod 755 fakebin/sshpass
 chmod 755 fakebin/mkbin
 
 # 同梱ディレクトリ (VERSION + 既定の logfilter_arches 全 arch)
-exec mkbin bundled/logfilter v2.0.2 bundled linux_amd64 linux_arm64 darwin_arm64
+exec mkbin bundled/logfilter v2.1.0 bundled linux_amd64 linux_arm64 darwin_arm64
 env stfw_plugin_bundled_dir=${WORK}/bundled
 
 exec stfw secret keygen
@@ -34,12 +36,23 @@ exec cat remote/web01/uploaded-logfilter
 stdout 'logfilter=bundled'
 ! exists .stfw/cache/plugins/collectLog/logfilter
 
+# --- 旧版の雛形: プロセスの設定に旧既定版が残っていても、プロジェクト共通までの版 (同梱と一致) で収集できる ---
+rm remote/web01/uploaded-logfilter
+exec stfw run legacy
+exec cat remote/web01/uploaded-logfilter
+stdout 'logfilter=bundled'
+# validate はプロセスの設定に残った版のキーを、使われない (消してよい) と警告する
+exec stfw validate
+stdout '\[warn\] scenario/legacy/_10_99990101/_10_grp_collectLog: logfilter_version in config/config.yml is not used; set it in config/plugins/process/collectLog/config.yml'
+stdout '\[warn\] scenario/legacy/_10_99990101/_10_grp_collectLog: logfilter_arches in config/config.yml is not used'
+! stdout 'scenario/demo/.*is not used'
+
 # --- 同梱が設定版と一致: plugin install はインストール済み (exit 3) で DL しない ---
 execcode 3 stfw plugin install collectLog
 ! stderr 'download'
 
 # --- arch ごとの解決: キャッシュ済み arch (linux_amd64) はキャッシュ優先、他 arch は同梱で補う ---
-exec mkbin .stfw/cache/plugins/collectLog/logfilter v2.0.2 cache linux_amd64
+exec mkbin .stfw/cache/plugins/collectLog/logfilter v2.1.0 cache linux_amd64
 execcode 3 stfw plugin install collectLog
 rm remote/web01/uploaded-logfilter
 exec stfw run demo
@@ -57,15 +70,31 @@ stderr 'download failed'
 cp config.version.yml config/plugins/process/collectLog/config.yml
 execcode 6 stfw run demo
 stderr 'is not installed'
-stderr 'bundled logfilter is v2\.0\.2 but logfilter_version is v9\.9\.9'
+stderr 'bundled logfilter is v2\.1\.0 but logfilter_version is v9\.9\.9'
 execcode 6 stfw plugin install collectLog
 stderr 'download failed'
+
+# --- プロジェクト共通の版が stfw.yml の値を ${...} で参照する: install と run が同じ版 (v2.0.2) を見る ---
+# (install も run と同じく stfw.yml を環境へ反映してから設定を読む。AS-BUILT §4.7)
+cp config.ref.yml config/plugins/process/collectLog/config.yml
+execcode 6 stfw plugin install collectLog
+stderr 'bundled logfilter is v2\.1\.0 but logfilter_version is v2\.0\.2'
+stderr 'download failed'
+execcode 6 stfw run demo
+stderr 'bundled logfilter is v2\.1\.0 but logfilter_version is v2\.0\.2'
 
 -- stfw.yml --
 stfw:
   project_version: 0.1.0
   loglevel: "info"
   inventory: staging.yml
+  tools:
+    logfilter: v2.0.2
+-- config.ref.yml --
+stfw:
+  process:
+    collectLog:
+      logfilter_version: ${stfw_tools_logfilter}
 -- config/inventory/staging.yml --
 stfw_inventory:
   - web:
@@ -91,6 +120,24 @@ description:
 stfw:
   process:
     collectLog:
+      targets:
+        - group: web
+          user: appuser
+          paths:
+            - /var/log/app/.*\.log
+-- scenario/legacy/metadata.yml --
+description:
+-- scenario/legacy/_10_99990101/metadata.yml --
+description:
+-- scenario/legacy/_10_99990101/_10_grp_collectLog/metadata.yml --
+description:
+-- scenario/legacy/_10_99990101/_10_grp_collectLog/config/config.yml --
+# v1.8 までの stfw new process が既定設定から複製した設定 (版のキーが残っている)
+stfw:
+  process:
+    collectLog:
+      logfilter_version: v2.0.2
+      logfilter_arches: linux_amd64
       targets:
         - group: web
           user: appuser

@@ -5,3 +5,7 @@
 # install 時の curl / tar / unzip は install 側で確認する。
 # ブラウザモードの実行には Chrome / Chromium が必要 (stfw:full イメージに Chrome を同梱)。
 requires: []
+# 外部ツールの取得に使う設定キー。プロジェクト共通までの設定だけで決め、プロセスの
+# config/config.yml に書いても使わない (雛形にも複製しない。AS-BUILT §4.7)。
+provision_keys:
+  - k6_version

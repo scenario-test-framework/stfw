@@ -4,3 +4,7 @@
 # (プロビジョニングは install、存在ゲートは is_installed が担う)。
 # install 時の curl / tar は install 側で確認する。
 requires: []
+# 外部ツールの取得に使う設定キー。プロジェクト共通までの設定だけで決め、プロセスの
+# config/config.yml に書いても使わない (雛形にも複製しない。AS-BUILT §4.7)。
+provision_keys:
+  - compare_files_version
