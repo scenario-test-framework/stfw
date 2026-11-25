@@ -1,0 +1,18 @@
+変更要望: v1.10.0 の変更の取り込み（実装契約の正本は docs/AS-BUILT.md。各項目の節を参照。実装に無い挙動を発明しない）
+
+1. compare / compareRegex の起動設定の補完規則（AS-BUILT §4.11 手順 4、§4.11.1 手順 6）
+   - compare・compareRegex が使う compare-files の既定版を v2.3.0 にした（v1.9.0 までは v2.2.4）。stfw:full も v2.3.0 を同梱する。
+   - プロセスローカルの起動設定（config/compare_files.{json,yaml,yml}。-config で渡す）に書いた false（sorted / writeDiffOnly / deleteWorkDir）と
+     空配列 []（ignoreFileRegexList / ignoreItemList / ignoreAreaList）は、プロジェクト共通の起動設定で補完されず、そのまま使われる。
+     共通側が true や一覧でも、プロセスローカルで無効化・解除できる（v1.9.0 までは補完元の値を引き継ぎ、解除できなかった）。
+   - 補完されるのは、書いていない項目と、null を書いた真偽・一覧・文字列・画像スタイルの項目、空文字の文字列項目。数値の項目は null を書くと 0 になり補完されない。
+   - 真偽の項目に書いた空文字 "" も false として効く。
+   - sorted などの設定項目のキーを大文字・小文字だけ変えて併記した起動設定は、読込エラーで Error（exit 6）になる。
+     同じ項目をフラット形式と階層形式（input / compare / output）の両方で書いた場合は、階層形式の値が使われる。
+   - 同梱の compare_files.json を複製したプロセスローカルは、書かれた sorted / writeDiffOnly の false が共通側の true より優先される（空でない一覧は以前から複製側が優先）。
+   - 上流の SPEC-028-05（compareRegex の比較ルール解決。受け入れ基準 4 に「ignoreFileRegexList: [] は最初に発見した起動設定の値で補う」とあり、逆になった）、
+     compare 側の起動設定の補完に関する仕様・条件、RDRA の外部システム「compare-files」・条件「compareRegex の比較ルール解決」などの記述が古いので直す。
+   - 上流の SPEC-031-01・RDRA バリエーション「Docker イメージ構成」などにある compare-files の既定版 v2.2.4 を v2.3.0 に直す
+     （stfw:full は compare と compareRegex の config.yml の既定版を同梱し、両者が食い違うとビルドを失敗させる）。
+
+範囲外: CI・配布の仕組み（今回の変更なし）。
