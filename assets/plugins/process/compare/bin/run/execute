@@ -44,7 +44,7 @@ bin="${stfw_plugin_cache_dir}/compare-files/${os}_${arch}/compare_files"
 # 一致するときに限る (解決順は bin/install/is_installed と同じ)。
 bundled="${stfw_plugin_bundled_dir:-}/compare-files"
 if [ ! -x "${bin}" ] && [ -n "${stfw_plugin_bundled_dir:-}" ] \
-  && [ "$(cat "${bundled}/VERSION" 2>/dev/null)" = "${stfw_process_compare_compare_files_version:-v2.2.4}" ]; then
+  && [ "$(cat "${bundled}/VERSION" 2>/dev/null)" = "${stfw_process_compare_compare_files_version:-v2.3.0}" ]; then
   bin="${bundled}/${os}_${arch}/compare_files"
 fi
 if [ ! -x "${bin}" ]; then

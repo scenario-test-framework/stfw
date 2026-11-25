@@ -490,7 +490,7 @@ Assert フェーズの組込みプラグイン。期待値（`expect/`）と収�
 **プロビジョニング（`assets/plugins/process/compare`）**
 
 - compare-files はローカルで `expect`/`actual` を比較するため、`install` は**実行ホストの os_arch 版 1 種のみ**を取得する（収集系プラグインのような arch 送り分けはしない）。os_arch は `uname -s`/`uname -m` から解決する。
-- リリース資産名は `compare-files_{version無しv}_{os}_{arch}.tar.gz`（GitHub Releases）。既定バージョンは `v2.2.4`、ダウンロード元は `stfw_compare_files_download_base` で差し替え可能。バイナリは永続キャッシュ `${stfw_plugin_cache_dir}/compare-files/{os_arch}/compare_files` に配置する。`is_installed` が同キャッシュの存在で実行前ゲートする。
+- リリース資産名は `compare-files_{version無しv}_{os}_{arch}.tar.gz`（GitHub Releases）。既定バージョンは `v2.3.0`、ダウンロード元は `stfw_compare_files_download_base` で差し替え可能。バイナリは永続キャッシュ `${stfw_plugin_cache_dir}/compare-files/{os_arch}/compare_files` に配置する。`is_installed` が同キャッシュの存在で実行前ゲートする。
 - プロビジョニングモデルは collectLog（logfilter §4.8）と同一の「初回 install 優先」。キャッシュ済みなら再ダウンロードしない。**`compare_files_version` を変更したときは `${stfw_plugin_cache_dir}/compare-files/` を削除してから再 install する**（キャッシュパスに版を含めず、両プラグインで同じ運用にそろえている）。
 - キャッシュが無い場合は、版一致のイメージ同梱版 `${stfw_plugin_bundled_dir}/compare-files/{os_arch}/compare_files` を使う（stfw:full。解決順・版一致条件は §4.8「イメージ同梱版へのフォールバック」）。
 
@@ -507,7 +507,7 @@ Assert フェーズの組込みプラグイン。期待値（`expect/`）と収�
 1. `expect/` 直下の各エントリ名（収集系 process 名）について `${stfw_bizdate_dir}/{name}/evidence` を解決する。ディレクトリが無ければ Error（exit 6）。
 2. `actual/` を作り直し、evidence 配下を **file-level symlink** でツリー再現する。
 3. **プロジェクト共通レイアウトの注入**: `{proj}/config/plugins/process/compare/` が存在する場合、`COMPAREFILES_CLASSPATH` の末尾へ連結（既存値があれば `:` 区切り）してから起動する。
-4. **起動設定のプロセスローカル優先**: プロセスディレクトリの `config/compare_files.{json,yaml,yml}`（この優先順で探索）が存在する場合、`-config` で明示指定して起動する（compare-files の既定解決は前勝ちのため、明示しないと手順 3 で注入したプロジェクト共通側が勝ってしまう）。`-config` 指定時も、欠落キーは compare-files の既定の探索（`COMPAREFILES_CLASSPATH` の各要素 → カレント → `./config`）で**最初に見つかった起動設定 1 件**の値で補完される（実行環境の既存の `COMPAREFILES_CLASSPATH` に起動設定が無ければプロジェクト共通のもの）。`ignoreFileRegexList` など一覧のキーは、空配列 `[]` を明示しても「欠落」扱いで補完元の値を引き継ぐ（共通の除外ルールをローカルで解除することはできない。compare-files v2.2.4 `SetDefault`）。
+4. **起動設定のプロセスローカル優先**: プロセスディレクトリの `config/compare_files.{json,yaml,yml}`（この優先順で探索）が存在する場合、`-config` で明示指定して起動する（compare-files の既定解決は前勝ちのため、明示しないと手順 3 で注入したプロジェクト共通側が勝ってしまう）。`-config` 指定時も、欠落キーは compare-files の既定の探索（`COMPAREFILES_CLASSPATH` の各要素 → カレント → `./config`）で**最初に見つかった起動設定 1 件**の値で補完される（実行環境の既存の `COMPAREFILES_CLASSPATH` に起動設定が無ければプロジェクト共通のもの）。補完されるのは書いていない項目と、`null` を書いた真偽・一覧・文字列・画像スタイルの項目、空文字の文字列項目で（数値の項目は `null` を書くと 0 になり補完されない）、書いた `false`（`sorted` / `writeDiffOnly` / `deleteWorkDir`）と空配列 `[]`（`ignoreFileRegexList` / `ignoreItemList` / `ignoreAreaList`）はそのまま使う（共通側が `true` や一覧でも、プロセスローカルで無効化・解除できる。compare-files v2.3.0〜。v2.2.4 までは `false` と `[]` も欠落扱いで補完元の値を引き継いでいた）。同梱の `config/compare_files.json` を複製したプロセスローカルの起動設定は、書かれた `sorted` / `writeDiffOnly` の `false` が v2.3.0 からプロジェクト共通側の `true` より優先されるため、共通側の値を使いたい項目は複製から消す。`sorted` などの設定項目のキーを大文字・小文字だけ変えて併記した起動設定（`Sorted` と `sorted` など）は、v2.3.0 から読込エラーで Error（exit 6）になるため、どちらか一方にそろえる。真偽の項目に書いた空文字 `""` も `false` として効く（共通側の値を引き継ぐには、キーを書かないか `null` にする）。同じ項目をフラット形式（大文字・小文字違いの綴りを含む）と階層形式（`input` / `compare` / `output`）の両方で書いた場合、v2.3.0 からは綴りにかかわらず階層形式の値が使われる（v2.2.4 までは綴りが正規名と異なるフラットキーの値が勝つことがあった）。
 5. `compare_files [-config {process-local}] -od result expect actual` を実行する。
 
 **設定・レイアウトの解決順（シナリオ横断の共通化）**
@@ -519,7 +519,7 @@ Assert フェーズの組込みプラグイン。期待値（`expect/`）と収�
 
 | キー | 説明 |
 |---|---|
-| `compare_files_version` | 取得する compare-files のリリースタグ（既定 `v2.2.4`） |
+| `compare_files_version` | 取得する compare-files のリリースタグ（既定 `v2.3.0`） |
 | `on_mismatch` | 比較不一致（compare-files exit 3）の扱い。`error`（既定）= exit 6 に変換してステップ失敗（従来挙動・回帰テスト運用）/ `warn` = exit 3 のまま返して Warn 記録・続行（差分確認運用）。`error` / `warn` 以外の値は設定不正として exit 6 |
 
 **終了コードの対応付け**
@@ -541,7 +541,7 @@ compare の**ディレクトリ比較**は expect と actual の「相対パス�
 
 **プロビジョニング（`assets/plugins/process/compareRegex`）**
 
-- compare と同じリリース資産 `compare-files_{version無しv}_{os}_{arch}.tar.gz` を取得し、`compare_regex` を永続キャッシュ `${stfw_plugin_cache_dir}/compare-files/{os_arch}/compare_regex` に配置する（同じディレクトリの一時名へコピーして実行権限を付けてから最終名へ移す。容量不足などで途中で失敗しても、壊れたバイナリが最終名に残って「インストール済み」と判定されないようにする）（`stfw_plugin_cache_dir` はプラグイン種別ごと = `.stfw/cache/plugins/compareRegex/`）。既定バージョン `v2.2.4`、ダウンロード元は `stfw_compare_files_download_base` で差し替え可能、「初回 install 優先」、`compare_files_version` 変更時はキャッシュの `compare-files/` を削除して再 install、はいずれも compare と同じ。
+- compare と同じリリース資産 `compare-files_{version無しv}_{os}_{arch}.tar.gz` を取得し、`compare_regex` を永続キャッシュ `${stfw_plugin_cache_dir}/compare-files/{os_arch}/compare_regex` に配置する（同じディレクトリの一時名へコピーして実行権限を付けてから最終名へ移す。容量不足などで途中で失敗しても、壊れたバイナリが最終名に残って「インストール済み」と判定されないようにする）（`stfw_plugin_cache_dir` はプラグイン種別ごと = `.stfw/cache/plugins/compareRegex/`）。既定バージョン `v2.3.0`、ダウンロード元は `stfw_compare_files_download_base` で差し替え可能、「初回 install 優先」、`compare_files_version` 変更時はキャッシュの `compare-files/` を削除して再 install、はいずれも compare と同じ。
 - キャッシュが無い場合は、版一致のイメージ同梱版 `${stfw_plugin_bundled_dir}/compare-files/{os_arch}/compare_regex` を使う（stfw:full は compare と同じ `compare-files/` へ `compare_files` と `compare_regex` を同梱し、`VERSION` を共有する。§4.8・§10.2）。
 - compare と compareRegex は同梱版を共有するため、両者の既定 `compare_files_version` が食い違うとイメージのビルドを失敗させる（invokeRest / invokeWeb の k6 と同じ）。
 
@@ -567,7 +567,7 @@ compare の**ディレクトリ比較**は expect と actual の「相対パス�
 3. `config/compare_target.csv` が無ければ exit 6。**BOM 付き UTF-8 は exit 6**（compare-files は BOM を取り除かず、1 行目の左ディレクトリが存在しない名前になって比較が 1 件抜けたまま差分扱いになるため）。**データ行が 1 行も無ければ exit 6**（compare-files は対象 0 件を一致として exit 0 を返すため、検証の素通りを防ぐ）。**CSV は「1 行 = 1 レコード」になる書き方だけを受け付け**、外れるものは比較の前に exit 6 にする。各行は compare-files の CSV リーダー（`internal/csvio/reader.go`）と同じ規則でフィールドに分ける: `"` は**フィールドの先頭でだけ**クォートを開き、クォート内の `""` は `"` 1 文字、クォート内の `"` で閉じる（フィールド途中の `"` はただの文字）。リーダーはクォート内の改行を値に含め、CR 単独もレコードの終わりとするため、**行末でクォートが閉じていない行**（コメント行でも後続のデータ行を飲み込む）と**行の途中の CR** は拒否する。行の終わりは LF か CRLF。読み飛ばす行は compare-files と同じく、空のフィールド 1 つだけの行（空行・`""` だけの行）と、先頭のフィールドが `#` で始まる行。**データ行は 3 列**（compare-files も 3 列以外をエラーにする。正規表現にカンマを含めるときは `"…"` でクォートする）。**データ行は、左ディレクトリが `expect/{収集系 process 名}/…`、右ディレクトリが `actual/{収集系 process 名}/…` を指し、`.` と `..` の要素を含まないこと**。外れる行があれば exit 6（右にも `expect/` を書くと期待値どうしを比べて合格し、process 名を省くと意図した期待値を読まないため。空白だけの行もここで exit 6）。
 4. compare と同じ手順で `expect/` から `actual/` を組み立てる（expect 不在・収集系 process ディレクトリ無し・evidence 不在は exit 6）。
 5. プロジェクト共通の比較ルール **`{proj}/config/plugins/process/compareRegex/`** が存在する場合、`COMPAREFILES_CLASSPATH` の末尾へ連結（既存値があれば `:` 区切り）してから起動する（compare が自分のディレクトリを注入するのと同じ。どのプラグインも `config/plugins/process/{type}/` を自分の共通ディレクトリとして読む）。ここには stfw の設定（`config.yml`）と並べて、比較レイアウト `compare_layout/*.json` と起動設定 `compare_files.{json,yaml,yml}` を置ける。compare のディレクトリ `{proj}/config/plugins/process/compare/` は読まない（compare と同じ比較ルールを使うときは複製する）。v1.8.0 は compare のディレクトリを読み、自分のディレクトリは `config.yml` 専用だった（挙動変化）。
-6. 起動設定はプロセスローカル `config/compare_files.{json,yaml,yml}` があれば `-config` で明示指定する（compare と同じ）。`-config` で渡した起動設定の欠落キーは、compare-files の既定の探索（`COMPAREFILES_CLASSPATH` → カレント → `./config`）で最初に見つかった起動設定から補われる（実行環境の既存の `COMPAREFILES_CLASSPATH` に起動設定が無ければ、プロジェクト共通 `config/plugins/process/compareRegex/` の起動設定）。`./config` より前の探索先（既存の `COMPAREFILES_CLASSPATH`・プロジェクト共通・カレント）のどこにも起動設定が無いと、プロセスローカルのファイル自身が既定として選ばれて欠落キーが補われないため、`{}` だけでは必須キー（`outputCharset` など）不足で exit 6 になる（v2.2.4 の実物で確認）。**プロセスローカルの起動設定は compare-files 同梱の `config/compare_files.json` を複製して編集する**のが確実。`ignoreFileRegexList` など一覧のキーは、空配列 `[]` を明示しても「欠落」扱いで補完元の値を引き継ぐ（共通の除外ルールをローカルで解除することはできない。compare-files v2.2.4 `SetDefault`）。プロセスローカルの比較レイアウト `config/compare_layout/` も compare と同じく後勝ちで効く。
+6. 起動設定はプロセスローカル `config/compare_files.{json,yaml,yml}` があれば `-config` で明示指定する（compare と同じ）。`-config` で渡した起動設定の欠落キーは、compare-files の既定の探索（`COMPAREFILES_CLASSPATH` → カレント → `./config`）で最初に見つかった起動設定から補われる（実行環境の既存の `COMPAREFILES_CLASSPATH` に起動設定が無ければ、プロジェクト共通 `config/plugins/process/compareRegex/` の起動設定）。`./config` より前の探索先（既存の `COMPAREFILES_CLASSPATH`・プロジェクト共通・カレント）のどこにも起動設定が無いと、プロセスローカルのファイル自身が既定として選ばれて欠落キーが補われないため、`{}` だけでは必須キー（`outputCharset` など）不足で exit 6 になる（compare-files の実物で確認）。**プロセスローカルの起動設定は compare-files 同梱の `config/compare_files.json` を複製して編集する**のが確実。同梱の複製には `sorted` / `writeDiffOnly` の `false` が書かれており、v2.3.0 からはこれがプロジェクト共通側の `true` より優先される（v2.2.4 までは共通側の `true` が勝っていた。空でない一覧は以前から複製側が優先）。共通側の値を使いたい項目は複製から消す。補完されるのは書いていない項目と、`null` を書いた真偽・一覧・文字列・画像スタイルの項目、空文字の文字列項目で（数値の項目は `null` を書くと 0 になり補完されない）、書いた `false`（`sorted` / `writeDiffOnly` / `deleteWorkDir`）と空配列 `[]`（`ignoreFileRegexList` / `ignoreItemList` / `ignoreAreaList`）はそのまま使う（共通側が `true` や一覧でも、プロセスローカルで無効化・解除できる。compare-files v2.3.0〜。v2.2.4 までは `false` と `[]` も欠落扱いで補完元の値を引き継いでいた）。プロセスローカルの比較レイアウト `config/compare_layout/` も compare と同じく後勝ちで効く。
 7. `compare_regex [-config {process-local}] -od result config/compare_target.csv` を実行する（`-od` は起動設定の `outputDir` より優先され、結果は必ずプロセスの `result/` に出る）。
 8. 終了コードが 0（一致）か 3（差分）でも `result/` が空なら exit 6（比較が行われていない。compare-files は環境変数 `COMPAREFILES_OPT` の引数を先頭に足すため、`-v` / `-h` が入っていると版表示だけで exit 0 になる）。
 
@@ -575,7 +575,7 @@ compare の**ディレクトリ比較**は expect と actual の「相対パス�
 
 | キー | 説明 |
 |---|---|
-| `compare_files_version` | 取得する compare-files のリリースタグ（既定 `v2.2.4`。compare の既定と一致させる）。**上書きはプロジェクト共通 `config/plugins/process/compareRegex/config.yml` で行う**（install はプロセス非依存の設定を見る。§4.8） |
+| `compare_files_version` | 取得する compare-files のリリースタグ（既定 `v2.3.0`。compare の既定と一致させる）。**上書きはプロジェクト共通 `config/plugins/process/compareRegex/config.yml` で行う**（install はプロセス非依存の設定を見る。§4.8） |
 | `on_mismatch` | compare と同じ（`error`（既定）= 差分を exit 6 / `warn` = 差分を exit 3 のまま返す / それ以外は exit 6） |
 
 **終了コードの対応付け**: compare-files の `compare_regex` も `0=一致（OK/Ignore）` / `3=差分（NG/LeftOnly/RightOnly）` / `6=エラー` を返し、対応付けは compare と同じ（差分は `on_mismatch` に従う。比較エラーは常に exit 6）。

@@ -792,7 +792,7 @@ if [ "${STFW_TEST_CF_FAIL:-0}" = "1" ]; then
   exit 6
 fi
 if [ "${STFW_TEST_CF_NORESULT:-0}" = "1" ]; then
-  echo "compare-files 2.2.4"
+  echo "compare-files 2.3.0"
   exit 0
 fi
 if [ -z "${out}" ]; then

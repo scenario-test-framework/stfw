@@ -23,7 +23,7 @@
 
 | キー | 必須 | 置き場所 | 説明 |
 |---|---|---|---|
-| `compare_files_version` | - | プロジェクト共通 `config/plugins/process/compareRegex/config.yml` | 取得する compare-files のリリースタグ (既定 v2.2.4。compare の既定と同じ)。install はプロセス非依存の設定を見るため、プロセスの `config/config.yml` に書いても取得する版は変わらない |
+| `compare_files_version` | - | プロジェクト共通 `config/plugins/process/compareRegex/config.yml` | 取得する compare-files のリリースタグ (既定 v2.3.0。compare の既定と同じ)。install はプロセス非依存の設定を見るため、プロセスの `config/config.yml` に書いても取得する版は変わらない |
 | `on_mismatch` | - | プロジェクト共通、またはプロセスの `config/config.yml` | 比較不一致の扱い。`error` (既定) = ステップ失敗として停止 + Blocked 伝播 / `warn` = Warn として記録して続行 (compare と同じ) |
 
 ## 比較対象設定 (config/compare_target.csv・必須)
@@ -56,7 +56,7 @@ expect/_45_collect_scripts/api,actual/_45_collect_scripts/api,summary\.csv
 比較レイアウトと起動設定の仕組みは compare と同じ。プロジェクト共通は **compareRegex 自身のディレクトリ**
 `{proj}/config/plugins/process/compareRegex/` (`compare_layout/*.json` や `compare_files.json`。stfw の `config.yml` と同じ場所) に置き、
 プロセス固有の上書きはプロセスローカル `config/compare_layout/` に置く (後勝ち)。起動設定 `config/compare_files.{json,yaml,yml}` は
-プロセスローカルにあれば `-config` で最優先に使う。欠落キーは compare-files の既定の探索 (`COMPAREFILES_CLASSPATH` → カレント → `./config`) で最初に見つかった起動設定から補われる (実行環境の既存の `COMPAREFILES_CLASSPATH` に起動設定が無ければ、プロジェクト共通 `compareRegex/` の起動設定)。`./config` より前の探索先 (既存の `COMPAREFILES_CLASSPATH`・プロジェクト共通・カレント) のどこにも起動設定が無いと、プロセスローカル自身が既定になり補われない (`{}` だけでは必須キー不足で exit 6)。compare-files 同梱の `config/compare_files.json` を複製して編集するのが確実。`ignoreFileRegexList` などの一覧は、ローカルで空配列 `[]` を明示しても補完元の値を引き継ぐ (共通の除外ルールをローカルで解除することはできない)。
+プロセスローカルにあれば `-config` で最優先に使う。欠落キーは compare-files の既定の探索 (`COMPAREFILES_CLASSPATH` → カレント → `./config`) で最初に見つかった起動設定から補われる (実行環境の既存の `COMPAREFILES_CLASSPATH` に起動設定が無ければ、プロジェクト共通 `compareRegex/` の起動設定)。`./config` より前の探索先 (既存の `COMPAREFILES_CLASSPATH`・プロジェクト共通・カレント) のどこにも起動設定が無いと、プロセスローカル自身が既定になり補われない (`{}` だけでは必須キー不足で exit 6)。compare-files 同梱の `config/compare_files.json` を複製して編集するのが確実。複製に書かれた `false` (`sorted` / `writeDiffOnly`) は v2.3.0 から共通側の `true` より優先されるので、共通側の値を使いたい項目は消す。`sorted` などの設定項目のキーを大文字・小文字だけ変えて併記した起動設定 (`Sorted` と `sorted` など) は v2.3.0 から読込エラー (exit 6) になるので、一方にそろえる。真偽の項目に書いた空文字 `""` も `false` として効く (共通側の値を引き継ぐには、キーを書かないか `null` にする)。ローカルに書いた `false` (`sorted` / `writeDiffOnly` / `deleteWorkDir`) と空配列 `[]` (`ignoreFileRegexList` など) はそのまま使われ、共通側の値を無効化・解除できる (compare-files v2.3.0〜。v2.2.4 までは補完元の値を引き継いでいた)。
 
 compare のディレクトリ `{proj}/config/plugins/process/compare/` は読まない。compare と同じ比較ルールを使うときは複製する
 (v1.8.0 は compare のディレクトリを読み、自分のディレクトリは `config.yml` 専用だった)。

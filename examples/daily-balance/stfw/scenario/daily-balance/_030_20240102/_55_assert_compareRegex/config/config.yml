@@ -1,7 +1,7 @@
 # Assert: 出力時刻入りの名前で収集した日次残高レポートを期待値と突合する (compareRegex)。
 # 組み合わせは config/compare_target.csv の正規表現で決める
 # (期待値 expect/_45_collect_scripts/api/balance_report_20240102000000.json は一致する名前の 1 例)。
-# compare_files_version / on_mismatch は既定値 (compare と同じ v2.2.4 / error) を使うため差分なし。
+# compare_files_version / on_mismatch は既定値 (compare と同じ v2.3.0 / error) を使うため差分なし。
 stfw:
   process:
     compareRegex: {}

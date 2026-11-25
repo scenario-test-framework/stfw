@@ -20,7 +20,7 @@ bin="${stfw_plugin_cache_dir}/compare-files/${os_arch}/compare_files"
 # 永続キャッシュが無ければイメージ同梱版 (stfw:full) を使う。設定版と同梱版 (VERSION) が
 # 一致するときに限る (解決順は bin/run/execute と同じ)。
 bundled="${stfw_plugin_bundled_dir:-}/compare-files"
-version="${stfw_process_compare_compare_files_version:-v2.2.4}"
+version="${stfw_process_compare_compare_files_version:-v2.3.0}"
 if [ ! -x "${bin}" ] && [ -n "${stfw_plugin_bundled_dir:-}" ] \
   && [ "$(cat "${bundled}/VERSION" 2>/dev/null)" = "${version}" ]; then
   bin="${bundled}/${os_arch}/compare_files"

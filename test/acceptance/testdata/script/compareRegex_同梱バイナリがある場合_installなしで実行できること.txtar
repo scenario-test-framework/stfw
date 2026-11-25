@@ -22,13 +22,13 @@ execcode 6 stfw run rx
 stderr 'is not installed'
 
 # --- 同梱に compare_files しか無い: compare_regex は解決できない ---
-exec mkbin bundled/compare-files compare_files v2.2.4 bundled
+exec mkbin bundled/compare-files compare_files v2.3.0 bundled
 env stfw_plugin_bundled_dir=${WORK}/bundled
 execcode 6 stfw run rx
 stderr 'is not installed'
 
 # --- 同梱あり・キャッシュなし: install なしで run が成功し、キャッシュは作られない ---
-exec mkbin bundled/compare-files compare_regex v2.2.4 bundled
+exec mkbin bundled/compare-files compare_regex v2.3.0 bundled
 exec stfw run rx
 stderr 'compare_regex=bundled'
 ! exists .stfw/cache/plugins/compareRegex/compare-files
@@ -47,7 +47,7 @@ mkdir config/plugins/process/compareRegex
 cp config.v999.yml config/plugins/process/compareRegex/config.yml
 execcode 6 stfw run rx
 stderr 'is not installed'
-stderr 'bundled compare-files is v2\.2\.4 but compare_files_version is v9\.9\.9'
+stderr 'bundled compare-files is v2\.3\.0 but compare_files_version is v9\.9\.9'
 stderr 'config/plugins/process/compareRegex/config\.yml'
 ! stderr 'compare_regex=bundled'
 # install は同梱を使わず DL を試みる
@@ -56,7 +56,7 @@ stderr 'download failed'
 rm config/plugins/process/compareRegex/config.yml
 
 # --- 永続キャッシュと同梱の両方がある: 永続キャッシュを優先する ---
-exec mkbin .stfw/cache/plugins/compareRegex/compare-files compare_regex v2.2.4 cache
+exec mkbin .stfw/cache/plugins/compareRegex/compare-files compare_regex v2.3.0 cache
 exec stfw run rx
 stderr 'compare_regex=cache'
 ! stderr 'compare_regex=bundled'
