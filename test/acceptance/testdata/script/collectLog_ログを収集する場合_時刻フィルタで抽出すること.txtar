@@ -19,9 +19,9 @@ exec weird mk remote/web01
 
 # logfilter リリース tarball のフィクスチャを作る (logfilter_{ver}_{arch}/logfilter)
 mkdir lfsrc
-mkdir lfsrc/logfilter_v2.0.2_linux_amd64
-cp fakebin/fakelogfilter lfsrc/logfilter_v2.0.2_linux_amd64/logfilter
-exec tar czf lf.tar.gz -C lfsrc logfilter_v2.0.2_linux_amd64
+mkdir lfsrc/logfilter_v2.1.0_linux_amd64
+cp fakebin/fakelogfilter lfsrc/logfilter_v2.1.0_linux_amd64/logfilter
+exec tar czf lf.tar.gz -C lfsrc logfilter_v2.1.0_linux_amd64
 env STFW_TEST_LF_TARBALL=${WORK}/lf.tar.gz
 
 # プロビジョニング (curl はモック。arch 別に logfilter をキャッシュ)
@@ -59,6 +59,21 @@ exists remote/web01/rm.log
 grep '^rm -rf -- /tmp/stfw\.fake[0-9]+$' remote/web01/rm.log
 exec ls -A remote/web01/tmp
 ! stdout .
+
+# 基準時刻以降のログが 0 件 (logfilter は exit 3 で空の出力ファイルを作る) なら、空のファイルを収集して成功する
+env STFW_TEST_LF_NOMATCH=1
+exec stfw run demo
+stderr 'no log events since the bizdate start in web01:/var/log/app/app\.log; collecting an empty file'
+latestrun . RUN
+exists .stfw/runs/$RUN/workspace/demo/_10_99990101/_10_grp_collectLog/evidence/web01/var/log/app/app.log
+! grep . .stfw/runs/$RUN/workspace/demo/_10_99990101/_10_grp_collectLog/evidence/web01/var/log/app/app.log
+env STFW_TEST_LF_NOMATCH=0
+
+# logfilter 自体のエラー (exit 0 / 3 以外) は従来どおり収集失敗
+env STFW_TEST_LF_FAIL=1
+execcode 6 stfw run demo
+stderr 'logfilter failed on web01:/var/log/app/app\.log \(exit 6\)'
+env STFW_TEST_LF_FAIL=0
 
 # 専用ディレクトリを消せなければ、残った場所を示して失敗する
 env STFW_TEST_RM_FAIL=1
@@ -191,6 +206,10 @@ case "$1" in
     # logfilter -f [-tf FROM] IN OUT: マーカー付与 + 入力複製で再現する
     in="${*: -2:1}"; out="${*: -1}"
     mkdir -p "${root}$(dirname "${out}")"
+    # STFW_TEST_LF_FAIL=1: オプション不正などの失敗 (本物は exit 6)
+    if [ "${STFW_TEST_LF_FAIL:-}" = "1" ]; then exit 6; fi
+    # STFW_TEST_LF_NOMATCH=1: 該当 0 件 (本物は空の出力ファイルを作って exit 3)
+    if [ "${STFW_TEST_LF_NOMATCH:-}" = "1" ]; then : > "${root}${out}"; exit 3; fi
     { echo "# filtered by logfilter"; cat "${root}${in}"; } > "${root}${out}"
     ;;
   *)

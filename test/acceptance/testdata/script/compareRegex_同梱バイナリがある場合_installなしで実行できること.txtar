@@ -8,7 +8,8 @@
 #   - 永続キャッシュが無くても、設定版と一致する同梱版で install なしに run できる
 #   - 同梱が設定版と一致すれば plugin install は「インストール済み」(exit 3) で DL しない
 #   - 同梱に compare_files しか無い (compare_regex が無い) 場合は同梱を使わない
-#   - 設定版と同梱版が異なれば同梱を使わず、原因と対処 (compareRegex の共通設定) を出す
+#   - プロジェクト共通の設定版と同梱版が異なれば同梱を使わず、原因と対処 (compareRegex の共通設定) を出す
+#   - プロセスの設定に書いた版は使わない (プロジェクト共通までの設定で決まる。AS-BUILT §4.7)
 #   - 永続キャッシュと同梱の両方があれば永続キャッシュを優先する
 
 env PATH=${WORK}/fakebin:${PATH}
@@ -37,15 +38,19 @@ execcode 3 stfw plugin install compareRegex
 ! stderr 'download'
 ! exists .stfw/cache/plugins/compareRegex/compare-files
 
-# --- 設定版と同梱版が異なる: 同梱は使わず、不一致の理由と compareRegex の共通設定を案内する ---
-execcode 6 stfw run rxver
-stderr 'is not installed'
-stderr 'bundled compare-files is v2\.2\.4 but compare_files_version is v2\.2\.3'
-stderr 'config/plugins/process/compareRegex/config\.yml'
-! stderr 'compare_regex=bundled'
-# プロジェクト共通設定で版を上書きした場合、install は同梱を使わず DL を試みる
+# --- プロセスローカルの版は使わない (AS-BUILT §4.7): rxver (プロセスの設定に v2.2.3) も同梱版で動く ---
+exec stfw run rxver
+stderr 'compare_regex=bundled'
+
+# --- プロジェクト共通の設定版と同梱版が異なる: 同梱は使わず、不一致の理由と compareRegex の共通設定を案内する ---
 mkdir config/plugins/process/compareRegex
 cp config.v999.yml config/plugins/process/compareRegex/config.yml
+execcode 6 stfw run rx
+stderr 'is not installed'
+stderr 'bundled compare-files is v2\.2\.4 but compare_files_version is v9\.9\.9'
+stderr 'config/plugins/process/compareRegex/config\.yml'
+! stderr 'compare_regex=bundled'
+# install は同梱を使わず DL を試みる
 execcode 6 stfw plugin install compareRegex
 stderr 'download failed'
 rm config/plugins/process/compareRegex/config.yml

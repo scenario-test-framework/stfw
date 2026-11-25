@@ -273,7 +273,7 @@ daily-balance の例（compose 内で完結）では扱いませんが、実ホ�
 
 - 事前に `stfw ssh trust {group}` で known_hosts を登録
 - Arrange で `scpPut`（設定ファイル配置）、Act で `sshExec`（バッチ起動）
-- Collect で `collectLog`（業務日付で絞ったログ）/ `collectFile`
+- Collect で `collectLog`（業務日付で絞ったログ。JSON Lines / logfmt も `targets[].log_format` で指定すれば、ログ内の時刻フィールドで絞れる）/ `collectFile`
 
 ## 7. 実行と確認
 

@@ -18,7 +18,7 @@ for cmd in curl tar; do
   fi
 done
 
-version="${stfw_process_collectLog_logfilter_version:-v2.0.2}"
+version="${stfw_process_collectLog_logfilter_version:-v2.1.0}"
 arches="${stfw_process_collectLog_logfilter_arches:-linux_amd64 linux_arm64 darwin_arm64}"
 # ダウンロード元は既定で GitHub Releases。テスト等で差し替え可能にする。
 base="${stfw_logfilter_download_base:-https://github.com/scenario-test-framework/logfilter/releases/download/${version}}"

@@ -6,7 +6,8 @@
 # 検証内容:
 #   - 永続キャッシュが無くても、設定版と一致する同梱版で install なしに run できる
 #   - 同梱が設定版と一致すれば plugin install は「インストール済み」(exit 3) で DL しない
-#   - 設定版と同梱版が異なれば同梱を使わず未プロビジョニング扱い (run exit 6 / install は DL へ)
+#   - プロジェクト共通の設定版と同梱版が異なれば同梱を使わず未プロビジョニング扱い (run exit 6 / install は DL へ)
+#   - プロセスの設定に書いた版は使わない (プロジェクト共通までの設定で決まる。AS-BUILT §4.7)
 #   - 永続キャッシュと同梱の両方があれば永続キャッシュを優先する (初回 install 優先)
 
 env PATH=${WORK}/fakebin:${PATH}
@@ -28,17 +29,19 @@ execcode 3 stfw plugin install compare
 ! stderr 'download'
 ! exists .stfw/cache/plugins/compare/compare-files
 
-# --- 設定版と同梱版が異なる: 同梱は使わず、不一致の理由を出す ---
-# プロセスローカルの版上書きは provisioning の単位ではない (install は exit 3 のまま)。
-# 利用者が原因と対処 (プロジェクト共通設定で上書きして install) を分かるよう stderr に出す。
-execcode 6 stfw run cmpver
-stderr 'is not installed'
-stderr 'bundled compare-files is v2\.2\.4 but compare_files_version is v2\.2\.3'
-stderr 'config/plugins/process/compare/config\.yml'
-! stderr 'compare_files=bundled'
-# プロジェクト共通設定で版を上書きした場合、install は同梱を使わず DL を試みる
+# --- プロセスローカルの版は使わない (AS-BUILT §4.7): cmpver (プロセスの設定に v2.2.3) も同梱版で動く ---
+exec stfw run cmpver
+stderr 'compare_files=bundled'
+
+# --- プロジェクト共通の設定版と同梱版が異なる: 同梱は使わず、不一致の理由と対処を出す ---
 mkdir config/plugins/process/compare
 cp config.v999.yml config/plugins/process/compare/config.yml
+execcode 6 stfw run cmp
+stderr 'is not installed'
+stderr 'bundled compare-files is v2\.2\.4 but compare_files_version is v9\.9\.9'
+stderr 'config/plugins/process/compare/config\.yml'
+! stderr 'compare_files=bundled'
+# install は同梱を使わず DL を試みる
 execcode 6 stfw plugin install compare
 stderr 'download failed'
 rm config/plugins/process/compare/config.yml

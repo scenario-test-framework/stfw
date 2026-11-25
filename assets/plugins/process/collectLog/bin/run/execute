@@ -5,6 +5,10 @@
 #   targets[].group : inventory グループ名 (ホスト解決)
 #   targets[].user  : ログインユーザー (secret {host}-{user} でパスワード解決)
 #   targets[].paths : 収集対象ログのパス正規表現 (posix-extended)
+#   targets[].log_format       : text (既定) / json (JSON Lines) / logfmt   → logfilter -lf
+#   targets[].timestamp_key    : 構造化ログの時刻フィールドのキー (ドット区切り) → logfilter -tk
+#   targets[].timestamp_format : auto (既定) / unix / unixms / unixus / unixns → logfilter -tfmt
+#   (構造化ログの 3 キーは logfilter v2.1.0 以降。AS-BUILT §4.8)
 #
 # 処理: logfilter バイナリ (host の arch 版) を scp 転送 → ssh で実行して
 #   「bizdate の実行開始日時 (stfw_bizdate_start_ts) 以降」のログ行に絞り込み →
@@ -63,7 +67,7 @@ cleanup_remote() {
 bundled="${stfw_plugin_bundled_dir:-}/logfilter"
 use_bundled=0
 if [ -n "${stfw_plugin_bundled_dir:-}" ] \
-  && [ "$(cat "${bundled}/VERSION" 2>/dev/null)" = "${stfw_process_collectLog_logfilter_version:-v2.0.2}" ]; then
+  && [ "$(cat "${bundled}/VERSION" 2>/dev/null)" = "${stfw_process_collectLog_logfilter_version:-v2.1.0}" ]; then
   use_bundled=1
 fi
 
@@ -77,6 +81,71 @@ if [ -n "${ts}" ]; then
   time_part="${rest:0:8}"
   from="${date_part} ${time_part}.000"
 fi
+
+# 構造化ログの設定を、どのホストにも接続する前に全 targets について検査する (fail-fast)。
+# 未定義のキーは既定 (log_format=text・オプションを渡さない) とし、明示的な空文字は不正とする
+# (未定義の変数の展開に気づけるよう)。timestamp_key / timestamp_format は構造化ログでのみ指定できる
+# (logfilter も text では受け付けない)。
+# lf_opts_{i} に、そのエントリで logfilter に渡すオプション (rq 済みの文字列) を入れる。
+i=0
+while :; do
+  group_var="stfw_process_collectLog_targets_${i}_group"
+  [ -z "${!group_var:-}" ] && break
+  fmt_var="stfw_process_collectLog_targets_${i}_log_format"
+  key_var="stfw_process_collectLog_targets_${i}_timestamp_key"
+  tsf_var="stfw_process_collectLog_targets_${i}_timestamp_format"
+  # YAML の配列で書いた値は {key}_0 / {key}_0_{sub} … に展開され、{key} 自体は作られない。黙って既定値にしない。
+  # 判定は {key}_{数字} に限る (同じ接頭辞の別のキー、例: log_format_note を誤って拒否しないため)。
+  # 空の配列・マップ ([] / {}) は何も展開されないため、書かなかったのと同じ既定値になる。
+  for v in "${fmt_var}" "${key_var}" "${tsf_var}"; do
+    if compgen -v "${v}_" | grep -q -E "^${v}_[0-9]+(_|$)"; then
+      echo "collectLog: ${v#stfw_process_collectLog_targets_"${i}"_} in targets[${i}] must be a single value, not a list" >&2
+      exit 6
+    fi
+  done
+  fmt="${!fmt_var-text}"
+  opts=""
+  case "${fmt}" in
+    text) ;;
+    json | logfmt) opts="-lf ${fmt}" ;;
+    *)
+      echo "collectLog: invalid log_format in targets[${i}]: ${fmt:-(empty)} (must be text, json or logfmt)" >&2
+      exit 6
+      ;;
+  esac
+  if [ -n "${!key_var+set}" ]; then
+    if [ "${fmt}" = "text" ]; then
+      echo "collectLog: timestamp_key in targets[${i}] requires log_format json or logfmt" >&2
+      exit 6
+    fi
+    if [ -z "${!key_var}" ]; then
+      echo "collectLog: invalid timestamp_key in targets[${i}]: (empty)" >&2
+      exit 6
+    fi
+    tk="${!key_var}"
+    # logfilter v2.1.0 は -tk の値の両端が同じ引用符 (' か ") なら一組取り除く。キー名そのものの引用符を
+    # 残すため、その場合は同じ引用符を一組足して渡す (リモートのシェル向けの引用は rq が別に行う)
+    case "${tk}" in
+      \'*\' | \"*\") [ "${#tk}" -ge 2 ] && tk="${tk:0:1}${tk}${tk:0:1}" ;;
+    esac
+    opts="${opts} -tk $(rq "${tk}")"
+  fi
+  if [ -n "${!tsf_var+set}" ]; then
+    if [ "${fmt}" = "text" ]; then
+      echo "collectLog: timestamp_format in targets[${i}] requires log_format json or logfmt" >&2
+      exit 6
+    fi
+    case "${!tsf_var}" in
+      auto | unix | unixms | unixus | unixns) opts="${opts} -tfmt ${!tsf_var}" ;;
+      *)
+        echo "collectLog: invalid timestamp_format in targets[${i}]: ${!tsf_var:-(empty)} (must be auto, unix, unixms, unixus or unixns)" >&2
+        exit 6
+        ;;
+    esac
+  fi
+  printf -v "lf_opts_${i}" '%s' "${opts}"
+  i=$((i + 1))
+done
 
 i=0
 while :; do
@@ -180,13 +249,28 @@ while :; do
       # stdin を消費してループが途中終了しないよう、読み取りは FD 3 を使う。
       while IFS= read -r f <&3; do
         [ -z "${f}" ] && continue
+        # 構造化ログのオプション (検査済み・rq 済み。text のエントリでは空)
+        opts_var="lf_opts_${i}"
+        lf_opts="${!opts_var:-}"
         if [ -n "${from}" ]; then
-          lf_cmd="$(rq "${remote_lf}") -f -tf $(rq "${from}") $(rq "${f}") $(rq "${remote_out}")"
+          lf_cmd="$(rq "${remote_lf}") -f${lf_opts:+ ${lf_opts}} -tf $(rq "${from}") $(rq "${f}") $(rq "${remote_out}")"
         else
-          lf_cmd="$(rq "${remote_lf}") -f $(rq "${f}") $(rq "${remote_out}")"
+          lf_cmd="$(rq "${remote_lf}") -f${lf_opts:+ ${lf_opts}} $(rq "${f}") $(rq "${remote_out}")"
         fi
-        if ! rssh "${lf_cmd}"; then
-          echo "collectLog: logfilter failed on ${host}:${f}" >&2
+        # logfilter は基準時刻以降のログが 0 件のとき exit 3 (警告) で空の出力ファイルを作る。
+        # 0 件も収集結果なので失敗にせず、空のファイルをエビデンスとして収集する (AS-BUILT §4.8)。
+        rssh "${lf_cmd}"
+        lf_rc=$?
+        if [ "${lf_rc}" -eq 3 ]; then
+          echo "collectLog: no log events since the bizdate start in ${host}:${f}; collecting an empty file" >&2
+        fi
+        if [ "${lf_rc}" -ne 0 ] && [ "${lf_rc}" -ne 3 ]; then
+          echo "collectLog: logfilter failed on ${host}:${f} (exit ${lf_rc})" >&2
+          if [ -n "${lf_opts}" ]; then
+            echo "collectLog: log_format / timestamp_key / timestamp_format need logfilter v2.1.0 or later." \
+              "If logfilter_version in config/plugins/process/collectLog/config.yml is older, set it to v2.1.0 or later (or remove it);" \
+              "then delete .stfw/cache/plugins/collectLog/logfilter/ and run \`stfw plugin install collectLog\`" >&2
+          fi
           rc=6
           continue
         fi

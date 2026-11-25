@@ -38,6 +38,14 @@ type PluginLocation struct {
 	Embedded bool
 }
 
+// processType はプラグインのプロセスタイプ名を返す (プラグインのディレクトリ名 = plugins/process/{type})。
+func (l PluginLocation) processType() string {
+	if l.Embedded {
+		return path.Base(l.EmbedPath)
+	}
+	return filepath.Base(l.Dir)
+}
+
 // ResolveProcessPlugin はプロセスプラグインを解決する。
 // 解決順はプロジェクト plugins/ → 同梱 assets/plugins/ (v0.2 の
 // stfw.get_installed_plugin_path と同じ順序)。
@@ -167,6 +175,15 @@ func CopyPluginDefaultConfig(loc PluginLocation, destDir string) ([]string, erro
 		return nil, fmt.Errorf("plugin config: %w", err)
 	}
 
+	// ツールの版など (plugin.yml の provision_keys) はプロセスの設定に複製しない (AS-BUILT §4.7)
+	meta, err := LoadPluginMeta(loc)
+	if err != nil {
+		return nil, err
+	}
+	if raw, err = stripProvisionKeys(raw, loc.processType(), meta.ProvisionKeys); err != nil {
+		return nil, err
+	}
+
 	confDir := filepath.Join(destDir, "config")
 	if err := os.MkdirAll(confDir, 0o755); err != nil {
 		return nil, err
@@ -183,13 +200,20 @@ func CopyPluginDefaultConfig(loc PluginLocation, destDir string) ([]string, erro
 // config/plugins/process/{type}/config.yml → プロセス config/config.yml
 // (v0.2 の process_service.private.export_config + scripts プラグイン execute の
 // export_yaml と同じ上書きチェーン)。
+//
+// ただし plugin.yml の provision_keys に宣言したキー (ツールの版など) は、プロセス設定に
+// 書かれていても使わず、プロジェクト共通までの値にする (AS-BUILT §4.7)。
 func ProcessConfigEnv(projDir string, loc PluginLocation, processType, processDir string) (map[string]string, error) {
 	flat, err := PluginConfigEnv(projDir, loc, processType)
 	if err != nil {
 		return nil, err
 	}
-	// プロセス設定
-	if err := flattenYAMLFile(filepath.Join(processDir, "config", "config.yml"), flat); err != nil {
+	meta, err := LoadPluginMeta(loc)
+	if err != nil {
+		return nil, err
+	}
+	// プロセス設定 (provision_keys のキーは値ごと除いてから重ねる)
+	if _, err := flattenProcessConfigExcept(filepath.Join(processDir, "config", "config.yml"), processType, meta.ProvisionKeys, flat); err != nil {
 		return nil, err
 	}
 	return flat, nil

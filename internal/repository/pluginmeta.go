@@ -22,8 +22,11 @@ const pluginMetaFileName = "plugin.yml"
 //	requires:          # このプラグインが前提とするコマンド (PATH 上の存在を検証する)
 //	  - mysql
 //	  - mysqldump
+//	provision_keys:    # 外部ツールの取得に使う設定キー (stfw.process.{type} の下)。
+//	  - logfilter_version  # プロジェクト共通までの設定だけで決める (AS-BUILT §4.7)
 type PluginMeta struct {
-	Requires []string `yaml:"requires"`
+	Requires      []string `yaml:"requires"`
+	ProvisionKeys []string `yaml:"provision_keys"`
 }
 
 // LoadPluginMeta はプラグインの plugin.yml を読み込む。

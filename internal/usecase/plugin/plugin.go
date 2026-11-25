@@ -107,6 +107,17 @@ func provisionEnv(projDir string, loc repository.PluginLocation, processType str
 		"stfw_process_type":     processType,
 		"stfw_plugin_cache_dir": cacheDir,
 	}
+	// stfw.yml の設定値を環境へ反映してから設定を読む (run と同じ。config チェーンの ${...} が
+	// stfw.yml を参照していても、install と run で同じ値に展開されるようにする。AS-BUILT §4.7)
+	cfg, _, err := repository.LoadConfig(projDir)
+	if err != nil {
+		return nil, err
+	}
+	for k, v := range cfg.Flat() {
+		if err := os.Setenv(k, v); err != nil {
+			return nil, err
+		}
+	}
 	conf, err := repository.PluginConfigEnv(projDir, loc, processType)
 	if err != nil {
 		return nil, err
