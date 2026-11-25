@@ -1,0 +1,25 @@
+変更要望: v1.9.0 の変更の取り込み（実装契約の正本は docs/AS-BUILT.md。各項目の節を参照。実装に無い挙動を発明しない）
+
+1. compareRegex の比較ルールのプロジェクト共通ディレクトリ（AS-BUILT §4.11.1 手順 5・6）
+   - compareRegex は自分のディレクトリ config/plugins/process/compareRegex/ の比較レイアウト・起動設定を読む。compare のディレクトリは読まない。
+   - 上流の SPEC-028-05（「比較レイアウト・起動設定のプロジェクト共通は compare と共有」）と関連する RDRA の記述が古いので直す。
+   - 起動設定の欠落キーは compare-files の探索で最初に見つかった起動設定 1 件から補われる。ignoreFileRegexList など一覧は [] でも引き継ぐ（compare と同じ。§4.11 手順 4）。
+
+2. collectLog の構造化ログ対応（AS-BUILT §4.8「構造化ログ（v1.9.0〜）」）
+   - targets[] の各エントリに log_format（text 既定 / json / logfmt）・timestamp_key・timestamp_format（auto / unix / unixms / unixus / unixns）を書くと、
+     JSON Lines / logfmt のログ内の時刻フィールドで業務日付の開始時刻以降に絞り込んで収集できる（logfilter v2.1.0 の機能）。
+   - 値の検査はどのホストにも接続する前に行い、不正なら Error（exit 6）。
+   - 同梱・既定の logfilter は v2.1.0。
+
+3. 基準時刻以降のログが 0 件のときの collectLog（AS-BUILT §4.8）
+   - logfilter が該当 0 件（exit 3）を返したら、空のファイルをエビデンスとして収集して成功にする（以前は Error）。
+     「その日はログが出ない」を空の期待値で確かめられる。
+
+4. ツールの版はプロジェクト共通の設定だけで決める（AS-BUILT §4.7・§4.8・§3.5・§2.3）
+   - plugin.yml に任意の provision_keys（外部ツールの取得に使う設定キー）を宣言できる。宣言したキーはプロセスの config/config.yml に書いても使わず、
+     プラグイン既定 → プロジェクト共通 config/plugins/process/{type}/config.yml の値で決める（install と実行で同じ版を見る）。
+   - stfw new process の雛形はこれらのキーを複製しない。プロセスの設定に残っていれば stfw validate が警告する。
+   - stfw plugin install も stfw run と同じく stfw.yml を環境へ反映してから設定を読む（${...} の展開をそろえる）。
+   - 上流の REQ-031（stfw:full のツール同梱）・SPEC-016 系（プラグイン設定）などに関係する。
+
+範囲外: CI・配布の仕組み（今回の変更なし）。

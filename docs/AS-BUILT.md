@@ -105,7 +105,7 @@ BC 間の共有は ID とジャーナルイベントのみである。notify・H
 | `stfw secret migrate` | なし | v0.2 形式（openssl S/MIME）の secret を age へ一括変換（§9.2） |
 | `stfw ssh trust <host\|group>` | inventory グループ名 or 単一ホスト | SSH サーバキーを `~/.ssh/known_hosts` へ登録（§9.6） |
 | `stfw plugin list` | なし | プロセスプラグイン名一覧（プロジェクト + 同梱の和集合・`_` 始まり除外・昇順） |
-| `stfw plugin install <type>` | type | プラグインの `bin/install/install` を実行。インストール済みは警告終了（exit 3） |
+| `stfw plugin install <type>` | type | プラグインの `bin/install/install` を実行。インストール済みは警告終了（exit 3）。設定を読む前に、`stfw run` と同じく stfw.yml のフラット化結果を環境変数へ export する（§8.2。プラグイン設定の `${...}` が install と run で同じ値に展開されるように。v1.9.0〜） |
 | `stfw plugin mysql-tsv-to-csv` | なし（stdin→stdout） | 隠しコマンド。`mysql --batch` 出力を RFC4180 CSV へ変換する組込み RDBMS プラグイン用ヘルパ（§4.9） |
 | `stfw plugin redis-encode-row` | `--key/--type/--ttl`（stdin→stdout） | 隠しコマンド。redis 値を正規化し CSV 1 行へ変換する組込み Redis プラグイン用ヘルパ（§4.10） |
 | `stfw plugin redis-decode` | なし（stdin→stdout） | 隠しコマンド。export CSV を redis-cli コマンド列へ変換する組込み Redis プラグイン用ヘルパ（§4.10） |
@@ -936,7 +936,7 @@ OTel のスパンステータスには Warn 相当がない（Ok / Error / Unset
 - 値中の `${VAR}` は **環境変数で展開**（未定義は空文字。bash の `source` と同挙動）
 - null 値は空文字
 - フラット化結果の全キーが実行時 env として全スクリプトへ公開される
-- **`stfw run` 開始時に、stfw.yml（+ 同梱デフォルト）のフラット化結果を stfw 自身の環境変数へ export する**（v0.2 `export_yaml` 互換）。これによりプラグイン/プロセス config チェーン（§8.1 の下段）の `${...}` 展開から stfw.yml の設定値を参照できる。例: stfw.yml に `stfw.db.database: appdb` を置き、`config/plugins/process/{type}/config.yml` で `database: ${stfw_db_database}` と参照すると、接続先 DB 名をプロジェクトで 1 か所に集約できる（接続先ホスト・パスワードは §4.7 の禁止契約どおり inventory + secret で解決し、config には書かない）。
+- **`stfw run` 開始時と `stfw plugin install`（`stfw init` のプラグイン一括 install を含む）の設定読込前に、stfw.yml（+ 同梱デフォルト）のフラット化結果を stfw 自身の環境変数へ export する**（v0.2 `export_yaml` 互換。install は v1.9.0〜）。これによりプラグイン/プロセス config チェーン（§8.1 の下段）の `${...}` 展開から stfw.yml の設定値を参照できる。例: stfw.yml に `stfw.db.database: appdb` を置き、`config/plugins/process/{type}/config.yml` で `database: ${stfw_db_database}` と参照すると、接続先 DB 名をプロジェクトで 1 か所に集約できる（接続先ホスト・パスワードは §4.7 の禁止契約どおり inventory + secret で解決し、config には書かない）。
 
 > **list 値の上書きに関する既知の制約**: 上書きチェーン（§8.1）は各レイヤーを同一マップへ後勝ちでフラット化する。list は添字キー（`_0`, `_1`, …）に展開されるため、**上位レイヤーがより短い list で上書きしても、下位レイヤーの余分な末尾添字（`_2` 以降など）は残留する**（プラグインは添字を空になるまで読むため、残留要素も有効になる）。これは list 値をとる全設定（`key_patterns` / `tables` / `targets` / invoke の `env` 等）に共通する。**list を完全に置き換えたい場合は単一レイヤーで定義するか、上書き側の要素数を同数以上にする**こと（post-flatten では「list 添字」と「数値 map キー」が区別できないため、汎用的な末尾クリアは行わない）。
 
