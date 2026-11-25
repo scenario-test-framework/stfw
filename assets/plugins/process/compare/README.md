@@ -18,7 +18,7 @@
 
 | キー | 必須 | 説明 |
 |---|---|---|
-| `compare_files_version` | - | 取得する compare-files のリリースタグ (既定 v2.2.4)。**プロジェクト共通 `config/plugins/process/compare/config.yml` で指定する** (プロセスの `config/config.yml` に書いても使わない) |
+| `compare_files_version` | - | 取得する compare-files のリリースタグ (既定 v2.3.0)。**プロジェクト共通 `config/plugins/process/compare/config.yml` で指定する** (プロセスの `config/config.yml` に書いても使わない) |
 | `on_mismatch` | - | 比較不一致の扱い。`error` (既定) = ステップ失敗として停止 + Blocked 伝播 (回帰テスト運用) / `warn` = Warn として記録して続行 (差分確認運用。run 終了コードは Warn あり・Error なしで 3) |
 
 比較レイアウト (`compare_layout/*.json`) は次の後勝ちマージで解決される (AS-BUILT §4.11):
@@ -30,7 +30,8 @@ compareRegex はこのディレクトリを読まない (compareRegex の共通�
 プロジェクト共通に置いた起動設定は、compare-files の探索 (`COMPAREFILES_CLASSPATH` の各要素 → カレント → `./config`) で
 最初に見つかった 1 件になる場合 (実行環境の既存の `COMPAREFILES_CLASSPATH` に起動設定が無い場合) に「プロジェクト既定」として効く:
 プロセスローカルが無ければそのまま使われ、あればプロセスローカルで欠けているキーの補完元になる
-(`ignoreFileRegexList` などの一覧は空配列 `[]` を明示しても引き継がれ、ローカルで解除できない。AS-BUILT §4.11)。
+(ローカルに書いた `false` と空配列 `[]` はそのまま使われ、共通側の値を無効化・解除できる。compare-files v2.3.0〜。v2.2.4 までは補完元の値を引き継いでいた。AS-BUILT §4.11)。
+compare-files 同梱の起動設定を複製したプロセスローカルは、書かれた `sorted` / `writeDiffOnly` の `false` が共通側の `true` より優先されるので、共通側の値を使いたい項目は複製から消す。`sorted` などの設定項目のキーを大文字・小文字だけ変えて併記した起動設定 (`Sorted` と `sorted` など) は v2.3.0 から読込エラー (exit 6) になるので、一方にそろえる。真偽の項目に書いた空文字 `""` も `false` として効く (共通側の値を引き継ぐには、キーを書かないか `null` にする)。
 
 ## ディレクトリ規約 (エビデンスディレクトリ規約)
 

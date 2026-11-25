@@ -16,7 +16,7 @@ chmod 755 fakebin/fakecomparefiles
 chmod 755 fakebin/mkbin
 
 # 同梱ディレクトリ (VERSION + 実行ホストの os_arch 版 compare_files)
-exec mkbin bundled/compare-files compare_files v2.2.4 bundled
+exec mkbin bundled/compare-files compare_files v2.3.0 bundled
 env stfw_plugin_bundled_dir=${WORK}/bundled
 
 # --- 同梱あり・キャッシュなし: install なしで run が成功し、キャッシュは作られない ---
@@ -38,7 +38,7 @@ mkdir config/plugins/process/compare
 cp config.v999.yml config/plugins/process/compare/config.yml
 execcode 6 stfw run cmp
 stderr 'is not installed'
-stderr 'bundled compare-files is v2\.2\.4 but compare_files_version is v9\.9\.9'
+stderr 'bundled compare-files is v2\.3\.0 but compare_files_version is v9\.9\.9'
 stderr 'config/plugins/process/compare/config\.yml'
 ! stderr 'compare_files=bundled'
 # install は同梱を使わず DL を試みる
@@ -47,7 +47,7 @@ stderr 'download failed'
 rm config/plugins/process/compare/config.yml
 
 # --- 永続キャッシュと同梱の両方がある: 永続キャッシュを優先する ---
-exec mkbin .stfw/cache/plugins/compare/compare-files compare_files v2.2.4 cache
+exec mkbin .stfw/cache/plugins/compare/compare-files compare_files v2.3.0 cache
 exec stfw run cmp
 stderr 'compare_files=cache'
 ! stderr 'compare_files=bundled'
@@ -88,7 +88,7 @@ description:
 stfw:
   process:
     compare:
-      compare_files_version: v2.2.4
+      compare_files_version: v2.3.0
 -- scenario/cmp/_10_99990101/_20_asrt_compare/expect/_10_col_scripts/host1/data.txt --
 hello
 -- scenario/cmpver/metadata.yml --

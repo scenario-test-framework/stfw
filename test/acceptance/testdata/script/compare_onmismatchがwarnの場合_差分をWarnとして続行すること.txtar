@@ -67,7 +67,7 @@ description:
 stfw:
   process:
     compare:
-      compare_files_version: v2.2.4
+      compare_files_version: v2.3.0
       on_mismatch: warn
 -- scenario/cmpwarn/_10_99990101/_20_asrt_compare/expect/_10_col_scripts/host1/data.txt --
 hello
@@ -103,7 +103,7 @@ description:
 stfw:
   process:
     compare:
-      compare_files_version: v2.2.4
+      compare_files_version: v2.3.0
       on_mismatch: warn
 -- scenario/cmpok/_10_99990101/_20_asrt_compare/expect/_10_col_scripts/host1/data.txt --
 hello
@@ -129,7 +129,7 @@ description:
 stfw:
   process:
     compare:
-      compare_files_version: v2.2.4
+      compare_files_version: v2.3.0
       on_mismatch: bogus
 -- scenario/cmpbad/_10_99990101/_20_asrt_compare/expect/_10_col_scripts/host1/data.txt --
 hello

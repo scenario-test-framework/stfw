@@ -118,7 +118,7 @@ description:
 stfw:
   process:
     compare:
-      compare_files_version: v2.2.4
+      compare_files_version: v2.3.0
 -- scenario/cmp/_10_99990101/_20_asrt_compare/expect/_10_col_scripts/host1/data.txt --
 hello
 world
@@ -143,7 +143,7 @@ description:
 stfw:
   process:
     compare:
-      compare_files_version: v2.2.4
+      compare_files_version: v2.3.0
 -- scenario/cmpng/_10_99990101/_20_asrt_compare/expect/_10_col_scripts/host1/data.txt --
 hello
 DIFFERENT
@@ -157,7 +157,7 @@ description:
 stfw:
   process:
     compare:
-      compare_files_version: v2.2.4
+      compare_files_version: v2.3.0
 -- scenario/cmperr/_10_99990101/_10_asrt_compare/expect/_90_missing_scripts/host1/data.txt --
 hello
 world
@@ -174,7 +174,7 @@ description:
 stfw:
   process:
     compare:
-      compare_files_version: v2.2.4
+      compare_files_version: v2.3.0
 -- scenario/cmpnoexp/_10_99990101/_10_asrt_compare/result/CompareSummary.csv --
 Status,Left,Right
 STALE,old,run
@@ -188,7 +188,7 @@ description:
 stfw:
   process:
     compare:
-      compare_files_version: v2.2.4
+      compare_files_version: v2.3.0
 -- scenario/cmpempexp/_10_99990101/_10_asrt_compare/expect/README.txt --
 expect は存在するが収集 process ディレクトリ (サブディレクトリ) を含まない
 -- scenario/cmpempexp/_10_99990101/_10_asrt_compare/result/CompareSummary.csv --
@@ -215,7 +215,7 @@ description:
 stfw:
   process:
     compare:
-      compare_files_version: v2.2.4
+      compare_files_version: v2.3.0
 -- scenario/cmpempty/_10_99990101/_20_asrt_compare/expect/_10_col_scripts/host1/data.txt --
 hello
 world
@@ -242,7 +242,7 @@ description:
 stfw:
   process:
     compare:
-      compare_files_version: v2.2.4
+      compare_files_version: v2.3.0
 -- scenario/cmpro/_10_99990101/_20_asrt_compare/expect/_10_col_scripts/host1/data.txt --
 hello
 world

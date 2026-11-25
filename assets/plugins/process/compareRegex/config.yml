@@ -17,5 +17,5 @@
 stfw:
   process:
     compareRegex:
-      compare_files_version: v2.2.4
+      compare_files_version: v2.3.0
       on_mismatch: error

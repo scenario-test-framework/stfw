@@ -36,8 +36,8 @@ case "$(uname -m)" in
 esac
 os_arch="${os}_${arch}"
 
-version="${stfw_process_compareRegex_compare_files_version:-v2.2.4}"
-# リリース資産名はバージョンに先頭 v を含まない (compare-files_2.2.4_linux_amd64.tar.gz)。
+version="${stfw_process_compareRegex_compare_files_version:-v2.3.0}"
+# リリース資産名はバージョンに先頭 v を含まない (compare-files_2.3.0_linux_amd64.tar.gz)。
 version_num="${version#v}"
 # ダウンロード元は既定で GitHub Releases。テスト等で差し替え可能にする (compare と同じ env)。
 base="${stfw_compare_files_download_base:-https://github.com/scenario-test-framework/compare-files/releases/download/${version}}"
