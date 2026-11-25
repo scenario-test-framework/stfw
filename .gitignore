@@ -8,3 +8,4 @@ dist/
 docs/index.html
 
 .stfw/
+tmp/
